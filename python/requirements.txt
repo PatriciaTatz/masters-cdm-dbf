@@ -1,0 +1,4 @@
+#Required modoulates 
+scipy
+numpy 
+
