@@ -1,0 +1,9 @@
+bin/
+menv/
+include/
+__pycache__/
+lib/
+lib64/
+results/
+share/
+
