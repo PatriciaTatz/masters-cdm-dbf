@@ -19,6 +19,7 @@ class DiscreteSignal:
         if channel=="withNoise":
             self.symbols = self.add_awgn(self.symbols, SNR)
         else:
+            print("nonoise")
             pass
         self.create_arraysignals()
         
@@ -46,5 +47,8 @@ class DiscreteSignal:
     def add_awgn(self, signal, SNR):
         return ch.awgn(signal,SNR)
     
+    def add_delay(self, delay, Lc, arrpath):
+        
+        return np.pad(self.arrSignals[arrpath], (delay//Lc, 0), mode='constant') 
 
 
