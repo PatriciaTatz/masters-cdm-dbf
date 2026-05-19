@@ -27,7 +27,7 @@ class CodeGenerator:
             #n: must be a power of 2 and int 
 
             WHcode = km.WalshHadamardSequence(length=self.config.Lc, index=codeindex, ordering='sequency')
-            return WHcode
+            return WHcode.polar_sequence
         else: 
             raise Exception("Unrecognised code family! Choose from [WH, ]")
 
@@ -63,8 +63,8 @@ class Multiplexer:
         #A: despread and B: decorrelate via matched filtering. 
 
         #matched filter settings
-        symbols_span = 4 #Used to calculate Nspan , no of symbols considered in a window
-        self.Nspan = Lc*symbols_span + 1#Span of symbols to consider per filter window
+        symbols_span = 8 #Used to calculate Nspan , no of symbols considered in a window
+        self.Nspan = Lc*symbols_span #Span of symbols to consider per filter window
         self.Lc = Lc
         Fs = Lc #Take Lc samples per symbol (sampling rate)
         alpha = 0.25
@@ -74,19 +74,23 @@ class Multiplexer:
         #loop does both part A and part B 
         despread_symbols = [] 
         decorr_symbols = [] 
+
+        self.delay = (Lc*symbols_span) // 2
         for i in range(len(symbols)):
             j = i%Lc #restarts the code indexing at the end of sequence 
-            despread_symbols.append(symbols[i]*code[j])
+            despread_symbols.append((symbols[i]*code[j])/Lc)
             
         decorr_symbols = np.convolve(despread_symbols, h_rrc, mode='same')
-        #mode=same accounts for the filter delay 
 
-        #decimate the signal by Lc 
         return decorr_symbols
 
     def downsample(self, signal):
-        decision_symbols = signal[::self.Lc] #start:stop:step, 
+        #decision_symbols = signal[::self.Lc] #start:stop:step, 
+        decision_symbols = signal.reshape(-1, self.Lc).mean(axis=1)
+
         return decision_symbols
+
+
 
 
 
