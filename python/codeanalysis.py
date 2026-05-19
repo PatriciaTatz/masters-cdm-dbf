@@ -77,6 +77,7 @@ for start in range(0, n, maxplots):
         #add grid lines 
         for m in range(-codecfg.Lc//2, codecfg.Lc//2 + 1):
             ax_csd[idx].axvline(m / codecfg.Lc, color='gray', linestyle='--', linewidth=0.5, alpha=0.5)
+ 
     plt.tight_layout(pad=1.0)
     plt.savefig(f"./WH/csd_{start//16}.png")
     plt.close(fig_csd)
