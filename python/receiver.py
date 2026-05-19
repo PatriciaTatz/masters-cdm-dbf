@@ -1,44 +1,42 @@
 # TODO you can use isort to sort these
 import components as rf
-import mysignal as s 
-import measure as measure
+from mysignal import DiscreteSignal
 import scipy
 import numpy as np
 import utils as u
-from config import * 
+from config import cdmCfg, signalCfg
+import matplotlib.pyplot as plt 
 
 class Receiver:
-    class Signals: 
+    class ArraySignals: 
         def __init__(self, arraySpread, arraySpreadSum, arrayDespread, arrayDecisionSymbols):
-            self.arraySpreadSignals = arraySpread
-            self.arraySpreadSumSignals = arraySpreadSum
-            self.arrayDeSpreadSignals = arrayDespread
-            self.arrayDecisionSymbols = arrayDecisionSymbols
+            self.SpreadSignals = arraySpread
+            self.SpreadSumSignals = arraySpreadSum
+            self.DeSpreadSignals = arrayDespread
+            self.DecisionSymbols = arrayDecisionSymbols
 
-    def __init__(self, codeconfig, signal):
-        self.codecfg = codeconfig
-        self.signal = signal
-        self.Lss = rxconfig.Lc*signal.conf.Ls
+    def __init__(self, config):
+        self.codecfg = config
 
+        #TODO preserve memory 
         self.multiplexer = rf.Multiplexer()
 
-        self.signals = self.assemble(self.multiplexer)
+    def assemble(self, signal):
+        self.Lss = self.codecfg.Lc*signal.conf.Ls
 
-    def assemble(self, multiplexer):
         #spreading of array signals    
         # TODO fix up multiplexer
         arraySpread = np.empty((0,self.Lss))
 
         #idealised code set indexes
         code = rf.CodeGenerator(self.codecfg)
-        
         code_list = [code.generate(2), code.generate(3)]
 
         #spreader
-        for i in range(self.signal.conf.no_arrays):
+        for i in range(signal.conf.no_arrays):
             nSpreadSignal = self.multiplexer.encoder(
-                                code_list[i],
-                                self.signal.arrSignals[i])
+                code_list[i],
+                signal.arrSignals[i])
 
             arraySpread = np.vstack((arraySpread,nSpreadSignal))
 
@@ -47,28 +45,66 @@ class Receiver:
 
         #despreader
         arrayDespread = np.empty((0,self.Lss))
-        arrayDecisionSymbols = np.empty((0,self.signal.conf.Ls))
-        for i in range(self.signal.conf.no_arrays):
+        arrayDecisionSymbols = np.empty((0,signal.conf.Ls))
+        for i in range(signal.conf.no_arrays):
             nDespreadSignal = self.multiplexer.decoder(
-                                self.rxcfg.Lc,
-                                self.signal.conf.Ts,
-                                code_list[i],
-                                arraySpreadSum)
+                self.codecfg.Lc,
+                signal.conf.Ts,
+                code_list[i],
+                arraySpreadSum)
 
             nDecisionSymbols = self.multiplexer.downsample(nDespreadSignal)
 
             arrayDespread = np.vstack((arrayDespread,nDespreadSignal))
             arrayDecisionSymbols = np.vstack((arrayDecisionSymbols,nDecisionSymbols))
 
-        return self.Signals(arraySpread, arraySpreadSum, arrayDespread, arrayDecisionSymbols)
+        self.arraySignals = self.ArraySignals(arraySpread, arraySpreadSum, arrayDespread, arrayDecisionSymbols)
+
+        return self.arraySignals
 
 
 if __name__ == "__main__":
     #configure
     codeCfg = cdmCfg(Lc=32, code="WH") 
-    sigCfg = signalCfg(Ts=1, modType="BPSK", Ls=10, no_arrays=2)
+    sigCfg = signalCfg(Ts=1, modType="BPSK", Ls=30, no_arrays=2)
+    snr = 25
+    path = 0
+    #assemble reciever 
+    inputSignal = DiscreteSignal(sigCfg, channel="noNoise", SNR=snr)     
+    rx = Receiver(codeCfg)
+    rx.assemble(inputSignal) 
 
-    #BER simulation
-    ber = measure.BER(sigCfg, codeCfg, arrpath=0)
-    ber.curve(maxSims=1000, maxSNR=5)
-    ber.plot_curve(show_plot="on")
+    #show plots to see how it evolves & verify its working 
+    fig, axs = plt.subplots(2, 1)
+    axs[0].stem(inputSignal.arrSignals[path])
+    axs[0].set_title("Input Signal")
+
+    axs[1].stem(rx.arraySignals.DecisionSymbols[path])
+    axs[1].set_title("Downsampled Despread Signal")
+
+    for ax in axs:
+        ax.grid(True)
+
+    #show plots to see how it evolves & verify its working 
+    fig, axs = plt.subplots(2, 1)
+    axs[0].plot(inputSignal.arrSignals[path])
+    axs[0].set_title("Input Signal")
+
+    axs[1].plot(rx.arraySignals.DeSpreadSignals[path])
+    axs[1].set_title("Despread Signal")
+
+    for ax in axs:
+        ax.grid(True)
+
+    #show plots to see how it evolves & verify its working 
+    fig, axs = plt.subplots(2, 1)
+    axs[0].stem(inputSignal.arrSignals[path])
+    axs[0].set_title("Input Signal")
+
+    axs[1].plot(rx.arraySignals.SpreadSignals[path])
+    axs[1].set_title("Spread Signal")
+
+    plt.tight_layout(pad=1.0)
+    for ax in axs:
+        ax.grid(True)
+    plt.show()
