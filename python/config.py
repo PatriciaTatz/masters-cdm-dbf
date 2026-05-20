@@ -3,14 +3,14 @@
 from dataclasses import dataclass
 
 @dataclass
-class cdmCfg:
+class dbfCfg:
     Lc: int
     code: str
+    no_arrays: int
 
 
 @dataclass
 class signalCfg:
     Ts:int
     modType: str
-    Ls: int
-    no_arrays:int 
+    Ns: int
