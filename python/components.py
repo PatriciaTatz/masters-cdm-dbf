@@ -13,7 +13,7 @@ import numpy as np
 from enum import Enum 
 import commpy.filters as filter
 import komm as km
-
+import matplotlib.pyplot as plt 
 
 class CodeGenerator:
     #Method to generate all code families studied 
@@ -34,8 +34,6 @@ class CodeGenerator:
 
 class Multiplexer:
     #Method to spread the signal using a code sequence
-    def __init__(self):
-        pass
 
     def encoder(self, code, symbols):
         """
@@ -58,40 +56,71 @@ class Multiplexer:
 
         return ss     
 
-    def decoder(self, Lc, Ts, code, symbols):   
-        #This is a two part method, a despread followed by a matched filter. 
-        #A: despread and B: decorrelate via matched filtering. 
-
-        #matched filter settings
-        symbols_span = 8 #Used to calculate Nspan , no of symbols considered in a window
-        self.Nspan = Lc*symbols_span #Span of symbols to consider per filter window
-        self.Lc = Lc
-        Fs = Lc #Take Lc samples per symbol (sampling rate)
-        alpha = 0.25
-
-        dt_filter, h_rrc = filter.rrcosfilter(self.Nspan, alpha, Ts, Fs)
-
-        #loop does both part A and part B 
+    def decoder(self, Lc, Ts, code, spreadsum):   
+        #Depends on Decorrelator being run first. ASK ALIX
         despread_symbols = [] 
-        decorr_symbols = [] 
+        for i in range(len(spreadsum)):
+            #restarts the code indexing at the end of sequence 
+            despread_symbols.append((spreadsum[i]*code[i%Lc]))
 
-        self.delay = (Lc*symbols_span) // 2
-        for i in range(len(symbols)):
-            j = i%Lc #restarts the code indexing at the end of sequence 
-            despread_symbols.append((symbols[i]*code[j])/Lc)
-            
-        decorr_symbols = np.convolve(despread_symbols, h_rrc, mode='same')
+        #matched filter / correlator too! 
+        sps = Lc #samples per symbol 
+        Fs = sps/Ts #sample per second, take Lc samples per second 
+        alpha = 0.25 #does this need to match?
+        span = 8 #consider 8 symbols bc we upsampled it by that much in tx but thats probs not right because its unknown irl
+        Ntaps = span*sps
 
-        return decorr_symbols
+        dt_filter, h_rrc = filter.rrcosfilter(Ntaps, alpha, Ts, Fs)
+        h_delay = (Ntaps-1)/2
 
-    def downsample(self, signal):
-        #decision_symbols = signal[::self.Lc] #start:stop:step, 
-        decision_symbols = signal.reshape(-1, self.Lc).mean(axis=1)
+        conv_symbols = np.convolve(despread_symbols, h_rrc, mode='full')
 
-        return decision_symbols
-
-
-
+        h_delay = int(np.round(h_delay))
 
 
+        Nsamples = len(spreadsum) // Lc   # number of samples representing symbols that was spread
+        idxs = h_delay  + np.arange(Nsamples)*sps
+        samples = conv_symbols[idxs]
+
+        return [samples, idxs]
+
+
+class MatchedFilter:
+    def txrrcfilter(self, symbols, Ts):
+        """
+        rrc filter for transmit
+        independent of Lc / Rx settings as its suppose to simulate real rxd signals
+        what it does:
+        - upsamples
+        - applies filter 
+        - is called by mysignal.py 
+        """
+        self.txsps = 4 #samples per symbol, 
+        Fs = self.txsps/Ts #Hz; sampling rate, sample per second 
+        alpha = 0.25#roll off factor 
+        span = 8 #dictates how far a symbols influene spreads across time
+        Ntaps = span*self.txsps   #total length of the filter 
+        upsampled = np.array([])
+        for symbol in symbols:
+            pulse = np.zeros(self.txsps)
+            pulse[0] = symbol
+            upsampled = np.concatenate((upsampled, pulse)) #adds sps*0s after each pulse[0]  
+
+        #apply filter
+        dt_filter, h_rrc = filter.rrcosfilter(Ntaps, alpha, Ts, Fs)
+        txsignal = np.convolve(upsampled, h_rrc, mode='full')
+        group_delay = (Ntaps-1)/2
+
+        return txsignal, group_delay 
+
+
+class SymbolSampler:
+    def symbols(self, signal, delay, interval, Ns):
+        delay = int(np.round(delay))
+
+        interval = int(np.round(interval)) #symbol period
+
+        idxs = delay + np.arange(Ns) * interval*2
+        samples = signal[idxs]
+        return samples, idxs
 
