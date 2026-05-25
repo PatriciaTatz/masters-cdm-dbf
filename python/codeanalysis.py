@@ -12,16 +12,15 @@ from scipy.fft import fft, fftfreq
 
 
 #codes================
-codecfg = cdmCfg(Lc=32, code="WH")
-code = rf.CodeGenerator(codecfg)
-codes = [code.generate(idx).polar_sequence for idx in np.arange(0,codecfg.Lc)]
+dbfconf = dbfCfg(Lc=4, code="WH", no_arrays=1)   
+code = rf.CodeGenerator(dbfconf)
+codes = [code.generate(idx) for idx in np.arange(dbfconf.Lc)] #generate all possible codes 
 
-
-#autocorrelation==========================================
+#autocorrelation=========================================
 acfs = []
 corr = msr.Correlation()
 for j in range(len(codes)):
-    acf, lag, pkwidth = corr.acf(codes[j], corr_len=codecfg.Lc)
+    acf, lag, pkwidth = corr.acf(codes[j], corr_len=dbfconf.Lc)
     acfs.append(acf)
 n = len(acfs)
 rows = int(np.ceil(np.sqrt(n)))
@@ -32,7 +31,6 @@ ax_acf = ax_acf.ravel()
     ax_acf[k].plot(lag, acf)
     ax_acf[k].set_title(f"ACF of Code {k}")
  """
-
 
 #crosscorrelation=========================================
 ccfs = []
@@ -50,7 +48,7 @@ for i in range(len(codes)):
 #cross spectrum density 
 #ccfs = codesmixed
 fft_ccfs = [fft(ccf) for ccf in ccfs]
-freq_bins = fftfreq(codecfg.Lc, d=1) 
+freq_bins = fftfreq(dbfconf.Lc) 
 
 
 #plot of the cross spectrum density 
@@ -73,13 +71,12 @@ for start in range(0, n, maxplots):
             goodpairs.append([iidx[k]+1, jidx[k]+1])
             ax_csd[idx].title.set_color('green')
 
-
         #add grid lines 
-        for m in range(-codecfg.Lc//2, codecfg.Lc//2 + 1):
-            ax_csd[idx].axvline(m / codecfg.Lc, color='gray', linestyle='--', linewidth=0.5, alpha=0.5)
+        for m in range(-dbfconf.Lc//2, dbfconf.Lc//2 + 1):
+            ax_csd[idx].axvline(m / dbfconf.Lc, color='gray', linestyle='--', linewidth=0.5, alpha=0.5)
  
     plt.tight_layout(pad=1.0)
-    plt.savefig(f"./WH/csd_{start//16}.png")
+    plt.savefig(f"./results/{dbfconf.code}/csd_{start//16}.png")
     plt.close(fig_csd)
 
 
