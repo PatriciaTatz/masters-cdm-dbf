@@ -1,38 +1,53 @@
 import numpy as np
 from scipy.special import erfc
 from receiver import Receiver
-from config import cdmCfg, signalCfg
-import mysignal as s
+from config import dbfCfg, signalCfg
+from signals import DiscreteSignal, ArraySignals
 import matplotlib.pyplot as plt 
 from matplotlib.ticker import LogLocator, LogFormatterMathtext
 
 class BER:
-    def __init__(self, signalconfig, codeconfig, arrpath):
+    def __init__(self, signalconfig, codeconfig):
         self.sigcfg = signalconfig
-        self.codecfg = codeconfig
-        self.arrpath = arrpath
+        self.dbfcfg = codeconfig
+        self.rx = Receiver(self.dbfcfg)
+
+        #BER simulation
+        self.signal = DiscreteSignal(self.sigcfg)
+        self.array = ArraySignals()
+        self.Lss = len(self.signal.transmit) * self.dbfcfg.Lc
 
 
     def curve(self, maxSims, maxSNR):
         self.snr_range = np.arange(0,maxSNR, 1)
-        self.ber_theory = 0.5 * erfc(np.sqrt(self.snr_range))
-        self.ber_curve = [] 
-        rx = Receiver(self.codecfg)
 
-        for snr in self.snr_range:
-            ber_sum = 0
+        snr_linear = 10**(self.snr_range / 10)
+        self.ber_theory = 0.5 * erfc(np.sqrt(snr_linear))
+
+        self.ber_curve = np.zeros(len(self.snr_range))        
+        arrpath=0 
+        for i, snr in enumerate(self.snr_range):
             print("snr=",snr)
-            #generate signal 
-            for _ in range(maxSims):
-                inputSignal = s.DiscreteSignal(self.sigcfg, channel="withNoise", SNR=snr)     
-                rx.assemble(inputSignal) 
+            #preserve and reset arrays 
+            self.array.create_inputsignals(self.signal, self.dbfcfg.no_arrays)
+            self.array.create_rxsignals(self.Lss, self.sigcfg.Ns)
 
-                txbits = np.sign(inputSignal.arrSignals)
-                rxbits = np.sign(rx.arraySignals.DecisionSymbols[self.arrpath])    
+            ber_sum = 0
+            for txidx in range(maxSims):
+                #Add noise to the same signal 
+                txsignal = self.signal.add_awgn(self.signal.transmit, SNR=snr)
+                txsymbols = self.signal.symbol_sampler(txsignal)
+
+                #CDM4DBF
+                self.rx.assemble(self.array) 
+                rxsymbols = self.signal.symbol_sampler(self.array.Despread[arrpath][0])
+ 
+                txbits = np.sign(txsymbols[0])
+                rxbits = np.sign(rxsymbols[0])    
 
                 ber_sum += np.mean(txbits!=rxbits)
         
-            self.ber_curve.append(ber_sum/maxSims)
+            self.ber_curve[i] = ber_sum / maxSims
 
         return self.snr_range, self.ber_curve, self.ber_theory
 
@@ -53,7 +68,7 @@ class BER:
             '--',
             linewidth=2,
             label='Theoretical BPSK BER'
-        ) 
+        )  
 
         # Log-scale tick formatting
         ax = plt.gca()
@@ -66,16 +81,14 @@ class BER:
 
         plt.grid(True, which='both', linestyle='--', alpha=0.6)
         plt.legend()
-        plt.tight_layout()
         if show_plot=="on": plt.show()
 
 
 if __name__ == "__main__":
     #configure
-    codeCfg = cdmCfg(Lc=32, code="WH") 
-    sigCfg = signalCfg(Ts=1, modType="BPSK", Ls=10, no_arrays=2)
+    sigconf = signalCfg(Ts=5, modType="BPSK", Ns=1)  
+    dbfconf = dbfCfg(Lc=5, code="mLength", no_arrays=1)   
 
-    #BER simulation
-    ber = BER(sigCfg, codeCfg, arrpath=0)
-    ber.curve(maxSims=10**4, maxSNR=20)
+    ber = BER(sigconf, dbfconf)
+    ber.curve(maxSims=10**4, maxSNR=12)
     ber.plot_curve(show_plot="on")
