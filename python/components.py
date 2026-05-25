@@ -8,12 +8,13 @@ RF components
 - Matched Filter 
 """
 
-from scipy.linalg import hadamard  
+from scipy.signal import max_len_seq
 import numpy as np  
 from enum import Enum 
 import commpy.filters as filter
 import komm as km
 import matplotlib.pyplot as plt 
+from math import log2
 
 class CodeGenerator:
     #Method to generate all code families studied 
@@ -28,6 +29,13 @@ class CodeGenerator:
 
             WHcode = km.WalshHadamardSequence(length=self.config.Lc, index=codeindex, ordering='sequency')
             return WHcode.polar_sequence
+
+        if self.config.code == "mLength":
+            degree = int(log2(self.config.Lc+1))            
+            seq, _ = max_len_seq(degree)
+
+            print(seq)
+            return np.roll(seq, codeindex % self.config.Lc)
         else: 
             raise Exception("Unrecognised code family! Choose from [WH, ]")
 
@@ -67,7 +75,7 @@ class Multiplexer:
         sps = Lc #samples per symbol 
         Fs = sps/Ts #sample per second, take Lc samples per second 
         alpha = 0.25 #does this need to match?
-        span = 8 #consider 8 symbols bc we upsampled it by that much in tx but thats probs not right because its unknown irl
+        span = 8 #consider 8 symbols, i believe this is normal number 
         Ntaps = span*sps
 
         dt_filter, h_rrc = filter.rrcosfilter(Ntaps, alpha, Ts, Fs)
@@ -76,7 +84,6 @@ class Multiplexer:
         conv_symbols = np.convolve(despread_symbols, h_rrc, mode='full')
 
         h_delay = int(np.round(h_delay))
-
 
         Nsamples = len(spreadsum) // Lc   # number of samples representing symbols that was spread
         idxs = h_delay  + np.arange(Nsamples)*sps
@@ -95,14 +102,14 @@ class MatchedFilter:
         - applies filter 
         - is called by mysignal.py 
         """
-        self.txsps = 4 #samples per symbol, 
-        Fs = self.txsps/Ts #Hz; sampling rate, sample per second 
+        self.ups = 8 #samples per symbol, upsampling factor 
+        Fs = self.ups/Ts #Hz; sampling rate, sample per second 
         alpha = 0.25#roll off factor 
         span = 8 #dictates how far a symbols influene spreads across time
-        Ntaps = span*self.txsps   #total length of the filter 
+        Ntaps = span*self.ups #total length of the filter 
         upsampled = np.array([])
         for symbol in symbols:
-            pulse = np.zeros(self.txsps)
+            pulse = np.zeros(self.ups)
             pulse[0] = symbol
             upsampled = np.concatenate((upsampled, pulse)) #adds sps*0s after each pulse[0]  
 
@@ -113,14 +120,4 @@ class MatchedFilter:
 
         return txsignal, group_delay 
 
-
-class SymbolSampler:
-    def symbols(self, signal, delay, interval, Ns):
-        delay = int(np.round(delay))
-
-        interval = int(np.round(interval)) #symbol period
-
-        idxs = delay + np.arange(Ns) * interval*2
-        samples = signal[idxs]
-        return samples, idxs
 
