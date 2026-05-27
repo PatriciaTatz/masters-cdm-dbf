@@ -31,21 +31,21 @@ class CodeSelector:
         for j in range(len(self.allcodes)):
             #generate lags of equal length 
             acf = correlate(self.allcodes[j], self.allcodes[j])
-
             peaks, _ = find_peaks(acf)
-            print(np.argmax(acf[peaks]))
-            print(j)
+            plt.figure()
             try:
                 largest_peak_index = peaks[np.argmax(acf[peaks])]
-                acf_widths.append(results_half[3]-results_half[2])
-
                 #max width at half max 
                 results_half = peak_widths(acf, [largest_peak_index], rel_height=0.5) 
+                acf_widths.append(results_half[3]-results_half[2])
+
                 lagx1, lagx2 = self.lagscaler(results_half)
                 plt.plot(self.lags[largest_peak_index] , acf[largest_peak_index ], "x")
                 plt.hlines(results_half[1], lagx1, lagx2, color="C2")  #yvalue, xmin, xmax 
         
-            except: pass
+            except Exception as e:
+                print(f"Error occurred: {e}")
+                print(f"Error type: {type(e)}")
 
             #plot and save images 
             plt.plot(self.lags, acf)
@@ -78,20 +78,23 @@ class CodeSelector:
                 pairidx.append((i,j))
 
                 peaks, _ = find_peaks(ccf)
-                largest_peak_index = peaks[np.argmax(ccf[peaks])]
-
-            
-                #max width at half max 
-                results_half = peak_widths(ccf, [largest_peak_index], rel_height=0.5) 
-                lagx1, lagx2 = self.lagscaler(results_half)
-
-                ccf_widths.append(results_half[3]-results_half[2])
-            
-                #plot and save images 
                 plt.figure()
+                try:
+                    largest_peak_index = peaks[np.argmax(ccf[peaks])]
+                    #max width at half max 
+                    results_half = peak_widths(ccf, [largest_peak_index], rel_height=0.5) 
+
+                    lagx1, lagx2 = self.lagscaler(results_half)
+                    plt.plot(self.lags[largest_peak_index] , ccf[largest_peak_index ], "x")
+                    plt.hlines(results_half[1], lagx1, lagx2, color="C2")  #yvalue, xmin, xmax 
+            
+                except Exception as e:
+                    print(f"Error occurred: {e}")
+                    print(f"Error type: {type(e)}")
+
+
+                #plot and save images 
                 plt.plot(self.lags,ccf)
-                plt.plot(self.lags[largest_peak_index] , ccf[largest_peak_index ], "x")
-                plt.hlines(results_half[1], lagx1, lagx2, color="C2")  #yvalue, xmin, xmax 
                 plt.grid()
                 plt.title(f"CCF: code[{i}]xcode[{j}]")
                 plt.savefig(f"./results/{self.codefam}/ccf/ccf_codes{i}x{j}.png")
@@ -123,10 +126,11 @@ class CodeSelector:
 if __name__ == "__main__":
     #initiate code config
     WHcfg = dbfCfg(Lc=32, code="WH")
-    #WHcodes = CodeSelector(WHcfg)
+    WHcodes = CodeSelector(WHcfg)
     #WHcodes.acf()
     #WHcodes.ccf()
 
     Goldcfg = dbfCfg(Lc=31, code="Gold")
     Goldcodes = CodeSelector(Goldcfg)
-    Goldcodes.acf()
+    #Goldcodes.acf()
+    Goldcodes.ccf()
