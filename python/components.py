@@ -12,6 +12,8 @@ from scipy.signal import max_len_seq
 import numpy as np  
 from enum import Enum 
 import commpy.filters as filter
+from commpy.sequences import pnsequence
+
 import komm as km
 import matplotlib.pyplot as plt 
 from math import log2
@@ -30,12 +32,34 @@ class CodeGenerator:
             WHcode = km.WalshHadamardSequence(length=self.config.Lc, index=codeindex, ordering='sequency')
             return WHcode.polar_sequence
 
-        if self.config.code == "mLength":
-            degree = int(log2(self.config.Lc+1))            
-            seq, _ = max_len_seq(degree)
+        if self.config.code == "Gold":
+            m = round(log2(self.config.Lc + 1))
+            N_valid = 2**m - 1
 
-            print(seq)
-            return np.roll(seq, codeindex % self.config.Lc)
+            #pre-derived poly masks required by pn sequence
+            gold_masks = {
+                        5: {
+                            "mask1": "10100",      # x^5 + x^2 + 1
+                            "mask2": "11110",      # x^5 + x^4 + x^3 + x^2 + 1
+                        },
+                        7: {
+                            "mask1": "1000100",    # x^7 + x^3 + 1
+                            "mask2": "1001110",    # x^7 + x^6 + x^5 + x^2 + 1
+                        },
+                        10: {
+                            "mask1": "1000000100", # x^10 + x^3 + 1
+                        }}
+            if m not in gold_masks:
+                raise ValueError(f"No standard polynomial pair stored for m={m}")
+            
+            s1 = pnsequence(m, [1]*m, gold_masks[m]["mask1"], N_valid)
+            s2 = pnsequence(m, [1]*m, gold_masks[m]["mask1"], N_valid)
+
+            # Step 5: generate all Gold codes
+            code = np.logical_xor(s1, np.roll(s2, codeindex)).astype(int)
+    
+            return code
+
         else: 
             raise Exception("Unrecognised code family! Choose from [WH, ]")
 
