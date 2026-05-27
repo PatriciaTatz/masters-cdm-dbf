@@ -56,7 +56,7 @@ class CodeGenerator:
             s2 = pnsequence(m, [1]*m, gold_masks[m]["mask1"], N_valid)
 
             # Step 5: generate all Gold codes
-            code = np.logical_xor(s1, np.roll(s2, codeindex)).astype(int)
+            code = np.logical_xor(s1, np.roll(s2, codeindex+1)).astype(int)
     
             return code
 
