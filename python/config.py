@@ -6,7 +6,7 @@ from dataclasses import dataclass
 class dbfCfg:
     Lc: int
     code: str
-    no_arrays: int
+    no_arrays: int = 1 
     degree: int = 1
 
 
