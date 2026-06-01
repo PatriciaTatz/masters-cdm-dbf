@@ -38,6 +38,10 @@ class CodeGenerator:
 
             #pre-derived poly masks required by pn sequence
             gold_masks = {
+                        3: {
+                            "mask1": "101",   # x^3 + x + 1
+                            "mask2": "110",   # x^3 + x^2 + 1
+                        },
                         5: {
                             "mask1": "10100",      # x^5 + x^2 + 1
                             "mask2": "11110",      # x^5 + x^4 + x^3 + x^2 + 1
