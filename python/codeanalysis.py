@@ -151,8 +151,8 @@ class CodeSelector:
             amean = np.mean(normpower)
             gmean = np.exp(np.mean(np.log(normpower))) 
             sf = float(gmean / amean)
-            sfs.append((sf, j))
-        return sfs
+            sfs.append((j, sf))
+        return self.create_dict(sfs)
 
     def find_best_clique(self, nodeweights, edgeweights, Narrays):
 
@@ -186,14 +186,19 @@ if __name__ == "__main__":
     #rankings of acf widths, ccf widths, and csd height at 1/Lc
 
     #initiate code config
-    WHcfg = dbfCfg(Lc=32, code="WH")
+    WHcfg = dbfCfg(Lc=16, code="WH")
     WHcodes = CodeSelector(WHcfg)
-    node_weights = WHcodes.acf()
-    edge_weights = WHcodes.ccf()
+    acfs = WHcodes.acf()
+    ccfs = WHcodes.ccf()
+    sfs = WHcodes.sf()
+
+    node_weights = {k: acfs[k] + sfs[k] for k in acfs.keys() & sfs.keys()}
+    edge_weights = ccfs
+
     best_clique = WHcodes.find_best_clique(node_weights, edge_weights, 4)
     print(best_clique)
 
-    #proof, run BER curves and see if we do get improvements 
+    #POC, run BER curves and see if we do get improvements 
 
 
     #Goldcfg = dbfCfg(Lc=7, code="Gold")
