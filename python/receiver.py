@@ -21,7 +21,7 @@ class Receiver:
 
         #idealised code set indexes
         code = rf.CodeGenerator(self.dbf)
-        code_list = [code.generate(2), code.generate(3)]
+        code_list = [code.generate(k) for k in self.dbf.codeids]
     
         #spreader
         for i in range(self.dbf.no_arrays):
@@ -51,7 +51,7 @@ if __name__ == "__main__":
 
     #config settings 
     sigconf = signalCfg(Ts=5, modType="BPSK", Ns=1)  
-    dbfconf = dbfCfg(Lc=5, code="mLength", no_arrays=1)   
+    dbfconf = dbfCfg(Lc=4, code="WH", no_arrays=1)   
 
     #create signal 
     signal = DiscreteSignal(sigconf)
