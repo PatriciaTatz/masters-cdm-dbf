@@ -97,7 +97,7 @@ class Multiplexer:
         despread_symbols = [] 
         for i in range(len(spreadsum)):
             #restarts the code indexing at the end of sequence 
-            despread_symbols.append((spreadsum[i]*code[i%Lc]))
+            despread_symbols.append((spreadsum[i]*code[i%Lc]/ Lc))
 
         #matched filter / correlator too! 
         sps = Lc #samples per symbol 
