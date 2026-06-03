@@ -20,7 +20,6 @@ class DiscreteSignal:
         self.create_symbols()
         self.filtered_signal()
 
-
     def create_symbols(self):
         #modType: requires 
         if self.conf.modType == "BPSK":
@@ -32,7 +31,7 @@ class DiscreteSignal:
 
     def filtered_signal(self):
         self.mf = MatchedFilter()
-        self.transmit, self.group_delay = self.mf.txrrcfilter(self.symbols, self.conf.Ts)
+        self.input, self.group_delay = self.mf.txrrcfilter(self.symbols, self.conf.Ts)
 
     def add_awgn(self, signal, SNR):
         return ch.awgn(signal,SNR)
@@ -45,23 +44,19 @@ class DiscreteSignal:
         samples = txsignal[idxs]
         return samples, idxs
 
-    
-class ArraySignals: 
-    def create_rxsignals(self, Lss, Ns):
+    def create_rxsignals(self):
         self.Spread = []
         self.SprSum = []
         self.Despread= []
 
-    def create_inputsignals(self, signal, no_arrays):
-        self.signal = signal
-        txsignal = self.signal.transmit
+    def create_inputsignals(self, no_arrays):
         timedelay = 1 #time delay between array elements on antenna 
-        indexshift = int(timedelay/self.signal.conf.Ts)
+        indexshift = int(timedelay/self.conf.Ts)
 
-        self.inputSignals = np.empty((0,len(txsignal)))
+        self.inputSignals = np.empty((0,len(self.input)))
 
         for i in range(no_arrays):
-            nSignal =  np.roll(txsignal, shift=i*indexshift)
+            nSignal =  np.roll(self.input, shift=i*indexshift)
             nSignal[:i*indexshift] = 0
             self.inputSignals = np.vstack((self.inputSignals, nSignal))
 
@@ -78,15 +73,15 @@ if __name__ == "__main__":
     """
     sigCfg = signalCfg(Ts=5, modType="BPSK", Ns=10)  
     signal = DiscreteSignal(sigCfg)
-    #signal.transmit = signal.add_awgn(signal.transmit,SNR=5)
-    sampled_symbols, idx = signal.symbol_sampler(signal.transmit)
+    signal.input = signal.add_awgn(signal.input,SNR=20)
+    sampled_symbols, idx = signal.symbol_sampler(signal.input)
 
     fig, axs = plt.subplots(3, 1)
     axs[0].stem(signal.symbols)
     axs[0].set_title("Random Symbols")
-    axs[1].plot(signal.transmit, '--o')
+    axs[1].plot(signal.input, '--o')
     axs[1].set_title("Transmited Signal")
-    axs[2].plot(signal.transmit, '--o')
+    axs[2].plot(signal.input, '--o')
     axs[2].stem(idx, sampled_symbols,  linefmt='r--')
     axs[2].set_title("Sampled Symbols")
 
