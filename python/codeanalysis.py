@@ -4,8 +4,7 @@ assuming that its true Lc  = Narrays * 2
 """
 
 from components import CodeGenerator
-from config import dbfCfg
-
+from config import dbfCfg, signalCfg
 
 from scipy.signal import find_peaks, peak_widths, correlate, correlation_lags, csd
 import matplotlib.pyplot as plt 
@@ -23,6 +22,7 @@ class CodeSelector:
         self.codefam = config.code
         codes = CodeGenerator(config)
         self.allcodes = [codes.generate(idx) for idx in np.arange(self.Lc)]
+
         self.lags = correlation_lags(self.Lc, self.Lc)
 
 
@@ -30,28 +30,28 @@ class CodeSelector:
         #Find the peak width at zero timelag
         #ACF Widths = [(Amplitude, Code Index J)]
         #Rank: ACF WIDTHS MINIMISED 
-        self.acf_widths = []
-        self.acf_width = 0 #no peak
+        acf_widths = []
+        self.acf_plot = []
         for j in range(len(self.allcodes)):
-            #generate lags of equal length 
-            acf = correlate(self.allcodes[j], self.allcodes[j])
-            peaks, _ = find_peaks(acf)
-
+            print(self.allcodes[j])
+            #periodic ACF and normalised 
+            acf = np.real(np.fft.ifft(np.fft.fft(self.allcodes[j]) * np.conj(np.fft.fft(self.allcodes[j]))))
+            acf = np.fft.fftshift(acf) / self.Lc 
             try:
-                largest_peak_index = peaks[np.argmax(acf[peaks])]
-                #max width at half max 
-                results_half = peak_widths(acf, [largest_peak_index], rel_height=0.5) 
-
-
-                self.acf_width = float(results_half[3][0]-results_half[2][0])
+                zerolagindex = self.Lc //2 
+                acf_pk = peak_widths(acf, [self.Lc//2], rel_height=0.5) 
+                print(acf_pk)
             except Exception as e:
                 print(f"Error occurred: {e}")
                 print(f"Error type: {type(e)}")
         
-            self.acf_widths.append((j, self.acf_width))
-        self.acf_widths = self.create_dict(self.acf_widths)
 
-        return self.acf_widths
+            self.acf_plot.append((acf,) + acf_pk)
+            acf_widths.append((j, acf_pk[0]))
+
+        acf_widths = self.create_dict(acf_widths)
+
+        return acf_widths
 
     def ccf(self):
         #Find the CCF peak at zero time lag and classifies them as bad 
@@ -60,37 +60,40 @@ class CodeSelector:
         #GOOD: CCF WIDTHS MINIMISED
         #GOOD: CCF HEIGHTS MINIMISED 
         # Returns, ccf_widths, pairidx, and       
-        ccf_widths = []
-        csd_heights = [] #energy at 1/Lc only 
+
         ccf_width = 0  #if no peak found 
 
-        self.sum_cfs = [] 
+        self.csd_plot = []
+        self.ccf_plot = []
+        
+        sum_cfs = [] 
         for i in range(len(self.allcodes)):
             for j in range(i+1, len(self.allcodes)):
-                self.ccf = correlate(self.allcodes[i], self.allcodes[j])
-                self.fbins, self.csdx = csd(self.allcodes[i], self.allcodes[j], nperseg=self.Lc, return_onesided=False)       
+                #PERIODIC CCF 
+                ccf = np.fft.ifft(np.fft.fft(self.allcodes[i]) * np.conj(np.fft.fft(self.allcodes[j])))
+                ccf = np.fft.fftshift(ccf) 
+                try:
+                    zerolagindex = self.Lc //2 
+                    ccf_width , _, left, right = peak_widths(ccf, [self.Lc//2], rel_height=0.5) 
+                    
+                except Exception as e:
+                        print(f"Error occurred: {e}")
+                        print(f"Error type: {type(e)}")
+                ccf_plot.append((f"{i}-{j}", [ccf_width, left, right]))   
+
+                #CSD               
+                self.fbins, csdx = csd(self.allcodes[i], self.allcodes[j], nperseg=self.Lc, return_onesided=False)  
+                self.csdx_list.append(csdx)     
                 if not isclose(self.fbins[1], 1/self.Lc): raise ValueError("First frequency bin not close to 1/Lc!!")
                 csd_height =  float(self.fbins[1])
                 csd_heights.append((f"{i}-{j}", csd_height))  
 
-                peaks, _ = find_peaks(self.ccf)
-                try:
-                    largest_peak_index = peaks[np.argmax(self.ccf[peaks])]
-                    #max width at half max 
-                    results_half = peak_widths(self.ccf, [largest_peak_index], rel_height=0.5) 
-                    ccf_width = float(results_half[3][0]-results_half[2][0])
-                except Exception as e:
-                    print(f"Error occurred: {e}")
-                    print(f"Error type: {type(e)}")
-
-                ccf_widths.append((f"{i}-{j}", ccf_width))   
-
                 sumcf = csd_height + ccf_width 
-                self.sum_cfs.append((f"{i}-{j}", sumcf))
+                sum_cfs.append((f"{i}-{j}", sumcf))
+        sum_cfs = self.create_dict(sum_cfs)
 
-        self.sum_cfs = self.create_dict(self.sum_cfs)
+        return sum_cfs
 
-        return self.sum_cfs
     def sf(self):
         #here i calculate the spectral flatness (sf) of a code
         #GOOD: MAXIMISED
@@ -152,38 +155,49 @@ class CodeSelector:
     def plot(self, output):
         if output == "ACF":
             for j in range(len(self.allcodes)):
+
+                lags = np.arange(-self.Lc//2, self.Lc//2)
+                acf = self.acf_plot[j][0]
+                height = self.acf_plot[j][2]
+                lips = np.interp(self.acf_plot[j][3], np.arange(self.Lc), lags) 
+                rips = np.interp(self.acf_plot[j][4], np.arange(self.Lc), lags) 
+
                 #plot and save images 
                 plt.figure()
-                plt.plot(self.lags, acf)
+                plt.plot(lags, acf)
                 plt.xlabel("Lag")
                 plt.ylabel("ACF")
                 plt.grid()
                 plt.title(f"ACF: code[{j}]")
 
-                lagx1, lagx2 = self.lagscaler(results_half)
-                plt.plot(self.lags[largest_peak_index] , acf[largest_peak_index ], "x")
-                plt.hlines(results_half[1], lagx1, lagx2, color="C2")  #yvalue, xmin, xmax 
-
+                plt.plot(lags[self.Lc//2], acf[self.Lc//2], "x")
+                plt.hlines(height, lips, rips, color="C2")  #yvalue, xmin, xmax 
                 plt.savefig(f"./results/{self.codefam}/acf/acf_code{j}.png")
                 plt.close()
         elif output == "CCF":
             for i in range(len(self.allcodes)):
                 for j in range(i+1, len(self.allcodes)):
                     #plot and save images 
+
+
+
                     plt.figure()
                     plt.plot(self.lags,self.ccf)
-                    lagx1, lagx2 = self.lagscaler(results_half)
-                    plt.plot(self.lags[largest_peak_index] , self.ccf[largest_peak_index ], "x")
-                    plt.hlines(results_half[1], lagx1, lagx2, color="C2")  #yvalue, xmin, xmax 
+                    lagx1, lagx2 = self.lagscaler(self.ccf_results_half)
+                    plt.plot(self.lags[self.ccf_largest_peak_index] , self.ccf[self.ccf_largest_peak_index ], "x")
+                    plt.hlines(self.ccf_results_half[1], lagx1, lagx2, color="C2")  #yvalue, xmin, xmax 
                     plt.grid()
                     plt.title(f"CCF: code[{i}]xcode[{j}]")
                     plt.savefig(f"./results/{self.codefam}/ccf/ccf_codes{i}x{j}.png")
                     plt.close()
+
+
+
         elif output == "CSD":
             for i in range(len(self.allcodes)):
                 for j in range(i+1, len(self.allcodes)):
-                    #plt.figure()
-                    plt.stem(self.fbins,np.abs(self.csdx))
+                    plt.figure()
+                    plt.stem(self.fbins,np.abs(self.csdx_list[i+j]))
                     plt.title(f"CSD: code[{i}]xcode[{j}]")
                     for m in range(-self.Lc//2, self.Lc//2 + 1):
                         plt.axvline(m / self.Lc, color='gray', linestyle='--', linewidth=0.5, alpha=0.5)  
@@ -195,7 +209,7 @@ class CodeSelector:
                     plt.close()
 
         if output == "network":
-            clique = self.best_nodes
+            clique = self.worst_nodes
             G = nx.Graph()
             G.add_nodes_from(clique)
             G.add_edges_from(itertools.combinations(clique, 2))
@@ -218,7 +232,7 @@ class CodeSelector:
                 width=edge_weights
             )
             labels = {
-                i: f"{i}\n{self.acf_widths[i] + self.sfs[i]:.2f}"
+                i: f"c{i}\n{self.acf_widths[i] + self.sfs[i]:.2f}"
                 for i in G.nodes()
             }
             nx.draw_networkx_labels(G, pos, labels=labels)
@@ -233,36 +247,26 @@ class CodeSelector:
                 label_pos=0.3,   # move closer to source (0 → node i, 1 → node j)
                 font_size=8
             )
-            plt.show()
+            plt.show()  
 
-    
 
 if __name__ == "__main__":
 
     #rankings of acf widths, ccf widths, and csd height at 1/Lc
 
     #initiate code config
-    WHcfg = dbfCfg(Lc=16, code="WH")
+    WHcfg = dbfCfg(Lc=16, code="WH", no_arrays=2)
     WHcodes = CodeSelector(WHcfg)
     acfs = WHcodes.acf()
-    ccfs = WHcodes.ccf()
-    sfs = WHcodes.sf()
+    #ccfs = WHcodes.ccf()
+    #sfs = WHcodes.sf()
 
-    node_weights = {k: acfs[k] + sfs[k] for k in acfs.keys() & sfs.keys()}
-    print(sfs)
-    print(acfs)
-    print(node_weights)
-    edge_weights = ccfs
-    best, worst = WHcodes.find_best_clique(node_weights, edge_weights, 8)
-    print(best, worst)
+    #node_weights = {k: acfs[k] + sfs[k] for k in acfs.keys() & sfs.keys()}
+    #edge_weights = ccfs
+    #best, worst = WHcodes.find_best_clique(node_weights, edge_weights, WHcfg.no_arrays)
+    WHcodes.plot("ACF")
 
-    WHcodes.plot("network")
+    #WHcodes.plot("network")
 
-    #POC, run BER curves and see if we do get improvements 
-    
-
-    #Goldcfg = dbfCfg(Lc=7, code="Gold")
-    #Goldcodes = CodeSelector(Goldcfg)
-    #Goldcodes.acf()
-    #Goldcodes.ccf()
-    #print(Goldcodes.sf())
+    #WHcfg.codeids = best 
+    #print(worst)
