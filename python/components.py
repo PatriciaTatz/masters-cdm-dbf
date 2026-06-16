@@ -18,22 +18,18 @@ import komm as km
 import matplotlib.pyplot as plt 
 from math import log2
 
-class CodeGenerator:
-    #Method to generate all code families studied 
-    def __init__(self, config):
-        self.config = config        
-
-    def generate(self, codeindex):
+class CodeGenerator:       
+    def generate(self, codeindex, Lc, type):
         #L: code length used to generate code sequences 
-        if self.config.code == "WH":
+        if type == "WH":
             #construct n-by-n Hadamard matrix using Sylvesters construction
             #n: must be a power of 2 and int 
 
-            WHcode = km.WalshHadamardSequence(length=self.config.Lc, index=codeindex, ordering='sequency')
+            WHcode = km.WalshHadamardSequence(length=Lc, index=codeindex, ordering='sequency')
             return WHcode.polar_sequence
 
-        if self.config.code == "Gold":
-            m = round(log2(self.config.Lc + 1))
+        if type == "Gold":
+            m = round(log2(Lc + 1))
             N_valid = 2**m - 1
 
             #pre-derived poly masks required by pn sequence
@@ -68,20 +64,20 @@ class CodeGenerator:
             raise Exception("Unrecognised code family! Choose from [WH, ]")
 
 
-class Multiplexer:
+class CDMx:
     #Method to spread the signal using a code sequence
 
-    def encoder(self, code, signal):
+    def spreader(self, code, signalts):
         """
         direct time multiplication
         """
         ss = np.array([]) #spread symbols
-        codets = np.resize(code, len(signal))
+        codets = np.resize(code, len(signalts))
         ss = signalts*codets
 
         return ss     
 
-    def decoder(self, Lc, Ts, code, spreadsum):   
+    def despreader(self, Lc, Ts, code, spreadsum):   
         #Depends on Decorrelator being run first. ASK ALIX
         despread_symbols = [] 
         for i in range(len(spreadsum)):
