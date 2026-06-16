@@ -18,11 +18,12 @@ class DiscreteSignal:
 
     def __init__(self, sigconfig):
         self.conf = sigconfig
-    
+
         #generate signal/s
         self.mf = MatchedFilter()
         self.create_symbols() #create symbols, rrc filtered
         self.timeseries()#create time series based on input symbol rate
+        self.elementsignals()
 
     def create_symbols(self):
         #modType, Ns, Ts: required
@@ -35,71 +36,68 @@ class DiscreteSignal:
         self.bpsksymbols = np.random.choice(values, self.conf.no_symbols)
 
         #add rrcfilter
-        self.rrcsymbols, self.bpsksymbols = self.mf.txrrcfilter(self.bpsksymbols, self.conf.symbol_period, self.conf.sps)
+        self.rrcsymbols, self.bpsksymbols = self.mf.txrrcfilter(self.bpsksymbols, self.conf.Ts, self.conf.sps)
 
     def timeseries(self):
         #simtime: required
-        dt = self.conf.symbol_period/self.conf.sps
+        dt = self.conf.Ts/self.conf.sps
         self.timeidx = np.arange(0, self.conf.simtime, dt)
-        repeatf = int(self.conf.simtime/(self.conf.no_symbols*self.conf.symbol_period))
+        repeatf = int(self.conf.simtime/(self.conf.no_symbols*self.conf.Ts))
         self.signalts = np.tile(self.rrcsymbols, repeatf)
 
         
     def add_awgn(self, signal, SNR):
         return ch.awgn(signal,SNR)
 
-    def elementsignals(self, no_arrays):
-        #creates time series array for each array element 
-        timedelay = 1 #time delay between array elements due to propagation distance
-        indexshift = int(timedelay/self.conf.Ts)
-        self.inputSignals = np.empty((0,len(self.signalts)))
-
-        for i in range(no_arrays):
-            nSignal =  np.roll(self.signalts, shift=i*indexshift)
-            nSignal[:i*indexshift] = 0
-            self.inputSignals = np.vstack((self.inputSignals, nSignal))
+    def elementsignals(self):
+        #apply phase rotation 
+        psi = pi
+        #boresight element has no shift 
+        self.element = self.signalts
+        for i in range(1,self.conf.no_arrays):
+            signalNs = self.signalts*np.exp(1j*i*psi) 
+            self.element = np.vstack((self.element, signalNs))
 
 
-            
 if __name__ == "__main__":
     #show how to initiate the signal for whatever use 
 
     """
-    *Fs = Sample rate is always 1 sample per second 
     Ts: symbol period = e.g. 10 seconds
+    sps: samples per symbol 
     Ns: no of symbols = e.g. 5 unique symbols which lasts 10 seconds each post filter 
     modType: modulation type = BPSK 
     no_arrays: number of array signals t 
     """
-
-    Tb = 1/6.25e6
     config = CXBF(
-        symbol_period= Tb,
+        Ts = 1/6.25e6,
         sps = 10,
-        no_symbols= 1000, 
-        simtime=1*1000*Tb, 
+        no_symbols= 500, 
+        simtime=500*1/6.25e6, 
         modType="BPSK",
+        no_arrays=2
     )
+    
+    #repeating the signal does not behave well in the PSD so leave that for now and just translate this one signal 
 
     signal = DiscreteSignal(config)
-    fs = 10/config.symbol_period #sampling rate is how much ive upsampled (samples per symbol) / symbol period
-    f,Pxx = welch(signal.signalts, fs, nperseg=8192, return_onesided=False)
+    fs = config.sps/config.Ts #sampling rate is how much ive upsampled (samples per symbol) / symbol period
+    f,Pxx = welch(signal.signalts, fs, return_onesided=False)
     idx = np.argsort(f)
     f = f[idx]
     Pxx = Pxx[idx]
     df = f[1] - f[0]
     cumulative = np.cumsum(Pxx) * df
     total_power = cumulative[-1]
-    low_idx = np.where(cumulative >= 0.00005 * total_power)[0][0]
-    high_idx = np.where(cumulative >= 0.99995 * total_power)[0][0]
+    low_idx = np.where(cumulative >= 0.0005 * total_power)[0][0]
+    high_idx = np.where(cumulative >= 0.9995 * total_power)[0][0]
     bw = f[high_idx] - f[low_idx]
-
 
     #plot symbol + simulated timeseries
     plt.figure()
     plt.plot(signal.timeidx, signal.signalts, '--o')
     plt.title(f"Simulated Rx Signal Tsim={config.simtime}")
-    plt.stem(signal.timeidx,signal.bpsksymbols, 'red')
+    plt.stem(signal.timeidx[:len(signal.bpsksymbols)],signal.bpsksymbols, 'orange')
     plt.grid()
     plt.xlabel("Time (seconds)")
     plt.ylabel("Amplitude")
@@ -108,7 +106,7 @@ if __name__ == "__main__":
     plt.semilogy(f, Pxx, label="PSD")
     plt.text(
         0.02, 0.95,
-        f"99.99% BW={bw/1e6:.2f}MHz",
+        f"99.9% BW={bw/1e6:.2f}MHz",
         transform=plt.gca().transAxes,
         ha='left',
         va='top',
@@ -116,10 +114,16 @@ if __name__ == "__main__":
     )
     plt.text(
         0.02, 0.85,
-        f"Theoretical Null-Null BW={1/config.symbol_period*(1+0.5)/1e6}MHz",
+        f"Theoretical BW={1/config.Ts*(1+0.5)/1e6}MHz",
         transform=plt.gca().transAxes,
         ha='left',
         va='top',
         bbox=dict(facecolor='white', edgecolor='black')
     )
+
+    #plot all array elements 
+    plt.figure()
+    plt.plot(signal.timeidx, signal.element[0], '-', label="Element 1")
+    plt.plot(signal.timeidx, signal.element[1], '-', label="Element 2")
+    plt.legend()
     plt.show()
