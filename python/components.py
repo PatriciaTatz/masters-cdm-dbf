@@ -71,24 +71,13 @@ class CodeGenerator:
 class Multiplexer:
     #Method to spread the signal using a code sequence
 
-    def encoder(self, code, symbols):
+    def encoder(self, code, signal):
         """
-        input: 
-            code sequence [c1...L]
-            symbol [s1 .. s] 
-        output: 
-            ss = [s1*c1 s1*c2 ... s3*L
-                  s2*c1 s2*c2 ... s2*L
-                  ....      :      ...
-                  s*c1  s*c2  ... s*L]
-       """
+        direct time multiplication
+        """
         ss = np.array([]) #spread symbols
-        
-        for i in range(len(symbols)):
-            #Assumes Ts >> Tx, s is constant over code sequence 
-            #ss: spread symbol
-            spread_symbol = symbols[i]*code
-            ss = np.append(ss, spread_symbol)
+        codets = np.resize(code, len(signal))
+        ss = signalts*codets
 
         return ss     
 
@@ -121,7 +110,7 @@ class Multiplexer:
 
 
 class MatchedFilter:
-    def txrrcfilter(self, symbols, Ts):
+    def txrrcfilter(self, symbols, Ts, ups):
         """
         rrc filter for transmit
         independent of Lc / Rx settings as its suppose to simulate real rxd signals
@@ -130,22 +119,19 @@ class MatchedFilter:
         - applies filter 
         - is called by mysignal.py 
         """
-        self.ups = 8 #samples per symbol, upsampling factor 
-        Fs = self.ups/Ts #Hz; sampling rate, sample per second 
-        alpha = 0.25#roll off factor 
-        span = 8 #dictates how far a symbols influene spreads across time
-        Ntaps = span*self.ups #total length of the filter 
-        upsampled = np.array([])
-        for symbol in symbols:
-            pulse = np.zeros(self.ups)
-            pulse[0] = symbol
-            upsampled = np.concatenate((upsampled, pulse)) #adds sps*0s after each pulse[0]  
+        Fs = ups/Ts #Hz; sampling rate, sample per second 
+        alpha = 0.5 #roll off factor 
+        span =  16 #dictates how far a symbols influence spreads across time
+        Ntaps = span*ups + 1  #must be odd, total length of the filter 
 
+        upsampled = np.zeros(len(symbols)*ups) 
+        upsampled[::ups] = symbols
+  
         #apply filter
         dt_filter, h_rrc = filter.rrcosfilter(Ntaps, alpha, Ts, Fs)
         txsignal = np.convolve(upsampled, h_rrc, mode='full')
-        group_delay = (Ntaps-1)/2
+        group_delay = int((Ntaps-1)/2)
 
-        return txsignal, group_delay 
+        return txsignal[group_delay:-group_delay], upsampled
 
 
