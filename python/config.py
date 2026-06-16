@@ -1,18 +1,18 @@
-"used to configure software"
+"used to configure simulation"
 
 from dataclasses import dataclass, field
 import numpy as np
+
 @dataclass
-class dbfCfg:
-    Lc: int 
-    code: str
+class CXBF():
+    Ts: float
+    sps: int 
+    no_symbols: int 
+    simtime: float
+    modType: str
+    Lc: int
+    spreading_factor: int = 1
+    codefam: str = "WH"
     no_arrays: int = 1 
     degree: int = 1
-    codeids: list = field(default_factory=lambda: [1])
-
-
-@dataclass
-class signalCfg:
-    Ts:int
-    modType: str
-    Ns: int
+    codeids: list = field(default_factory=lambda: [1, 2])
