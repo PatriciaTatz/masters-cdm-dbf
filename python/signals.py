@@ -22,8 +22,8 @@ class DiscreteSignal:
         #generate signal/s
         self.mf = MatchedFilter()
         self.create_symbols() #create symbols, rrc filtered
-        self.timeseries()#create time series based on input symbol rate
-        self.elementsignals()
+        self.create_timeseries()#create time series based on input symbol rate
+        self.create_elementsignals()
 
     def create_symbols(self):
         #modType, Ns, Ts: required
@@ -33,30 +33,43 @@ class DiscreteSignal:
             values = [pi/4, 3*pi/4, 5*pi/4, 7*pi/4]
 
         #randomized symbols 
-        self.bpsksymbols = np.random.choice(values, self.conf.no_symbols)
+        no_symbols = int(self.conf.simtime // self.conf.Ts)
+        self.bpsksymbols = np.random.choice(values, no_symbols) 
 
         #add rrcfilter
         self.rrcsymbols, self.bpsksymbols = self.mf.txrrcfilter(self.bpsksymbols, self.conf.Ts, self.conf.sps)
 
-    def timeseries(self):
-        #simtime: required
-        dt = self.conf.Ts/self.conf.sps
-        self.timeidx = np.arange(0, self.conf.simtime, dt)
-        repeatf = int(self.conf.simtime/(self.conf.no_symbols*self.conf.Ts))
-        self.signalts = np.tile(self.rrcsymbols, repeatf)
-
-        
     def add_awgn(self, signal, SNR):
         return ch.awgn(signal,SNR)
 
-    def elementsignals(self):
-        #apply phase rotation 
-        psi = pi
-        #boresight element has no shift 
+    def create_timeseries(self):
+        #the timestep is the symbol period divided by how much each sample was upsampled by the RRC filter
+        dt = self.conf.Ts/self.conf.sps
+        self.timeidx = np.arange(0, self.conf.simtime, dt)
+        self.signalts = self.rrcsymbols
+
+    def create_elementsignals(self):
+        #apply phase rotation as delay is too small to be seen as lagged samples. Why? 
+        psi = pi 
+        #boresight element has no shift create_elementsignals
         self.element = self.signalts
         for i in range(1,self.conf.no_arrays):
             signalNs = self.signalts*np.exp(1j*i*psi) 
             self.element = np.vstack((self.element, signalNs))
+
+    def calculate_psd(self):
+        fs = self.conf.sps/self.conf.Ts  #sampling rate is how much ive upsampled (samples per symbol) / symbol period ==  sampling frequency
+        f,Pxx = welch(self.signalts, fs, return_onesided=False, detrend=False)
+        idx = np.argsort(f)
+        f = f[idx]
+        Pxx = Pxx[idx]
+        df = f[1] - f[0]
+        cumulative = np.cumsum(Pxx) * df
+        total_power = cumulative[-1]
+        low_idx = np.where(cumulative >= 0.0005 * total_power)[0][0]
+        high_idx = np.where(cumulative >= 0.9995 * total_power)[0][0]
+        self.bw = f[high_idx] - f[low_idx]
+        return f, Pxx
 
 
 if __name__ == "__main__":
@@ -71,9 +84,8 @@ if __name__ == "__main__":
     """
     config = CXBF(
         Ts = 1/6.25e6,
-        sps = 10,
-        no_symbols= 500, 
-        simtime=500*1/6.25e6, 
+        sps = 12,
+        simtime=500/6.25e6, 
         modType="BPSK",
         no_arrays=2
     )
@@ -81,17 +93,7 @@ if __name__ == "__main__":
     #repeating the signal does not behave well in the PSD so leave that for now and just translate this one signal 
 
     signal = DiscreteSignal(config)
-    fs = config.sps/config.Ts #sampling rate is how much ive upsampled (samples per symbol) / symbol period
-    f,Pxx = welch(signal.signalts, fs, return_onesided=False)
-    idx = np.argsort(f)
-    f = f[idx]
-    Pxx = Pxx[idx]
-    df = f[1] - f[0]
-    cumulative = np.cumsum(Pxx) * df
-    total_power = cumulative[-1]
-    low_idx = np.where(cumulative >= 0.0005 * total_power)[0][0]
-    high_idx = np.where(cumulative >= 0.9995 * total_power)[0][0]
-    bw = f[high_idx] - f[low_idx]
+    f, Pxx = signal.calculate_psd()
 
     #plot symbol + simulated timeseries
     plt.figure()
@@ -106,7 +108,7 @@ if __name__ == "__main__":
     plt.semilogy(f, Pxx, label="PSD")
     plt.text(
         0.02, 0.95,
-        f"99.9% BW={bw/1e6:.2f}MHz",
+        f"99.9% BW={signal.bw/1e6:.2f}MHz",
         transform=plt.gca().transAxes,
         ha='left',
         va='top',
