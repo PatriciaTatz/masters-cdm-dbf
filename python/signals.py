@@ -37,14 +37,14 @@ class DiscreteSignal:
         self.bpsksymbols = np.random.choice(values, no_symbols) 
 
         #add rrcfilter
-        self.transmit, self.bpsksymbols = self.mf.txrrcfilter(self.bpsksymbols, self.conf.Ts, self.conf.sps)
+        self.transmit, self.bpsksymbols = self.mf.txrrcfilter(self.bpsksymbols, self.conf.Ts, self.conf.samples_symbol)
 
     def add_awgn(self, signal, SNR):
         return ch.awgn(signal,SNR)
 
     def create_timeseries(self):
         #the timestep is the symbol period divided by how much each sample was upsampled by the RRC filter
-        self.dt = self.conf.Ts/self.conf.sps
+        self.dt = self.conf.Ts/self.conf.samples_symbol
         self.time =  np.arange(len(self.transmit)) * self.dt
         
 
@@ -58,7 +58,7 @@ class DiscreteSignal:
             self.elements.append(signalNs)
 
     def calculate_psd(self):
-        fs = self.conf.sps/self.conf.Ts  #sampling rate is how much ive upsampled (samples per symbol) / symbol period ==  sampling frequency
+        fs = self.conf.samples_symbol/self.conf.Ts  #sampling rate is how much ive upsampled (samples per symbol) / symbol period ==  sampling frequency
         f,Pxx = welch(self.transmit, fs, return_onesided=False, detrend=False)
         idx = np.argsort(f)
         f = f[idx]
@@ -77,14 +77,14 @@ if __name__ == "__main__":
 
     """
     Ts: symbol period = e.g. 10 seconds
-    sps: samples per symbol 
+    samples_symbol: samples per symbol 
     Ns: no of symbols = e.g. 5 unique symbols which lasts 10 seconds each post filter 
     modType: modulation type = BPSK 
     no_arrays: number of array signals t 
     """
     config = CXBF(
         Ts = 1/6.25e6,
-        sps = 20,
+        samples_symbol = 20,
         simtime=50/6.25e6, 
         modType="BPSK",
         no_arrays=2
@@ -122,7 +122,6 @@ if __name__ == "__main__":
         bbox=dict(facecolor='white', edgecolor='black')
     )
 
-    #plot all array elements 
     plt.figure()
     plt.plot(signal.timeidx, signal.element[0], '-', label="Element 1")
     plt.plot(signal.timeidx, signal.element[1], '-', label="Element 2")
