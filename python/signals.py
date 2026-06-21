@@ -37,29 +37,29 @@ class DiscreteSignal:
         self.bpsksymbols = np.random.choice(values, no_symbols) 
 
         #add rrcfilter
-        self.rrcsymbols, self.bpsksymbols = self.mf.txrrcfilter(self.bpsksymbols, self.conf.Ts, self.conf.sps)
+        self.transmit, self.bpsksymbols = self.mf.txrrcfilter(self.bpsksymbols, self.conf.Ts, self.conf.sps)
 
     def add_awgn(self, signal, SNR):
         return ch.awgn(signal,SNR)
 
     def create_timeseries(self):
         #the timestep is the symbol period divided by how much each sample was upsampled by the RRC filter
-        dt = self.conf.Ts/self.conf.sps
-        self.timeidx = np.arange(0, self.conf.simtime, dt)
-        self.signalts = self.rrcsymbols
+        self.dt = self.conf.Ts/self.conf.sps
+        self.time =  np.arange(len(self.transmit)) * self.dt
+        
 
     def create_elementsignals(self):
         #apply phase rotation as delay is too small to be seen as lagged samples. Why? 
         psi = pi 
         #boresight element has no shift create_elementsignals
-        self.element = self.signalts
+        self.elements = [self.transmit]
         for i in range(1,self.conf.no_arrays):
-            signalNs = self.signalts*np.exp(1j*i*psi) 
-            self.element = np.vstack((self.element, signalNs))
+            signalNs = self.transmit*np.exp(1j*i*psi) 
+            self.elements.append(signalNs)
 
     def calculate_psd(self):
         fs = self.conf.sps/self.conf.Ts  #sampling rate is how much ive upsampled (samples per symbol) / symbol period ==  sampling frequency
-        f,Pxx = welch(self.signalts, fs, return_onesided=False, detrend=False)
+        f,Pxx = welch(self.transmit, fs, return_onesided=False, detrend=False)
         idx = np.argsort(f)
         f = f[idx]
         Pxx = Pxx[idx]
@@ -84,8 +84,8 @@ if __name__ == "__main__":
     """
     config = CXBF(
         Ts = 1/6.25e6,
-        sps = 12,
-        simtime=500/6.25e6, 
+        sps = 20,
+        simtime=50/6.25e6, 
         modType="BPSK",
         no_arrays=2
     )
@@ -94,14 +94,13 @@ if __name__ == "__main__":
 
     signal = DiscreteSignal(config)
     f, Pxx = signal.calculate_psd()
-
     #plot symbol + simulated timeseries
     plt.figure()
-    plt.plot(signal.timeidx, signal.signalts, '--o')
+    plt.plot(signal.time*1e9, signal.transmit, '--o')
     plt.title(f"Simulated Rx Signal Tsim={config.simtime}")
-    plt.stem(signal.timeidx[:len(signal.bpsksymbols)],signal.bpsksymbols, 'orange')
+    plt.stem(signal.time[:len(signal.bpsksymbols)]*1e9,signal.bpsksymbols, 'orange')
     plt.grid()
-    plt.xlabel("Time (seconds)")
+    plt.xlabel("Time (nsec)")
     plt.ylabel("Amplitude")
 
     plt.figure()
