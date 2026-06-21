@@ -8,7 +8,7 @@ RF components
 - Matched Filter 
 """
 
-from scipy.signal import max_len_seq
+from scipy.signal import max_len_seq, welch
 import numpy as np  
 from enum import Enum 
 import commpy.filters as filter
@@ -18,63 +18,35 @@ import komm as km
 import matplotlib.pyplot as plt 
 from math import log2
 
-class CodeGenerator:       
-    def generate(self, codeindex, Lc, type):
+class CDMx:
+    def generate_code(self, no_arrays, Lc, codeids, type):
         #L: code length used to generate code sequences 
         if type == "WH":
             #construct n-by-n Hadamard matrix using Sylvesters construction
             #n: must be a power of 2 and int 
+            codes = []
+            for i in range(no_arrays):
+                WHcode = km.WalshHadamardSequence(
+                    length=Lc,
+                    index=codeids[i],
+                    ordering='sequency')
 
-            WHcode = km.WalshHadamardSequence(length=Lc, index=codeindex, ordering='sequency')
-            return WHcode.polar_sequence
-
-        if type == "Gold":
-            m = round(log2(Lc + 1))
-            N_valid = 2**m - 1
-
-            #pre-derived poly masks required by pn sequence
-            gold_masks = {
-                        3: {
-                            "mask1": "101",   # x^3 + x + 1
-                            "mask2": "110",   # x^3 + x^2 + 1
-                        },
-                        5: {
-                            "mask1": "10100",      # x^5 + x^2 + 1
-                            "mask2": "11110",      # x^5 + x^4 + x^3 + x^2 + 1
-                        },
-                        7: {
-                            "mask1": "1000100",    # x^7 + x^3 + 1
-                            "mask2": "1001110",    # x^7 + x^6 + x^5 + x^2 + 1
-                        },
-                        10: {
-                            "mask1": "1000000100", # x^10 + x^3 + 1
-                        }}
-            if m not in gold_masks:
-                raise ValueError(f"No standard polynomial pair stored for m={m}")
-            
-            s1 = pnsequence(m, [1]*m, gold_masks[m]["mask1"], N_valid)
-            s2 = pnsequence(m, [1]*m, gold_masks[m]["mask1"], N_valid)
-
-            # Step 5: generate all Gold codes
-            code = np.logical_xor(s1, np.roll(s2, codeindex+1)).astype(int)
-    
-            return code
-
+                codes.append(WHcode.polar_sequence)
         else: 
             raise Exception("Unrecognised code family! Choose from [WH, ]")
 
+        return codes 
+        
 
-class CDMx:
-    #Method to spread the signal using a code sequence
-
-    def spreader(self, code, signalts):
+    def spreader(self, code, Lc, signal):
         """
         direct time multiplication
         """
-        ss = np.array([]) #spread symbols
-        codets = np.resize(code, len(signalts))
-        ss = signalts*codets
+        ss = [] #spread symbols    
+        #repeat the code to equal length of the signal that reflects the spreading facto]
 
+        for i in range(len(signal)):
+            ss.append(signal[i]*code[i%Lc])
         return ss     
 
     def despreader(self, Lc, Ts, code, spreadsum):   
@@ -85,17 +57,15 @@ class CDMx:
             despread_symbols.append((spreadsum[i]*code[i%Lc]/ Lc))
 
         #matched filter / correlator too! 
-        sps = Lc #samples per symbol 
+        sps = Lc #samples per symbol sample 
         Fs = sps/Ts #sample per second, take Lc samples per second 
-        alpha = 0.25 #does this need to match?
-        span = 8 #consider 8 symbols, i believe this is normal number 
+        alpha = 0.5 #does this need to match?
+        span = 16 #consider 8 symbols, i believe this is normal number 
         Ntaps = span*sps
 
         dt_filter, h_rrc = filter.rrcosfilter(Ntaps, alpha, Ts, Fs)
         h_delay = (Ntaps-1)/2
-
         conv_symbols = np.convolve(despread_symbols, h_rrc, mode='full')
-
         h_delay = int(np.round(h_delay))
 
         Nsamples = len(spreadsum) // Lc   # number of samples representing symbols that was spread
@@ -117,7 +87,7 @@ class MatchedFilter:
         """
         Fs = ups/Ts #Hz; sampling rate, sample per second 
         alpha = 0.5 #roll off factor 
-        span =  16 #dictates how far a symbols influence spreads across time
+        span =  10 #dictates how far a symbols influence spreads across time
         Ntaps = span*ups + 1  #must be odd, total length of the filter 
 
         upsampled = np.zeros(len(symbols)*ups) 
@@ -131,3 +101,16 @@ class MatchedFilter:
         return txsignal[group_delay:-group_delay], upsampled
 
 
+class SpecAn: 
+    def calculate_psd(self,fs, signal):
+        f,Pxx = welch(signal, fs, return_onesided=False)
+        idx = np.argsort(f)
+        f = f[idx]
+        Pxx = Pxx[idx]
+        df = f[1] - f[0]
+        cumulative = np.cumsum(Pxx) * df
+        total_power = cumulative[-1]
+        low_idx = np.where(cumulative >= 0.005 * total_power)[0][0]
+        high_idx = np.where(cumulative >= 0.995 * total_power)[0][0]
+        bw = f[high_idx] - f[low_idx]
+        return f, Pxx, bw
