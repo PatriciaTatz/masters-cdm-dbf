@@ -14,7 +14,7 @@ class Receiver():
 
     def setup(self, signal, plot="off"):
         self.ups = int(self.conf.Lc * self.conf.SF)
-        self.fs = self.ups/signal.dt
+        self.fs = self.conf.samples_symbol*self.ups / self.conf.Ts 
         siglen = len(signal.elements[0])
 
         #upsampled time axis
@@ -114,7 +114,7 @@ class Receiver():
         plt.ylabel("Amplitude")
         plt.text(
             0.02, 0.95,
-            f"99.9% BW={bw/1e6:.2f}MHz",
+            f"99.99% BW={bw/1e6:.2f}MHz",
             transform=plt.gca().transAxes,
             ha='left',
             va='top',
@@ -123,8 +123,6 @@ class Receiver():
 
         plt.grid()
         plt.show()
-
-
 
 
 
@@ -152,4 +150,4 @@ if __name__ == "__main__":
     #initiate and assemble receiver 
     rx = Receiver(config)
     rx.setup(signal)
-    rx.assemble(plot="recovered") 
+    rx.assemble(plot="spread, recovered") 
