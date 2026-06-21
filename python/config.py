@@ -6,7 +6,7 @@ import numpy as np
 @dataclass
 class CXBF():
     Ts: float
-    sps: int 
+    samples_symbol: int 
     simtime: float
     modType: str
     Lc: int = 1
