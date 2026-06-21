@@ -7,11 +7,10 @@ import numpy as np
 class CXBF():
     Ts: float
     sps: int 
-    no_symbols: int 
     simtime: float
     modType: str
-    Lc: int
-    spreading_factor: int = 1
+    Lc: int = 1
+    SF: int = 1
     codefam: str = "WH"
     no_arrays: int = 1 
     degree: int = 1
