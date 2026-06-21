@@ -113,7 +113,7 @@ class SpecAn:
         cumulative = np.cumsum(Pxx) * df
         total_power = cumulative[-1]
         #99% occupied bandwidth 
-        low_idx = np.where(cumulative >= 0.005 * total_power)[0][0]
-        high_idx = np.where(cumulative >= 0.995 * total_power)[0][0]
+        low_idx = np.where(cumulative >= 0.0005 * total_power)[0][0]
+        high_idx = np.where(cumulative >= 0.9995 * total_power)[0][0]
         bw = f[high_idx] - f[low_idx]
         return f, Pxx, bw
