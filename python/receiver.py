@@ -13,19 +13,19 @@ class Receiver():
         self.conf  = config 
 
     def setup(self, signal, plot="off"):
-        ups= int(self.conf.Lc * self.conf.SF)
-        self.fs = ups/signal.dt
+        self.ups = int(self.conf.Lc * self.conf.SF)
+        self.fs = self.ups/signal.dt
         siglen = len(signal.elements[0])
 
         #upsampled time axis
         self.rxsignal = [
-            np.repeat(sig, ups)
+            np.repeat(sig, self.ups)
             for sig in signal.elements
         ]
-        self.time = np.arange(len(self.rxsignal[0])) * signal.dt / ups 
+        self.time = np.arange(len(self.rxsignal[0])) * signal.dt / self.ups 
 
         upsiglen = len(self.rxsignal[0])
-        assert upsiglen == siglen*ups, "Upsampling error in length!"
+        assert upsiglen == siglen*self.ups, "Upsampling error in length!"
 
         if plot=="show":
             plt.title("Upsampled Signal to Chip Rate")
@@ -58,34 +58,57 @@ class Receiver():
             )
             self.rxspread.append(nSpread)
 
-        if plot=="show":
-            self.spread_plot(0)
+        if "spread" in plot:
+            self.time_psd_plot(
+                signal.time, signal.elements, 
+                self.time, self.rxspread,
+                0
+            )
 
         #combiner , element wise 
         self.sum = [sum(values) for values in zip(*self.rxspread)]
 
-        #note: changes amplitude 
-        #despreader + decorrelator
+        if "sum" in plot: 
+            self.sum_plot()
+
         for i in range(self.conf.no_arrays):
-            nDespreadSignal = self.cdmx.despreader(
+            nDespread = self.cdmx.despreader(
+                self.conf.samples_symbol,
+                self.ups,
+                self.conf.Ts, 
+                self.codes[i],
                 self.conf.Lc,
-                self.conf.Ts,
-                self.code_list[i],
                 self.sum)
 
-            self.signal.Despread.append(nDespreadSignal)
+            self.rxdespread.append(nDespread)
+
+        if "recovered" in plot:
+            self.time_psd_plot(
+                signal.time, signal.elements, 
+                self.time, self.rxdespread,
+                0)
+
         return signal
 
-    def spread_plot(self,index):
-        plt.figure(1)
+    def sum_plot(self):
+        plt.figure()
+        plt.plot(self.time, self.sum)
+        plt.title(f"Combined Signal from {self.conf.no_arrays} Elements")
+        plt.xlabel("Time")
+        plt.ylabel("Amplitude")
+        plt.grid()
+        plt.show()
+
+    def time_psd_plot(self,tbefore, before_signal, tafter, after_signal, index):
+        plt.figure()
         plt.title(f"Spread Signal of Element {index}")
-        plt.plot(self.time, self.rxsignal[index], '-x', label=f"Upsampled element {index} signal")
-        plt.plot(self.time, self.rxspread[index], '--x', label=f"Spread element {index} signal" )
+        plt.plot(tbefore, before_signal[index], '-xb', label=f"Before element {index} signal")
+        plt.plot(tafter, after_signal[index], '--xg', label=f"After element {index} signal" )
         plt.legend()
         plt.grid()
 
-        f, Pxx, bw = SpecAn().calculate_psd(self.fs, self.rxsignal[index])
-        plt.figure(2)
+        f, Pxx, bw = SpecAn().calculate_psd(self.fs, np.array(after_signal[index]))
+        plt.figure()
         plt.semilogy(f/1e6, Pxx, label="PSD")
         plt.xlabel("Frequency (MHz)")
         plt.ylabel("Amplitude")
@@ -97,21 +120,9 @@ class Receiver():
             va='top',
             bbox=dict(facecolor='white', edgecolor='black')
         )
-        plt.text(
-            0.02, 0.85,
-            f"Theoretical BW={1/config.Ts*(1+0.5)*self.conf.Lc/1e6}MHz",
-            transform=plt.gca().transAxes,
-            ha='left',
-            va='top',
-            bbox=dict(facecolor='white', edgecolor='black')
-        )
+
         plt.grid()
         plt.show()
-
-
-
-
-
 
 
 
@@ -120,15 +131,15 @@ class Receiver():
 if __name__ == "__main__":
     """
     Ts: symbol period = e.g. 10 seconds
-    sps: samples per symbol 
+    samples_symbol: samples per symbol 
     Ns: no of symbols = e.g. 5 unique symbols which lasts 10 seconds each post filter 
     modType: modulation type = BPSK 
     no_arrays: number of array signals t 
     """
     config = CXBF(
         Ts = 1/6.25e6,
-        sps = 10,
-        simtime=500/6.25e6, 
+        samples_symbol = 10,
+        simtime=50/6.25e6, 
         modType="BPSK",
         Lc = 4,
         SF = 1,
@@ -140,5 +151,5 @@ if __name__ == "__main__":
 
     #initiate and assemble receiver 
     rx = Receiver(config)
-    rx.setup(signal, plot="show")
-    rx.assemble(plot="show") 
+    rx.setup(signal)
+    rx.assemble(plot="recovered") 
