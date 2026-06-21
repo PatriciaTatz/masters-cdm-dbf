@@ -123,7 +123,7 @@ if __name__ == "__main__":
     )
 
     plt.figure()
-    plt.plot(signal.timeidx, signal.element[0], '-', label="Element 1")
-    plt.plot(signal.timeidx, signal.element[1], '-', label="Element 2")
+    plt.plot(signal.time, signal.elements[0], '-', label="Element 1")
+    plt.plot(signal.time, signal.elements[1], '-', label="Element 2")
     plt.legend()
     plt.show()
