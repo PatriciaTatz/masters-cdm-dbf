@@ -5,13 +5,21 @@ import numpy as np
 
 @dataclass
 class CXBF():
-    Ts: float
-    samples_symbol: int 
-    simtime: float
-    modType: str
-    Lc: int = 1
-    SF: int = 1
+    Rb: float
+    Lc: int 
+    sps_chip: int
+    alpha: float
+    simtime: float 
+    modType: str = "BPSK"
     codefam: str = "WH"
-    no_arrays: int = 1 
+    no_elem: int = 1 
     degree: int = 1
     codeids: list = field(default_factory=lambda: [1, 2])
+
+    def __post_init__(self):
+        #calculate and assign derived parameters 
+        self.B = (1+self.alpha)*self.Rb
+        self.Rc = self.B * self.Lc
+        self.Fs = self.sps_chip*self.Rc 
+        self.Ts = 1/self.Fs
+        self.sps_symbol = int(self.Fs / self.Rb) #becomes sps_chip*(1+alpha)*Lc

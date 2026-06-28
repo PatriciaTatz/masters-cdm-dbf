@@ -19,65 +19,74 @@ import matplotlib.pyplot as plt
 from math import log2
 
 class CDMx:
-    def generate_code(self, no_arrays, Lc, codeids, type):
-        #L: code length used to generate code sequences 
-        if type == "WH":
+    def __init__(self, conf):
+        self.mf = Filter()
+        self.conf = conf 
+
+
+    def generate_code(self, time):
+        self.time = time
+        if self.conf.codefam == "WH":
             #construct n-by-n Hadamard matrix using Sylvesters construction
             #n: must be a power of 2 and int 
             codes = []
-            for i in range(no_arrays):
+            for i in range(self.conf.no_elem):
                 WHcode = km.WalshHadamardSequence(
-                    length=Lc,
-                    index=codeids[i],
+                    length=self.conf.Lc,
+                    index=self.conf.codeids[i],
                     ordering='sequency')
 
                 codes.append(WHcode.polar_sequence)
         else: 
             raise Exception("Unrecognised code family! Choose from [WH, ]")
 
-        return codes 
-        
 
-    def spreader(self, code, Lc, signal):
+        codes = self.create_code_timeseries(codes)
+
+        return codes 
+
+    def create_code_timeseries(self, allcodes):
+        codets = []
+
+        for code in allcodes:
+            # Step 1: expand each chip
+            chip_expanded = np.repeat(code, self.conf.sps_chip)
+
+            # Step 2: repeat code to match signal length
+            reps = int(np.ceil(len(self.time) / len(chip_expanded)))
+            full_code = np.tile(chip_expanded, reps)
+
+            # Step 3: trim to exact length
+            full_code = full_code[:len(self.time)]
+
+            codets.append(full_code)
+
+        return codets
+
+    def spreader(self, code, signal):
         """
         direct time multiplication
         """
-        ss = [] #spread symbols    
-        #repeat the code to equal length of the signal that reflects the spreading facto]
-
-        for i in range(len(signal)):
-            ss.append(signal[i]*code[i%Lc])
+        ss = signal * code 
         return ss     
 
-    def despreader(self, sps, ups, Ts, code, Lc, spreadsum):   
-        
+    def despreader(self, code, spreadsum):   
         #Despread signal by multiplying with code block
-        despread= [] 
-        for i in range(len(spreadsum)):
-            #restarts the code indexing at the end of sequence 
-            despread.append((spreadsum[i]*code[i%ups]))
+        despread = spreadsum * code 
 
-        #Decorrelate symbols via Matched Filter (or Integrate/Dump)
-        sps_total = sps*ups
-        fs = sps_total/Ts
-        alpha = 0.5          #matched with TX h_rrc
-        span = 16            #matched with TX h_rrc
-        Ntaps = span*sps_total + 1 
-        h_delay = int((Ntaps-1)/2)
+        self.recovered, self.rxsymbols = self.mf.rrcfilter(
+            despread,
+            self.conf.Rb,
+            self.conf.Fs,
+            self.conf.sps_symbol, 
+            self.conf.alpha,
+            mode="rxmode"
+            )
+    
+        return self.recovered/np.max(self.recovered)
 
-
-        _, h_rrc = filter.rrcosfilter(Ntaps, alpha, Ts, fs)
-        recovered_signal = np.convolve(despread, h_rrc, mode='full') / sps_total
-        """ 
-        Nsamples = len(spreadsum) // Lc   # number of samples representing symbols that was spread
-        idxs = h_delay  + np.arange(Nsamples)*sps
-        samples = conv_symbols[idxs]/Lc  #normalise by Lc 
-
-        """        
-        return recovered_signal[h_delay:-h_delay]
-
-class MatchedFilter:
-    def txrrcfilter(self, symbols, Ts, ups):
+class Filter:
+    def rrcfilter(self, symbols, Rb, Fs, sps_symbol, alpha, span=16, mode="txmode"):
         """
         rrc filter for transmit
         independent of Lc / Rx settings as its suppose to simulate real rxd signals
@@ -86,34 +95,46 @@ class MatchedFilter:
         - applies filter 
         - is called by mysignal.py 
         """
-        Fs = ups/Ts #Hz; sampling rate, sample per second 
-        alpha = 0.5 #roll off factor 
-        span =  16 #dictates how far a symbols influence spreads across time
-        Ntaps = span*ups + 1  #must be odd, total length of the filter 
 
-        upsampled = np.zeros(len(symbols)*ups) 
-        upsampled[::ups] = symbols
-  
+        Ts = 1/Rb
+        Ntaps = span*sps_symbol + 1  #must be odd, total length of the filter 
+
+        if mode == "txmode":
+            upsampled = np.zeros(len(symbols)*sps_symbol)
+            upsampled[::sps_symbol] = symbols
+        else:
+            upsampled = symbols 
+
+
         #apply filter
         dt_filter, h_rrc = filter.rrcosfilter(Ntaps, alpha, Ts, Fs)
         txsignal = np.convolve(upsampled, h_rrc, mode='full')
-        h_delay = int((Ntaps-1)/2)
+        h_delay = (Ntaps-1)//2
 
         return txsignal[h_delay:-h_delay], upsampled
 
 
 class SpecAn: 
-    def calculate_psd(self,fs, signal):
-        f,Pxx = welch(signal, fs, return_onesided=False,  detrend=False)
-        idx = np.argsort(f)
-        f = f[idx]
-        Pxx = Pxx[idx]
-        #computer cumulative power
-        df = f[1] - f[0]
-        cumulative = np.cumsum(Pxx) * df
-        total_power = cumulative[-1]
-        #99% occupied bandwidth 
-        low_idx = np.where(cumulative >= 0.0005 * total_power)[0][0]
-        high_idx = np.where(cumulative >= 0.9995 * total_power)[0][0]
-        bw = f[high_idx] - f[low_idx]
-        return f, Pxx, bw
+    def calculate_psd(self ,fs, signal,threshold=-40):
+        fft_data = np.fft.fft(signal)
+        fft_data = np.fft.fftshift(fft_data)
+
+        power = np.abs(fft_data)**2
+        Pxx = power / np.sum(power) 
+        f = np.fft.fftshift(np.fft.fftfreq(len(signal), 1/fs))
+
+
+        Pxx_dB = 10*np.log10(Pxx + 1e-12)
+
+        peak = np.max(Pxx_dB)
+        mask = Pxx_dB > (peak + threshold)
+
+        idx = np.where(mask)[0]
+
+        f_low = f[idx[0]]
+        f_high = f[idx[-1]]
+
+        bw = f_high - f_low
+        return f, Pxx_dB, bw
+
+
