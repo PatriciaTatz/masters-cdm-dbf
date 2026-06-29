@@ -17,9 +17,7 @@ class CXBF():
     codeids: list = field(default_factory=lambda: [1, 2])
 
     def __post_init__(self):
-        #calculate and assign derived parameters 
-        self.B = (1+self.alpha)*self.Rb
-        self.Rc = self.B * self.Lc
-        self.Fs = self.sps_chip*self.Rc 
-        self.Ts = 1/self.Fs
-        self.sps_symbol = int(self.Fs / self.Rb) #becomes sps_chip*(1+alpha)*Lc
+        #calculate and assign derived parameter
+        self.sps_symbol = 10 #becomes sps_chip*(1+alpha)*Lc
+        self.Ts = 1/self.Rb 
+        self.Fs = self.sps_symbol / self.Ts 

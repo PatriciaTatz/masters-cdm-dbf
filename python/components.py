@@ -40,34 +40,18 @@ class CDMx:
         else: 
             raise Exception("Unrecognised code family! Choose from [WH, ]")
 
-
-        codes = self.create_code_timeseries(codes)
-
         return codes 
 
-    def create_code_timeseries(self, allcodes):
-        codets = []
-
-        for code in allcodes:
-            # Step 1: expand each chip
-            chip_expanded = np.repeat(code, self.conf.sps_chip)
-
-            # Step 2: repeat code to match signal length
-            reps = int(np.ceil(len(self.time) / len(chip_expanded)))
-            full_code = np.tile(chip_expanded, reps)
-
-            # Step 3: trim to exact length
-            full_code = full_code[:len(self.time)]
-
-            codets.append(full_code)
-
-        return codets
-
-    def spreader(self, code, signal):
+    def spreader(self, code, asignal):
         """
         direct time multiplication
         """
-        ss = signal * code 
+        ss = [] 
+        for i in range(len(asignal)):
+            
+            val = asignal[i]*code[i%self.conf.Lc]
+            ss.append(val)
+    
         return ss     
 
     def despreader(self, code, spreadsum):   
@@ -86,7 +70,7 @@ class CDMx:
         return self.recovered/np.max(self.recovered)
 
 class Filter:
-    def rrcfilter(self, symbols, Rb, Fs, sps_symbol, alpha, span=16, mode="txmode"):
+    def rrcfilter(self, symbols, Rb, Fs, sps_symbol, alpha, span=8, mode="txmode"):
         """
         rrc filter for transmit
         independent of Lc / Rx settings as its suppose to simulate real rxd signals

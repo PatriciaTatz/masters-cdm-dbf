@@ -19,16 +19,44 @@ class Receiver():
 
         self.cdmx = CDMx(self.conf)
         self.codes = self.cdmx.generate_code(self.time)
-        self.rxsignal =  signal.elements
+        self.rxsignal = signal.elements.copy()
 
         if "signal" in self.plot:
             self.signal_plot(
                 signal.time,
                 signal.elements[0],
-                signal.bpsksymbols
+                signal.bpsksymbols,
+                self.conf.Fs
             )
         
+        dt = 1/self.conf.Fs 
+        if self.conf.Lc < self.conf.sps_symbol:
+            ups = 1
+            ds = self.conf.sps_symbol//self.conf.Lc
+            newdt = dt * ds 
+        elif self.conf.Lc > self.conf.sps_symbol:
+            ds = 1
+            ups = 2* self.conf.Lc // self.conf.sps_symbol
+            newdt  = dt / ups
+        else:
+            ds = 1 
+            ups = 1
 
+        for i in range(self.conf.no_elem):
+            self.rxsignal[i] = resample_poly(signal.elements[i], ups, ds)
+
+        self.newFs = 1/newdt
+        self.time = np.arange(len(self.rxsignal[0]))*newdt
+
+        if "signal" in self.plot:
+            self.signal_plot(
+                self.time,
+                self.rxsignal[0],
+                signal.bpsksymbols,
+                self.newFs
+            )
+   
+        
     def assemble(self):
         #====================
         #     SPREADER      |
@@ -43,8 +71,8 @@ class Receiver():
 
         if "spread" in self.plot:
             self.spread_plot(
-                signal.time, signal.elements,  
-                self.time, self.codes, 
+                self.time, self.rxsignal,  
+                self.time, self.rxspread, 
                 signal.bpsksymbols,
                 0
             )
@@ -89,11 +117,11 @@ class Receiver():
         plt.grid()
         plt.show()
 
-    def signal_plot(self, time, signal, symbols):
+    def signal_plot(self, time, asignal, symbols, Fsample):
         plt.figure()
-        plt.plot(time*1e9, signal, '--o')
+        plt.plot(time*1e9, asignal, '--o')
         plt.title(f"Simulated Rx Signal Tsim={config.simtime}")
-        plt.stem(time[:len(symbols)]*1e9,symbols, 'orange')
+        plt.stem(signal.time[:len(symbols)]*1e9,symbols, 'orange')
         plt.grid()
         plt.xlabel("Time (nsec)")
         plt.ylabel("Amplitude")
@@ -101,7 +129,7 @@ class Receiver():
         plt.figure()
         f, Pxx, bw = SpecAn().calculate_psd(
             self.conf.Fs,
-            signal,
+            asignal,
             threshold=-20
             )
         plt.plot(f/1e6, Pxx, label="PSD")
@@ -119,33 +147,17 @@ class Receiver():
         plt.figure()
         plt.title(f"Spread Signal of Element {index}")
         plt.plot(tbefore, before_signal[index], '--ob', label=f"Before element {index} signal")
-        plt.step(tafter, after_signal[index], '-og')
-
-        plt.axvline(x=1.5, color='r', linestyle='--')
-        plt.axvline(x=1.5+1, color='r', linestyle='--')
-
-
+        plt.plot(tafter, after_signal[index], '-og', label="After spread")
         #plt.stem(tbefore[:len(symbols)]*1e9,symbols, 'orange')
         plt.legend()
         plt.grid()
 
 
+        f, Pxx, bw = SpecAn().calculate_psd(
+            self.newFs,
+            after_signal[index],
+            threshold=-23)
 
-        # Create 2 rows, 1 column
-        fig, axs = plt.subplots(2, 1)
-        # First plot
-        axs[1].step(tafter*1e9, after_signal[index], '-xg', label=f"After element {index} signal" )
-        axs[1].set_title("Symbol Sequence")
-        axs[1].grid()
-
-        # Second plot
-        plotonly = np.repeat([1, -1, 1, 1, -1, 1, 1], self.conf.sps_symbol)
-        axs[0].step(tafter*1e9, plotonly, '-ob')
-        axs[0].set_title("Chip Sequence")
-        axs[0].grid()
-        plt.tight_layout()
-
-        f, Pxx, bw = SpecAn().calculate_psd(self.conf.Fs, np.array(after_signal[index]), threshold=-23)
         plt.figure()
         plt.plot(f/1e6, Pxx, label="PSD")
         plt.xlabel("Frequency (MHz)")
@@ -176,14 +188,14 @@ if __name__ == "__main__":
     # PARAMETERS 
     # ==============================
 
-    Rb = 1
+    Rb =6.25e6
     Tb = 1/Rb
-    symbols = 7
+    symbols = 100
     totaltime = symbols*Tb
 
     config = CXBF(
         Rb = Rb,
-        Lc = 4,
+        Lc = 32,
         sps_chip= 1,
         alpha = 0.5,
         simtime = totaltime,

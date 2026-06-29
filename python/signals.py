@@ -34,7 +34,6 @@ class DiscreteSignal:
         #randomized symbols 
         no_symbols = int(self.conf.simtime*self.conf.Rb)
         self.bpsksymbols = np.random.choice(values, no_symbols) 
-        self.bpsksymbols = [1, -1, 1, -1, 1, -1, 1]
 
         #add rrcfilter
         self.transmit, self.bpsksymbols = self.mf.rrcfilter(
@@ -50,7 +49,7 @@ class DiscreteSignal:
 
     def create_timeseries(self):
         #the timestep is the symbol period divided by how much each sample was upsampled by the RRC filter
-        self.dt = 1 / self.conf.Fs
+        self.dt = 1 / self.conf.Fs 
         self.time =  np.arange(len(self.transmit)) * self.dt
         
     def create_elementsignals(self):
