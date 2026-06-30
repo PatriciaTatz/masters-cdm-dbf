@@ -16,10 +16,11 @@ class DiscreteSignal:
     #Method to generate discrete signal on the phase array 
     #Assumed output after the RF-front end. That is after carrier downconversion and LPF. 
 
-    def __init__(self, sigconfig):
-        self.conf = sigconfig
+    def __init__(self, conf):
+        self.conf = conf
+
         #generate signal/s
-        self.mf = Filter()
+        self.mf = Filter(conf)
         self.create_symbols() #create symbols, rrc filtered
         self.create_timeseries()#create time series based on input symbol rate
         self.create_elementsignals()
@@ -32,24 +33,19 @@ class DiscreteSignal:
             values = [pi/4, 3*pi/4, 5*pi/4, 7*pi/4]
 
         #randomized symbols 
-        no_symbols = int(self.conf.simtime*self.conf.Rb)
-        self.bpsksymbols = np.random.choice(values, no_symbols) 
+        no_symbols = int(self.conf.simtime*self.conf.rb)
+        self.symbols = np.random.choice(values, no_symbols) 
+        #self.bpsksymbols = [1, -1, 1, -1, 1, 1, -1, -1, 1, 1]
 
         #add rrcfilter
-        self.transmit, self.bpsksymbols = self.mf.rrcfilter(
-            self.bpsksymbols, 
-            self.conf.Rb,
-            self.conf.Fs,
-            self.conf.sps_symbol, 
-            self.conf.alpha
-            )
+        self.transmit, self.symbols = self.mf.rrcfilter(self, self.conf.fs)
 
     def add_awgn(self, signal, SNR):
         return ch.awgn(signal,SNR)
 
     def create_timeseries(self):
         #the timestep is the symbol period divided by how much each sample was upsampled by the RRC filter
-        self.dt = 1 / self.conf.Fs 
+        self.dt = 1 / self.conf.fs 
         self.time =  np.arange(len(self.transmit)) * self.dt
         
     def create_elementsignals(self):
@@ -82,8 +78,8 @@ if __name__ == "__main__":
     totaltime = symbols*Tb
 
     config = CXBF(
-        Rb = Rb,
-        Lc = 4,
+        rb = Rb,
+        lc = 4,
         sps_chip= 1,
         alpha = 0.5,
         simtime = totaltime,
@@ -91,9 +87,6 @@ if __name__ == "__main__":
     )
     
     signal = DiscreteSignal(config)
-    f, Pxx, bw = SpecAn().calculate_psd(
-            config.Fs,
-            signal.elements[0])
 
 
     #==================================
@@ -102,14 +95,20 @@ if __name__ == "__main__":
     plt.figure()
     plt.plot(signal.time*1e9, signal.transmit, '--o', label="RRC Filtered Tx Signal")
     plt.title(f"Signal Generator, Tsim={config.simtime*1e9:g}ns")
-    plt.stem(signal.time[:len(signal.bpsksymbols)]*1e9,signal.bpsksymbols, 'red', label="Upsampled Symbols")
+    plt.stem(signal.time[:len(signal.symbols)]*1e9,signal.symbols, 'red', label="Upsampled Symbols")
     plt.grid()
     plt.xlabel("Time (nsec)")
     plt.ylabel("Amplitude")
     plt.legend()
 
     plt.figure()
-    plt.semilogy(f/1e6, Pxx, label="PSD")
+    plt.title(f"PSD of Tx Signal")
+    f, Pxx, bw = SpecAn().calculate_psd(
+        config.fs,
+        signal.elements[0],
+        threshold=-3
+        )
+    plt.plot(f/1e6, Pxx, label="PSD")
     plt.text(
         0.02, 0.95,
         f"99.9% BW={bw/1e6:.2f}MHz",
@@ -118,14 +117,7 @@ if __name__ == "__main__":
         va='top',
         bbox=dict(facecolor='white', edgecolor='black')
     )
-    plt.text(
-        0.02, 0.85,
-        f"Theoretical BW={config.B/1e6}MHz",
-        transform=plt.gca().transAxes,
-        ha='left',
-        va='top',
-        bbox=dict(facecolor='white', edgecolor='black')
-    )
+    plt.grid()
 
     plt.figure()
     plt.grid()
