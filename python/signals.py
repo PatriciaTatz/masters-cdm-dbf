@@ -38,7 +38,7 @@ class DiscreteSignal:
         #self.bpsksymbols = [1, -1, 1, -1, 1, 1, -1, -1, 1, 1]
 
         #add rrcfilter
-        self.transmit, self.symbols = self.mf.rrcfilter(self, self.conf.fs)
+        self.transmit, self.symbols = self.mf.rrcfilter(self.symbols, self.conf.fs)
 
     def add_awgn(self, signal, SNR):
         return ch.awgn(signal,SNR)
@@ -103,15 +103,15 @@ if __name__ == "__main__":
 
     plt.figure()
     plt.title(f"PSD of Tx Signal")
-    f, Pxx, bw = SpecAn().calculate_psd(
+    specan = SpecAn().calculate_psd(
         config.fs,
         signal.elements[0],
         threshold=-3
         )
-    plt.plot(f/1e6, Pxx, label="PSD")
+    plt.plot(specan.f/1e6, specan.Pxx_dB, label="PSD")
     plt.text(
         0.02, 0.95,
-        f"99.9% BW={bw/1e6:.2f}MHz",
+        f"99.9% BW={specan.bw/1e6:.2f}MHz",
         transform=plt.gca().transAxes,
         ha='left',
         va='top',

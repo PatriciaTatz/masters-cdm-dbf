@@ -8,31 +8,31 @@ RF components
 - Matched Filter 
 """
 
-from scipy.signal import max_len_seq, welch
+from scipy.signal import max_len_seq, resample_poly
 import numpy as np  
 from enum import Enum 
 import commpy.filters as filter
 from commpy.sequences import pnsequence
-
 import komm as km
 import matplotlib.pyplot as plt 
-from math import log2
+from math import log2, ceil
+
+from models import DecorrOutput, SpreadOutput, Specan
+
 
 class CDMx:
     def __init__(self, conf):
-        self.mf = Filter()
+        self.mf = Filter(conf)
         self.conf = conf 
 
-
-    def generate_code(self, time):
-        self.time = time
+    def generate_code(self):
         if self.conf.codefam == "WH":
             #construct n-by-n Hadamard matrix using Sylvesters construction
             #n: must be a power of 2 and int 
             codes = []
             for i in range(self.conf.no_elem):
                 WHcode = km.WalshHadamardSequence(
-                    length=self.conf.Lc,
+                    length=self.conf.lc,
                     index=self.conf.codeids[i],
                     ordering='sequency')
 
@@ -42,60 +42,94 @@ class CDMx:
 
         return codes 
 
-    def spreader(self, code, asignal):
-        """
-        direct time multiplication
-        """
-        ss = [] 
-        for i in range(len(asignal)):
-            
-            val = asignal[i]*code[i%self.conf.Lc]
-            ss.append(val)
-    
-        return ss     
+    def resample_to_spschip(self,targetfs, oldfs, signal):
+        if oldfs < targetfs:
+            ups = int(round(targetfs/oldfs))
+            ds = 1 
+        elif oldfs > targetfs:
+            ups = 1 
+            ds = int(round(oldfs/targetfs))
+        else:
+            ups = 1
+            ds = 1
+        
+        newfs = oldfs * ups / ds #rarely a perfect match
+        rs = resample_poly(signal, ups, ds)
 
-    def despreader(self, code, spreadsum):   
+        return rs, newfs
+
+    def spreader(self, signals, codes):
+        targetfs = self.conf.sps_chip * self.conf.rc
+        oldfs = self.conf.fs
+        ss = []
+        exp_codes = []
+        for i in range(self.conf.no_elem):
+            resampled, fs = self.resample_to_spschip(targetfs, oldfs, signals[i])
+
+            code_sequence = np.repeat(codes[i], self.conf.sps_chip)
+            tile_repeats = int(np.ceil(len(resampled) / len(code_sequence)))
+            expanded_code = np.tile(code_sequence, tile_repeats)[:len(resampled)]
+            exp_codes.append(expanded_code)
+
+            spread_signal = resampled*expanded_code 
+            ss.append(spread_signal)
+
+        time = np.arange(len(ss[0])) * (1/fs)
+        return SpreadOutput(ss, time, exp_codes, fs)
+ 
+
+    def despreader(self, sumsignal, codes, fs):
         #Despread signal by multiplying with code block
-        despread = spreadsum * code 
+        dss = [] #despread
+        decorr = [] #decorrelated with rrc filter
 
-        self.recovered, self.rxsymbols = self.mf.rrcfilter(
-            despread,
-            self.conf.Rb,
-            self.conf.Fs,
-            self.conf.sps_symbol, 
-            self.conf.alpha,
-            mode="rxmode"
-            )
+        for i in range(self.conf.no_elem):
+            despread_signal = sumsignal*codes[1]
+            dss.append(despread_signal)
     
-        return self.recovered/np.max(self.recovered)
+            signal, symbols = self.mf.rrcfilter(
+                despread_signal,
+                fs,
+                mode="rxmode"
+                )
+            
+            decorr.append(signal)
+        #removes delay 
+        time = np.arange(len(decorr[0]))*(1/fs)
+        return DecorrOutput(decorr, time)
+
+
 
 class Filter:
-    def rrcfilter(self, symbols, Rb, Fs, sps_symbol, alpha, span=8, mode="txmode"):
-        """
-        rrc filter for transmit
-        independent of Lc / Rx settings as its suppose to simulate real rxd signals
-        what it does:
-        - upsamples
-        - applies filter 
-        - is called by mysignal.py 
-        """
+    def __init__(self, conf):
+        self.alpha = conf.alpha
+        self.rb = conf.rb
+        self.span = conf.span 
 
-        Ts = 1/Rb
-        Ntaps = span*sps_symbol + 1  #must be odd, total length of the filter 
+    def rrcfilter(self, signal, fs, mode="txmode"):
+        sps_symbol = int(round(fs / self.rb))
+        ts = 1 / self.rb 
+        ntaps = self.span*sps_symbol + 1  #must be odd, total length of the filter 
 
         if mode == "txmode":
-            upsampled = np.zeros(len(symbols)*sps_symbol)
-            upsampled[::sps_symbol] = symbols
+            symbols = np.zeros(len(signal)*sps_symbol)
+            symbols[::sps_symbol] = signal
+            samples = symbols
         else:
-            upsampled = symbols 
-
+            samples = signal
 
         #apply filter
-        dt_filter, h_rrc = filter.rrcosfilter(Ntaps, alpha, Ts, Fs)
-        txsignal = np.convolve(upsampled, h_rrc, mode='full')
-        h_delay = (Ntaps-1)//2
+        dt_filter, h_rrc = filter.rrcosfilter(ntaps, self.alpha, ts, fs)
+        h_rrc /= np.sqrt(np.sum(h_rrc**2))
 
-        return txsignal[h_delay:-h_delay], upsampled
+        filtered = np.convolve(samples, h_rrc, mode='full')
+        h_delay = (ntaps-1)//2
+        filtered_nodelay = filtered[h_delay:-h_delay]
+
+        if mode == "rxmode":
+            symbols = filtered_nodelay[::sps_symbol]
+
+        return filtered_nodelay/np.abs(np.max(filtered_nodelay)), symbols  
 
 
 class SpecAn: 
@@ -106,8 +140,7 @@ class SpecAn:
         power = np.abs(fft_data)**2
         Pxx = power / np.sum(power) 
         f = np.fft.fftshift(np.fft.fftfreq(len(signal), 1/fs))
-
-
+        
         Pxx_dB = 10*np.log10(Pxx + 1e-12)
 
         peak = np.max(Pxx_dB)
@@ -119,6 +152,6 @@ class SpecAn:
         f_high = f[idx[-1]]
 
         bw = f_high - f_low
-        return f, Pxx_dB, bw
+        return Specan(f, Pxx_dB, bw)
 
 

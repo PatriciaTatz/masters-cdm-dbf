@@ -8,105 +8,75 @@ from config import CXBF
 import matplotlib.pyplot as plt 
 
 class Receiver():
-    def __init__(self, config, plot):
+    def __init__(self, config, plot="off"):
         self.conf  = config 
         self.plot = plot
         if self.plot == "all":
             self.plot="signal,spread,sum,recovered"
 
     def setup(self, signal):
-        self.time = np.arange(len(signal.elements[0]))/self.conf.Fs
-
+        self.time = np.arange(len(signal.elements[0]))/self.conf.fs
         self.cdmx = CDMx(self.conf)
-        self.codes = self.cdmx.generate_code(self.time)
-        self.rxsignal = signal.elements.copy()
+        self.codes = self.cdmx.generate_code()
+        self.rxsignals = signal.elements.copy()
 
         if "signal" in self.plot:
             self.signal_plot(
+                "Original",
                 signal.time,
                 signal.elements[0],
-                signal.bpsksymbols,
-                self.conf.Fs
+                signal.symbols,
+                self.conf.fs
             )
         
-        dt = 1/self.conf.Fs 
-        if self.conf.Lc < self.conf.sps_symbol:
-            ups = 1
-            ds = self.conf.sps_symbol//self.conf.Lc
-            newdt = dt * ds 
-        elif self.conf.Lc > self.conf.sps_symbol:
-            ds = 1
-            ups = 2* self.conf.Lc // self.conf.sps_symbol
-            newdt  = dt / ups
-        else:
-            ds = 1 
-            ups = 1
-
-        for i in range(self.conf.no_elem):
-            self.rxsignal[i] = resample_poly(signal.elements[i], ups, ds)
-
-        self.newFs = 1/newdt
-        self.time = np.arange(len(self.rxsignal[0]))*newdt
-
-        if "signal" in self.plot:
-            self.signal_plot(
-                self.time,
-                self.rxsignal[0],
-                signal.bpsksymbols,
-                self.newFs
-            )
-   
         
     def assemble(self):
         #====================
         #     SPREADER      |
         #====================
-        self.rxspread = []
-        for i in range(self.conf.no_elem):
-            nSpread = self.cdmx.spreader(
-                self.codes[i],
-                self.rxsignal[i]
-            )
-            self.rxspread.append(nSpread)
+        spread = self.cdmx.spreader(
+            self.rxsignals,
+            self.codes,
+        )
 
         if "spread" in self.plot:
             self.spread_plot(
-                self.time, self.rxsignal,  
-                self.time, self.rxspread, 
-                signal.bpsksymbols,
+                self.time, self.rxsignals,  
+                spread.time, spread.signals, 
+                signal.symbols,
+                spread.fs,
                 0
             )
 
         #====================
         #     COMBINER      |
         #====================
-        self.sum = [sum(values) for values in zip(*self.rxspread)]
+        self.sum = [sum(values) for values in zip(*spread.signals)]
 
         if "sum" in self.plot: 
             self.sum_plot()
 
-
         #====================
         #     DESPREAD      |
         #====================
-        self.rxdespread= []
-        for i in range(self.conf.no_elem):
-            nDespread = self.cdmx.despreader(
-                self.codes[i],
-                self.sum
-                )
-            self.rxdespread.append(nDespread)
+        despread = self.cdmx.despreader(
+            self.sum,
+            spread.codes,
+            spread.fs
+            )
 
         if "recovered" in self.plot:
             self.spread_plot(
                 signal.time, signal.elements,  
-                self.time, self.rxdespread, 
-                signal.bpsksymbols,
+                despread.time, despread.signals,
+                signal.symbols,
+                spread.fs,
                 0
             )
 
-
         return signal
+
+
 
     def sum_plot(self):
         plt.figure()
@@ -117,33 +87,40 @@ class Receiver():
         plt.grid()
         plt.show()
 
-    def signal_plot(self, time, asignal, symbols, Fsample):
+    def signal_plot(self, title, time, asignal, symbols, Fsample):
         plt.figure()
-        plt.plot(time*1e9, asignal, '--o')
-        plt.title(f"Simulated Rx Signal Tsim={config.simtime}")
-        plt.stem(signal.time[:len(symbols)]*1e9,symbols, 'orange')
+        plt.plot(time, asignal, '-o', label="RRC Tx Signal")
+        plt.title(f"{title} Rx Signal for Tsim={config.simtime}")
+        #plt.axvline(x=time[6], color='red', linestyle='--', linewidth=2)
+        #plt.axvline(x=time[10], color='red', linestyle='--', linewidth=2)
+        plt.stem(signal.time[:len(symbols)],symbols, 'orange', label="Symbols")
+        plt.legend()
         plt.grid()
-        plt.xlabel("Time (nsec)")
+        plt.xlabel("Time (seconds)")
         plt.ylabel("Amplitude")
 
         plt.figure()
-        f, Pxx, bw = SpecAn().calculate_psd(
-            self.conf.Fs,
+        plt.title(f"PSD of {title} Rx Signal")
+        specan = SpecAn().calculate_psd(
+            self.conf.fs,
             asignal,
-            threshold=-20
+            threshold=-3
             )
-        plt.plot(f/1e6, Pxx, label="PSD")
+        plt.plot(specan.f/1e6, specan.Pxx_dB, label="PSD")
         plt.text(
             0.02, 0.95,
-            f"99.9% BW={bw/1e6:.2f}MHz",
+            f"99.9% BW={specan.bw/1e6:.2f}MHz",
             transform=plt.gca().transAxes,
             ha='left',
             va='top',
             bbox=dict(facecolor='white', edgecolor='black')
         )
+        plt.ylabel("Power (dB)")
+        plt.xlabel("Frequency (MHz)")
+        plt.grid()
         plt.show()
 
-    def spread_plot(self,tbefore, before_signal, tafter, after_signal, symbols, index=0):
+    def spread_plot(self,tbefore, before_signal, tafter, after_signal, symbols, fs, index=0):
         plt.figure()
         plt.title(f"Spread Signal of Element {index}")
         plt.plot(tbefore, before_signal[index], '--ob', label=f"Before element {index} signal")
@@ -153,24 +130,25 @@ class Receiver():
         plt.grid()
 
 
-        f, Pxx, bw = SpecAn().calculate_psd(
-            self.newFs,
+        specan = SpecAn().calculate_psd(
+            fs,
             after_signal[index],
-            threshold=-23)
+            threshold=-26)
 
         plt.figure()
-        plt.plot(f/1e6, Pxx, label="PSD")
+        plt.plot(specan.f/1e6, specan.Pxx_dB, label="PSD")
         plt.xlabel("Frequency (MHz)")
         plt.ylabel("Amplitude")
         plt.text(
             0.02, 0.95,
-            f"99.99% BW={bw/1e6:.2f}MHz",
+            f"99.99% BW={specan.bw/1e6:.2f}MHz",
             transform=plt.gca().transAxes,
             ha='left',
             va='top',
             bbox=dict(facecolor='white', edgecolor='black')
         )
-
+        plt.ylabel("Power (dB)")
+        plt.xlabel("Frequency (MHz)")
         plt.grid()
         plt.show()
 
@@ -188,15 +166,15 @@ if __name__ == "__main__":
     # PARAMETERS 
     # ==============================
 
-    Rb =6.25e6
+    Rb = 6.25e6
     Tb = 1/Rb
     symbols = 100
     totaltime = symbols*Tb
 
     config = CXBF(
-        Rb = Rb,
-        Lc = 32,
-        sps_chip= 1,
+        rb = Rb,
+        lc = 32,
+        sps_chip= 2,
         alpha = 0.5,
         simtime = totaltime,
         no_elem = 2
@@ -206,6 +184,6 @@ if __name__ == "__main__":
     signal = DiscreteSignal(config)
 
     #initiate and assemble receiver 
-    rx = Receiver(config, "spread")
+    rx = Receiver(config, "spread, recovered")
     rx.setup(signal)
     rx.assemble() 
