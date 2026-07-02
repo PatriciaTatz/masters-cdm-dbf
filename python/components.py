@@ -25,12 +25,12 @@ class CDMx:
         self.mf = Filter(conf)
         self.conf = conf 
 
-    def generate_code(self):
+    def generate_codes(self):
         if self.conf.codefam == "WH":
             #construct n-by-n Hadamard matrix using Sylvesters construction
             #n: must be a power of 2 and int 
             codes = []
-            for i in range(self.conf.no_elem):
+            for i in self.conf.codeids:
                 WHcode = km.WalshHadamardSequence(
                     length=self.conf.lc,
                     index=self.conf.codeids[i],

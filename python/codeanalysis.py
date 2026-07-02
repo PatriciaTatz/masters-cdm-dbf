@@ -5,6 +5,7 @@ assuming that its true Lc  = Narrays * 2
 
 from components import CDMx
 from config import CDMcfg   
+from models import CodeWeights
 
 from scipy.signal import find_peaks, peak_widths, correlate, correlation_lags, csd
 import matplotlib.pyplot as plt 
@@ -27,37 +28,123 @@ class CodeSelector:
         self.lags = correlation_lags(self.Lc, self.Lc)
         self.node_weight = {i: 0 for i in range(self.Lc)}
         self.edge_weight = {f"{i}-{j}":0 for i,j in itertools.combinations(range(self.Lc), 2)}
-        self.disqualified = []
+
+    def generate_weights(self):
+        sfs =  self.sf()
+        acfs = self.acf()
+        
+        self.node_weight = {
+            i: 0.5*acfs[i] + 0.5*sfs[i]
+            for i in range(self.Lc)
+            }
+
+        csd_height, ccf_pk = self.ccf()
+        self.edge_weight[f"{i}-{j}"] += csd_height + ccf_pk[0][0] + ccf_pk[1][0]
+
+        return CodeWeights(node, edges)
+
+    def sf(self):
+        """
+        Compute the spectral flatness (SF) for each code.
+
+        Spectral flatness measures how noise-like a spectrum is:
+
+            SF = geometric mean / arithmetic mean
+
+        Values near:
+            1 -> flat, noise-like spectrum
+            0 -> peaky, tonal spectrum
+
+        Ranking:
+            Higher spectral flatness is better.
+
+        Returns:
+            sf_score : ndarray
+                Normalized spectral flatness score for each code.
+        """
+
+        sf_score = []
+
+        for code in self.allcodes:
+
+            # Power spectrum
+            spectrum = fft(code)
+            power = np.abs(spectrum) ** 2
+
+            # Prevent log(0) in geometric mean calculation
+            power += 1e-12
+
+            # Normalize power spectrum
+            norm_power = power / np.sum(power)
+
+            # Arithmetic and geometric means
+            arithmetic_mean = np.mean(norm_power)
+            geometric_mean = np.exp(np.mean(np.log(norm_power)))
+
+            # Spectral flatness
+            flatness = geometric_mean / arithmetic_mean
+
+            sf_score.append(flatness)
+
+        # Normalize scores to [0, 1]
+        sf_score = np.asarray(sf_score)
+        sf_score /= np.max(sf_score)
+
+        return sf_score
 
 
     def acf(self):
-        #Find the peak width at zero timelag
-        #acf = [acf, pk width, pk width_height, pk left ips, pk right ips ]
-        #Rank: ACF WIDTHS MINIMISED 
+        """
+        Compute the periodic autocorrelation function (ACF) for each code and
+        measure the width of the zero-lag peak.
+
+        Stores:
+            self.acf_data : list of tuples
+                (acf, widths, width_heights, left_ips, right_ips)
+                Used for plotting 
+
+        Returns:
+            acf_score : normalized peak-width score
+        """
+
+        self.acfplot = []
         acf_score = []
-        self.acf = []
-        for j in range(len(self.allcodes)):
-            #periodic ACF and normalised 
-            acf = np.real(np.fft.ifft(np.fft.fft(self.allcodes[j]) * np.conj(np.fft.fft(self.allcodes[j]))))
-            acf = np.fft.fftshift(acf) / self.Lc 
-            
-            zerolagindex = self.Lc //2 
-            acf_pk = peak_widths(acf, [self.Lc//2], rel_height=0.5)
 
-            #force correct flat acf as BAD scores 
-            if acf_pk[0] == 0:
-                del self.node_weight[j]
-                self.disqualified.append(j)
+        zero_lag = self.Lc // 2
 
-            self.acf.append((acf,) + acf_pk)
-            acf_score.append(acf_pk[0][0] + acf_pk[1][0])
+        for code in self.allcodes:
+            # Periodic autocorrelation (Wiener-Khinchin theorem)
+            acf = np.real(
+                np.fft.ifft(
+                    np.fft.fft(code) *
+                    np.conj(np.fft.fft(code))
+                )
+            )
 
-        acf_score = acf_score / np.max(acf_score) #normalised
-        self.node_weight = {
-            i: self.node_weight[i] / acf_score[i]
-            for i in range(len(acf_score))
-            if i not in self.disqualified
-            }
+            # Shift zero lag to centre and normalise
+            acf = np.fft.fftshift(acf) / self.Lc
+
+            # Measure full width at half maximum (FWHM)
+            widths, width_heights, left_ips, right_ips = peak_widths(
+                acf,
+                [zero_lag],
+                rel_height=0.5
+            )
+
+            # Store full result for later inspection
+            self.acfplot.append(
+                (acf, widths, width_heights, left_ips, right_ips)
+            )
+
+            # Narrower peaks are better
+            acf_score.append(widths[0])
+
+        # Normalize scores to [0, 1]
+        acf_score = np.asarray(acf_score)
+        acf_score /= np.max(acf_score)
+
+        return acf_score 
+        
 
     def ccf(self):
         #Find the CCF peak at zero time lag and classifies them as bad 
@@ -87,57 +174,23 @@ class CodeSelector:
                 #Amplitude at 1/Lc 
                 if not isclose(self.fbins[1], 1/self.Lc): raise ValueError("First frequency bin not close to 1/Lc!!")
                 csd_height =  float(self.fbins[1])
-                
-                self.edge_weight[f"{i}-{j}"] += csd_height + ccf_pk[0][0] + ccf_pk[1][0]
 
-
-    def sf(self):
-        #here i calculate the spectral flatness (sf) of a code
-        #GOOD: MAXIMISED
-        sfs = []
-        for j in range(len(self.allcodes)):
-            fftcode = fft(self.allcodes[j])
-            power = np.abs(fftcode)**2 + 1e-12 #added 1e-12 to account for 0 bins, but close enough to be zero. 
-            normpower = power / np.sum(power)
-            amean = np.mean(normpower)
-            gmean = np.exp(np.mean(np.log(normpower))) 
-            sf = float(gmean / amean)
-            sfs.append(sf)
-        sfs = sfs / np.max(sfs)
-
-        self.node_weight = {
-            i: sfs[i]
-            for i in range(len(sfs))
-            if i not in self.disqualified
-        }
+        return csd_heights, ccf_pk
 
         
-
-    def find_best_clique(self, Narrays):
+    def find_best_clique(self, weights, no_elem):
         self.best_nodes = None
         self.worst_nodes = None 
         best_weight = float('inf')
         worst_weight = float('-inf')
 
-        #this order of operation is important! 
-        WHcodes.sf()
-        WHcodes.acf()
-        WHcodes.ccf()
-
-        #normalise the self node weights and edge weights 
-        self.node_weight = {
-            k: v / sum(self.node_weight.values())
-            for k, v in self.node_weight.items()
-        }
-
-
         valid_codes = [i for i in range(self.Lc) if i not in self.disqualified]
-        if len(valid_codes)<Narrays: raise("Not enough valid codes for this N array size!")
+        print(valid_codes)
+        if len(valid_codes)<no_elem: raise("Not enough valid codes for this N array size!")
 
-        for clique in itertools.combinations(valid_codes,Narrays):
-            print(self.node_weight)
-            node_sum = sum(self.node_weight[i] for i in clique)
-            edge_sum =  sum(self.edge_weight[f"{i}-{j}"] for i, j in itertools.combinations(clique, 2))
+        for clique in itertools.combinations(valid_codes,no_elem):
+            node_sum = sum(weights.node[i] for i in clique)
+            edge_sum =  sum(weights.edge[f"{i}-{j}"] for i, j in itertools.combinations(clique, 2))
 
             total = node_sum + edge_sum
             if total < best_weight:
@@ -244,23 +297,21 @@ class CodeSelector:
 
 
 if __name__ == "__main__":
-
-
-    #rankings of acf widths, ccf widths, and csd height at 1/Lc
-
     #initiate code config
     WHcfg = CDMcfg(
         simtime = 1, 
         lc=8,
         codefam="WH",
         no_elem=7)
+
+
     WHcodes = CodeSelector(WHcfg)
-    best, worst = WHcodes.find_best_clique(WHcfg.no_elem)
+
+    weights = WHcodes.generate_weights()
+    best, worst = WHcodes.find_best_clique(weights, WHcfg.no_elem)
+
     WHcodes.plot("ACF")
     WHcodes.plot("CCF")
     WHcodes.plot("CSD")
 
     WHcodes.plot("network", "best")
-
-    #WHcfg.codeids = best 
-    #print(worst)
