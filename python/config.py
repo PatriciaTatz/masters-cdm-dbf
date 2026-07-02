@@ -4,18 +4,17 @@ from dataclasses import dataclass, field
 import numpy as np
 
 @dataclass
-class CXBF():
-    rb: float
-    lc: int 
-    sps_chip: int
-    alpha: float
+class CDMcfg():
     simtime: float 
+    rb: float = 6.25e6
+    lc: int = 32
+    sps_chip: int = 2 
+    alpha: float = 0.5
     modType: str = "BPSK"
     codefam: str = "WH"
     no_elem: int = 1 
     degree: int = 1
     span: int = 8
-    codeids: list = field(default_factory=lambda: [1, 2])
 
     def __post_init__(self):
         #calculate and assign derived parameter
@@ -24,3 +23,4 @@ class CXBF():
         self.fs = self.sps_symbol / self.ts 
         self.b = self.rb * (1 + self.alpha)
         self.rc = self.rb * self.lc
+        self.codeids = np.arange(self.no_elem)

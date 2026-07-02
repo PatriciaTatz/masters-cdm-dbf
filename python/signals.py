@@ -8,7 +8,7 @@ from math import pi
 import random 
 import numpy as np  
 from components import Filter, SpecAn
-from config import CXBF
+from config import CDMcfg
 import matplotlib.pyplot as plt 
 from scipy.signal import welch
 
@@ -77,7 +77,7 @@ if __name__ == "__main__":
     symbols = 6
     totaltime = symbols*Tb
 
-    config = CXBF(
+    config = CDMcfg(
         rb = Rb,
         lc = 4,
         sps_chip= 1,

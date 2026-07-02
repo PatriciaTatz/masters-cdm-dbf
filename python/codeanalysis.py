@@ -3,11 +3,12 @@ analyse code sequences and find optimal set
 assuming that its true Lc  = Narrays * 2 
 """
 
-from components import CodeGenerator
-from config import dbfCfg, signalCfg
+from components import CDMx
+from config import CDMcfg   
 
 from scipy.signal import find_peaks, peak_widths, correlate, correlation_lags, csd
 import matplotlib.pyplot as plt 
+import matplotlib.colors as mcolors 
 import numpy as np 
 from scipy.fft import fft, fftfreq
 import itertools
@@ -17,41 +18,46 @@ import networkx as nx
 
 class CodeSelector:
     #Method to rank and select codes 
-    def __init__(self, config):
-        self.Lc = config.Lc
-        self.codefam = config.code
-        codes = CodeGenerator(config)
-        self.allcodes = [codes.generate(idx) for idx in np.arange(self.Lc)]
+    def __init__(self, conf):
+        self.Lc = conf.lc
+        self.codefam = conf.codefam
 
+        cdm = CDMx(conf)
+        self.allcodes = cdm.generate_codes()
         self.lags = correlation_lags(self.Lc, self.Lc)
+        self.node_weight = {i: 0 for i in range(self.Lc)}
+        self.edge_weight = {f"{i}-{j}":0 for i,j in itertools.combinations(range(self.Lc), 2)}
+        self.disqualified = []
 
 
     def acf(self):
         #Find the peak width at zero timelag
-        #ACF Widths = [(Amplitude, Code Index J)]
+        #acf = [acf, pk width, pk width_height, pk left ips, pk right ips ]
         #Rank: ACF WIDTHS MINIMISED 
-        acf_widths = []
-        self.acf_plot = []
+        acf_score = []
+        self.acf = []
         for j in range(len(self.allcodes)):
-            print(self.allcodes[j])
             #periodic ACF and normalised 
             acf = np.real(np.fft.ifft(np.fft.fft(self.allcodes[j]) * np.conj(np.fft.fft(self.allcodes[j]))))
             acf = np.fft.fftshift(acf) / self.Lc 
-            try:
-                zerolagindex = self.Lc //2 
-                acf_pk = peak_widths(acf, [self.Lc//2], rel_height=0.5) 
-                print(acf_pk)
-            except Exception as e:
-                print(f"Error occurred: {e}")
-                print(f"Error type: {type(e)}")
-        
+            
+            zerolagindex = self.Lc //2 
+            acf_pk = peak_widths(acf, [self.Lc//2], rel_height=0.5)
 
-            self.acf_plot.append((acf,) + acf_pk)
-            acf_widths.append((j, acf_pk[0]))
+            #force correct flat acf as BAD scores 
+            if acf_pk[0] == 0:
+                del self.node_weight[j]
+                self.disqualified.append(j)
 
-        acf_widths = self.create_dict(acf_widths)
+            self.acf.append((acf,) + acf_pk)
+            acf_score.append(acf_pk[0][0] + acf_pk[1][0])
 
-        return acf_widths
+        acf_score = acf_score / np.max(acf_score) #normalised
+        self.node_weight = {
+            i: self.node_weight[i] / acf_score[i]
+            for i in range(len(acf_score))
+            if i not in self.disqualified
+            }
 
     def ccf(self):
         #Find the CCF peak at zero time lag and classifies them as bad 
@@ -59,45 +65,36 @@ class CodeSelector:
         #CCF Heights = [(Amplitude, Code Index I, Code Index J), ... , ...]
         #GOOD: CCF WIDTHS MINIMISED
         #GOOD: CCF HEIGHTS MINIMISED 
-        # Returns, ccf_widths, pairidx, and       
+        # Returns, ccf_widths, pairi, and       
 
-        ccf_width = 0  #if no peak found 
-
-        self.csd_plot = []
-        self.ccf_plot = []
-        
-        sum_cfs = [] 
+        self.csd = []
+        self.ccf = []
         for i in range(len(self.allcodes)):
             for j in range(i+1, len(self.allcodes)):
-                #PERIODIC CCF 
-                ccf = np.fft.ifft(np.fft.fft(self.allcodes[i]) * np.conj(np.fft.fft(self.allcodes[j])))
-                ccf = np.fft.fftshift(ccf) 
-                try:
-                    zerolagindex = self.Lc //2 
-                    ccf_width , _, left, right = peak_widths(ccf, [self.Lc//2], rel_height=0.5) 
-                    
-                except Exception as e:
-                        print(f"Error occurred: {e}")
-                        print(f"Error type: {type(e)}")
-                ccf_plot.append((f"{i}-{j}", [ccf_width, left, right]))   
+                #PERIODIC CCF and normalised
+                #ccf_peak = [i, j, ccf, pk width, pk width_height, pk left ips, pk right ips ]
+                ccf = np.real(np.fft.ifft(np.fft.fft(self.allcodes[i]) * np.conj(np.fft.fft(self.allcodes[j]))))
+                ccf = np.fft.fftshift(ccf) / self.Lc 
 
+                zerolagindex = self.Lc //2 
+                ccf_pk = peak_widths(ccf, [self.Lc//2], rel_height=0.5) 
+                self.ccf.append((i, j, ccf, ) + ccf_pk)   
+                
                 #CSD               
                 self.fbins, csdx = csd(self.allcodes[i], self.allcodes[j], nperseg=self.Lc, return_onesided=False)  
-                self.csdx_list.append(csdx)     
+                self.csd.append((i,j, csdx))  
+
+                #Amplitude at 1/Lc 
                 if not isclose(self.fbins[1], 1/self.Lc): raise ValueError("First frequency bin not close to 1/Lc!!")
                 csd_height =  float(self.fbins[1])
-                csd_heights.append((f"{i}-{j}", csd_height))  
+                
+                self.edge_weight[f"{i}-{j}"] += csd_height + ccf_pk[0][0] + ccf_pk[1][0]
 
-                sumcf = csd_height + ccf_width 
-                sum_cfs.append((f"{i}-{j}", sumcf))
-        sum_cfs = self.create_dict(sum_cfs)
-
-        return sum_cfs
 
     def sf(self):
         #here i calculate the spectral flatness (sf) of a code
         #GOOD: MAXIMISED
-        self.sfs = []
+        sfs = []
         for j in range(len(self.allcodes)):
             fftcode = fft(self.allcodes[j])
             power = np.abs(fftcode)**2 + 1e-12 #added 1e-12 to account for 0 bins, but close enough to be zero. 
@@ -105,33 +102,42 @@ class CodeSelector:
             amean = np.mean(normpower)
             gmean = np.exp(np.mean(np.log(normpower))) 
             sf = float(gmean / amean)
-            self.sfs.append((j, sf))
+            sfs.append(sf)
+        sfs = sfs / np.max(sfs)
+
+        self.node_weight = {
+            i: sfs[i]
+            for i in range(len(sfs))
+            if i not in self.disqualified
+        }
+
         
-        self.sfs = self.create_dict(self.sfs)
 
-        return self.sfs
-        
-    def lagscaler(self, results_half):
-
-        left_ip = results_half[2][0]
-        right_ip = results_half[3][0]
-
-        left_lag = np.interp(left_ip, np.arange(len(self.lags)), self.lags)
-        right_lag = np.interp(right_ip, np.arange(len(self.lags)), self.lags)
-
-        return  left_lag, right_lag 
-
-
-    def find_best_clique(self, nodeweights, edgeweights, Narrays):
-
+    def find_best_clique(self, Narrays):
         self.best_nodes = None
         self.worst_nodes = None 
         best_weight = float('inf')
         worst_weight = float('-inf')
 
-        for clique in itertools.combinations(range(len(self.allcodes)),Narrays):
-            node_sum = sum(nodeweights[i] for i in clique)
-            edge_sum =  sum(edgeweights[f"{i}-{j}"] for i, j in itertools.combinations(clique, 2))
+        #this order of operation is important! 
+        WHcodes.sf()
+        WHcodes.acf()
+        WHcodes.ccf()
+
+        #normalise the self node weights and edge weights 
+        self.node_weight = {
+            k: v / sum(self.node_weight.values())
+            for k, v in self.node_weight.items()
+        }
+
+
+        valid_codes = [i for i in range(self.Lc) if i not in self.disqualified]
+        if len(valid_codes)<Narrays: raise("Not enough valid codes for this N array size!")
+
+        for clique in itertools.combinations(valid_codes,Narrays):
+            print(self.node_weight)
+            node_sum = sum(self.node_weight[i] for i in clique)
+            edge_sum =  sum(self.edge_weight[f"{i}-{j}"] for i, j in itertools.combinations(clique, 2))
 
             total = node_sum + edge_sum
             if total < best_weight:
@@ -142,25 +148,16 @@ class CodeSelector:
                 self.worst_nodes = clique
 
         return self.best_nodes, self.worst_nodes
+          
 
-    def create_dict(self, list):
-        #create dict for the nodes and vertices
-        #nodes [ key : value ] = [ code index : ACF_width ]
-        #edges [ key : value ] = [ code]
-        node_weights = {}
-        for _, (key, value) in enumerate(list):
-            node_weights[key] = value 
-        return node_weights             
-
-    def plot(self, output):
+    def plot(self, output, cliquetype="best"):
         if output == "ACF":
             for j in range(len(self.allcodes)):
-
                 lags = np.arange(-self.Lc//2, self.Lc//2)
-                acf = self.acf_plot[j][0]
-                height = self.acf_plot[j][2]
-                lips = np.interp(self.acf_plot[j][3], np.arange(self.Lc), lags) 
-                rips = np.interp(self.acf_plot[j][4], np.arange(self.Lc), lags) 
+                acf = self.acf[j][0]
+                height = self.acf[j][2]
+                lips = np.interp(self.acf[j][3], np.arange(self.Lc), lags) 
+                rips = np.interp(self.acf[j][4], np.arange(self.Lc), lags) 
 
                 #plot and save images 
                 plt.figure()
@@ -172,101 +169,98 @@ class CodeSelector:
 
                 plt.plot(lags[self.Lc//2], acf[self.Lc//2], "x")
                 plt.hlines(height, lips, rips, color="C2")  #yvalue, xmin, xmax 
+                plt.grid()
                 plt.savefig(f"./results/{self.codefam}/acf/acf_code{j}.png")
                 plt.close()
         elif output == "CCF":
-            for i in range(len(self.allcodes)):
-                for j in range(i+1, len(self.allcodes)):
-                    #plot and save images 
+            for i in range(len(self.ccf)):
+                #plot and save images 
+                lags = np.arange(-self.Lc//2, self.Lc//2)
+                ccf = self.ccf[i][2]
+                height = self.ccf[i][4]
+                lips = np.interp(self.ccf[i][5], np.arange(self.Lc), lags) 
+                rips = np.interp(self.ccf[i][6], np.arange(self.Lc), lags) 
+                ci = self.ccf[i][0]
+                cj = self.ccf[i][1]
 
-
-
-                    plt.figure()
-                    plt.plot(self.lags,self.ccf)
-                    lagx1, lagx2 = self.lagscaler(self.ccf_results_half)
-                    plt.plot(self.lags[self.ccf_largest_peak_index] , self.ccf[self.ccf_largest_peak_index ], "x")
-                    plt.hlines(self.ccf_results_half[1], lagx1, lagx2, color="C2")  #yvalue, xmin, xmax 
-                    plt.grid()
-                    plt.title(f"CCF: code[{i}]xcode[{j}]")
-                    plt.savefig(f"./results/{self.codefam}/ccf/ccf_codes{i}x{j}.png")
-                    plt.close()
-
-
-
+                plt.figure()
+                plt.plot(lags,ccf)
+                plt.plot(lags[self.Lc//2], ccf[self.Lc//2], "x")
+                plt.hlines(height, lips, rips, color="C2")  #yvalue, xmin, xmax 
+                plt.grid()
+                plt.title(f"CCF: code[{ci}]xcode[{cj}]")
+                plt.savefig(f"./results/{self.codefam}/ccf/ccf_codes{ci}x{cj}.png")
+                plt.close()
         elif output == "CSD":
-            for i in range(len(self.allcodes)):
-                for j in range(i+1, len(self.allcodes)):
-                    plt.figure()
-                    plt.stem(self.fbins,np.abs(self.csdx_list[i+j]))
-                    plt.title(f"CSD: code[{i}]xcode[{j}]")
-                    for m in range(-self.Lc//2, self.Lc//2 + 1):
-                        plt.axvline(m / self.Lc, color='gray', linestyle='--', linewidth=0.5, alpha=0.5)  
-                    k_vals = np.arange(-self.Lc//2, self.Lc//2 + 1, 4 )   # step = 4
-                    ticks = k_vals / self.Lc
-                    labels = [rf"{k}/Lc" for k in k_vals]
-                    plt.xticks(ticks, labels)
-                    plt.savefig(f"./results/{self.codefam}/csd/csd_codes{i}x{j}.png")
-                    plt.close()
+            for i in range(len(self.csd)):
+                ci = self.csd[i][0]
+                cj = self.csd[i][1]
+                csd = self.csd[i][2]
+
+                plt.figure()
+                plt.stem(self.fbins,np.abs(csd))
+                plt.title(f"CSD: code[{ci}]xcode[{cj}]")
+                for m in range(-self.Lc//2, self.Lc//2 + 1):
+                    plt.axvline(m / self.Lc, color='gray', linestyle='--', linewidth=0.5, alpha=0.5)  
+                k_vals = np.arange(-self.Lc//2, self.Lc//2 + 1, 4 )   # step = 4
+                ticks = k_vals / self.Lc
+                labels = [rf"{k}/Lc" for k in k_vals]
+                plt.xticks(ticks, labels)
+                plt.savefig(f"./results/{self.codefam}/csd/csd_codes{ci}x{cj}.png")
+                plt.close()
 
         if output == "network":
-            clique = self.worst_nodes
+            if cliquetype == "best":
+                clique = self.best_nodes
+            elif cliquetype == "worst":
+                clique = self.worst_nodes
+
             G = nx.Graph()
             G.add_nodes_from(clique)
             G.add_edges_from(itertools.combinations(clique, 2))
-            pos = nx.spring_layout(G)
+            pos = nx.circular_layout(G)
 
-            node_weights = [self.acf_widths[i] + self.sfs[i] for i in G.nodes()]
-            #"1-3" and "3-1" are different keys so thats why it tries both below
-            edge_weights = [self.sum_cfs.get(f"{i}-{j}", self.sum_cfs.get(f"{j}-{i}", 1)) for i, j in G.edges()]
-            plt.figure()
+            values = [self.node_weight[n] for n in G.nodes()]
+
             nx.draw_networkx_nodes(
                 G,
                 pos,
-                node_size=[w * 900 for w in node_weights],
-                node_color=node_weights,
-                cmap=plt.cm.coolwarm
+                node_size=[v * 1000 for v in values],
+                node_color=values,
+                cmap=plt.cm.coolwarm,
             )
+
             nx.draw_networkx_edges(
                 G,
                 pos,
-                width=edge_weights
+                width=[
+                    5*self.edge_weight.get(f"{i}-{j}", self.edge_weight.get(f"{j}-{i}", 1))
+                    for i, j in G.edges()
+                ]
             )
-            labels = {
-                i: f"c{i}\n{self.acf_widths[i] + self.sfs[i]:.2f}"
-                for i in G.nodes()
-            }
-            nx.draw_networkx_labels(G, pos, labels=labels)
-            edge_labels = {
-                (i, j): round(self.sum_cfs.get(f"{i}-{j}", self.sum_cfs.get(f"{j}-{i}", 1)),4)
-                for i, j in G.edges()
-            }
-            nx.draw_networkx_edge_labels(
-                G,
-                pos,
-                edge_labels=edge_labels,
-                label_pos=0.3,   # move closer to source (0 → node i, 1 → node j)
-                font_size=8
-            )
-            plt.show()  
+
+            nx.draw_networkx_labels(G, pos)
+            plt.show()
 
 
 if __name__ == "__main__":
 
+
     #rankings of acf widths, ccf widths, and csd height at 1/Lc
 
     #initiate code config
-    WHcfg = dbfCfg(Lc=16, code="WH", no_arrays=2)
+    WHcfg = CDMcfg(
+        simtime = 1, 
+        lc=8,
+        codefam="WH",
+        no_elem=7)
     WHcodes = CodeSelector(WHcfg)
-    acfs = WHcodes.acf()
-    #ccfs = WHcodes.ccf()
-    #sfs = WHcodes.sf()
-
-    #node_weights = {k: acfs[k] + sfs[k] for k in acfs.keys() & sfs.keys()}
-    #edge_weights = ccfs
-    #best, worst = WHcodes.find_best_clique(node_weights, edge_weights, WHcfg.no_arrays)
+    best, worst = WHcodes.find_best_clique(WHcfg.no_elem)
     WHcodes.plot("ACF")
+    WHcodes.plot("CCF")
+    WHcodes.plot("CSD")
 
-    #WHcodes.plot("network")
+    WHcodes.plot("network", "best")
 
     #WHcfg.codeids = best 
     #print(worst)

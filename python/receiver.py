@@ -4,7 +4,7 @@ from signals import DiscreteSignal
 from scipy.signal import upfirdn, resample_poly
 import numpy as np
 import utils as u
-from config import CXBF
+from config import CDMcfg
 import matplotlib.pyplot as plt 
 
 class Receiver():
@@ -17,7 +17,7 @@ class Receiver():
     def setup(self, signal):
         self.time = np.arange(len(signal.elements[0]))/self.conf.fs
         self.cdmx = CDMx(self.conf)
-        self.codes = self.cdmx.generate_code()
+        self.codes = self.cdmx.generate_codes()
         self.rxsignals = signal.elements.copy()
 
         if "signal" in self.plot:
@@ -171,7 +171,7 @@ if __name__ == "__main__":
     symbols = 100
     totaltime = symbols*Tb
 
-    config = CXBF(
+    config = CDMcfg(
         rb = Rb,
         lc = 32,
         sps_chip= 2,
