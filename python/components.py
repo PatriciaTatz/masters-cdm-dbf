@@ -33,7 +33,7 @@ class CDMx:
             for i in self.conf.codeids:
                 WHcode = km.WalshHadamardSequence(
                     length=self.conf.lc,
-                    index=self.conf.codeids[i],
+                    index=i,
                     ordering='sequency')
 
                 codes.append(WHcode.polar_sequence)
@@ -84,7 +84,7 @@ class CDMx:
         decorr = [] #decorrelated with rrc filter
 
         for i in range(self.conf.no_elem):
-            despread_signal = sumsignal*codes[1]
+            despread_signal = sumsignal*codes[i]
             dss.append(despread_signal)
     
             signal, symbols = self.mf.rrcfilter(
