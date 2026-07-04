@@ -1,43 +1,59 @@
 import numpy as np
 from scipy.special import erfc
 from receiver import Receiver
-from config import dbfCfg, signalCfg
+from codeanalysis import CodeSelector
+from config import CDMcfg
 from signals import DiscreteSignal
 import matplotlib.pyplot as plt 
 from matplotlib.ticker import LogLocator, LogFormatterMathtext
+from dataclasses import replace 
 
 class BER:
-    def __init__(self, signalconfig, codeconfig):
-        self.sigcfg = signalconfig
-        self.dbfcfg = codeconfig
-        self.rx = Receiver(self.dbfcfg)
+    def __init__(self, config, signal):
+        self.conf = config 
+        self.rx = Receiver(self.conf)
+        self.signal = signal
 
-    def curve(self, maxSims, maxSNR, sig):
+    def symbol_sampler(self, signal, dt) -> list[int]:
+        sps = int(1/(self.conf.rb*dt))
+        symbols_at_rb = signal[::sps]
+        return symbols_at_rb
+
+    def sim(self, maxSims, maxSNR):
+
         self.snr_range = np.arange(0,maxSNR, 1)
+        self.ber_curve = []
 
         snr_linear = 10**(self.snr_range / 10) #compute from dB to linear scale to put into erfc 
         self.ber_theory = 0.5 * erfc(np.sqrt(snr_linear))
-
-        self.ber_curve = []
-        txclean = sig.input.copy()
-        txsymbols = sig.symbol_sampler(txclean)
+        
+        arrpath = 0 
+        txclean = self.signal.elements
+        txsymbols = self.symbol_sampler(txclean, self.signal.dt)
         txbits = (txsymbols[0] > 0).astype(int)
-
-        arrpath=0 
+        #BER simulation 
         for i, snr in enumerate(self.snr_range):
             print("snr=",snr)
-        
+
             ber_sum = 0
             for txidx in range(maxSims):
-                #Add noise to the transmit signal that has been rrc'd filtered 
-                sig.input = sig.add_awgn(txclean, SNR=snr)
-                sig.create_inputsignals(self.dbfcfg.no_arrays) #based on sig.input
-                #CDM4DBF
-                self.rx.assemble(sig) 
-                #normalise the signal and sample at symbole rate
-                rxsymbols = sig.symbol_sampler(sig.Despread[arrpath][0])
+
+                #Add noise to the transmit signal and it needs to be done for each independent sim 
+                self.signal.elements = self.signal.add_awgn_to_elems(txclean, SNR=snr)
+
+                #setup rx, note this simulates for all path 
+                self.rx.setup(self.signal)
+
+                #run cdm for all paths 
+                _ , recovered_signal = self.rx.assemble() 
+
+                #sample at symbole rate for arrpath only 
+                rxsymbols = self.symbol_sampler(
+                    recovered_signal.signals[arrpath], 
+                    1/self.conf.fs 
+                )
  
-                rxbits = (rxsymbols[0] > 0).astype(int)
+                rxbits = (rxsymbols > 0).astype(int)
                 """ 
                 plt.figure()
                 plt.plot(sig.input, '-o', label='Original Rx Signal')
@@ -48,8 +64,10 @@ class BER:
                 plt.show()
                 print(rxbits) 
                 """
+
                 #get bit error rate per sim, so this is no false matches / total bits 
                 ber_sum += np.mean(txbits!=rxbits)
+
             #average all the ber sum for each sim, so this is bersum divided by max sims 
             self.ber_curve.append(ber_sum / maxSims)
         return self.snr_range, self.ber_curve, self.ber_theory
@@ -89,22 +107,61 @@ class BER:
         if show_plot=="on": plt.show()
 
 
+
+
 if __name__ == "__main__":
     #configure
-    sigconf = signalCfg(Ts=1, modType="BPSK", Ns=10)  
-    dbfconf_best = dbfCfg(Lc=8, code="WH", no_arrays=1, codeids=[6,7])   
-    dbfconf_worst = dbfCfg(Lc=8, code="WH", no_arrays=1, codeids=[0,1])   
+    Rb = 1
+    Tb = 1/Rb
+    symbols = 100
+    totaltime = symbols*Tb
 
-    #create signal 
-    signal = DiscreteSignal(sigconf)
+    config_all_codes = CDMcfg(
+        rb=Rb,
+        lc=16,
+        sps_chip=2,
+        alpha=0.5,
+        simtime=totaltime,
+        no_elem=5
+    )
 
-    #preserve memory for processed signals
-    ber_best = BER(sigconf, dbfconf_best)
-    ber_worst = BER(sigconf, dbfconf_worst)
+    WHcodes = CodeSelector(config_all_codes)
+    weights = WHcodes.generate_weights()
+    best, worst  = WHcodes.find_best_clique(
+        weights, 
+        config_all_codes.no_elem
+        )
 
-    snr_range, best_ber_curve, ber_theory = ber_best.curve(10**4, 9, signal)
-    snr_range, worst_ber_curve, ber_theory = ber_worst.curve(10**4, 9, signal)
+    config_best_codes = CDMcfg(
+        rb=Rb,
+        lc=16,
+        sps_chip=2,
+        alpha=0.5,
+        simtime=totaltime,
+        no_elem=5,
+        codeids=best
+    )
 
+    config_worst_codes = CDMcfg(
+        rb=Rb,
+        lc=16,
+        sps_chip=2,
+        alpha=0.5,
+        simtime=totaltime,
+        no_elem=5,
+        codeids=worst
+    )
+
+
+    #create signals based on all codes but note it does not use it 
+    signal = DiscreteSignal(config_all_codes)
+
+    #run sim with config for best and config for worst for the same signal 
+    ber_best = BER(config_best_codes, signal)
+    ber_worst = BER(config_worst_codes, signal)
+
+    snr_range, best_ber_curve, ber_theory = ber_best.sim(10**3, 5)
+    snr_range, worst_ber_curve, ber_theory = ber_worst.sim(10**3, 5)
 
     fig, ax = plt.subplots(figsize=(7,5))
 

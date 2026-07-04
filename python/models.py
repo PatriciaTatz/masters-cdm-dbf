@@ -19,3 +19,8 @@ class Specan:
     f: np.ndarray
     Pxx_dB: np.ndarray
     bw: float
+
+@dataclass
+class CodeWeights: 
+    node: list[np.ndarray]
+    edge: list[np.ndarray]

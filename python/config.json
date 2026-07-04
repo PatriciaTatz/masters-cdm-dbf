@@ -1,0 +1,11 @@
+{
+  "symbol_period": 1,
+  "symbol_rate": 100,
+  "no_symbols": 1000,
+  "spreading_factor": 10,
+  "modType": "BPSK",
+  "code": "WH",
+  "no_arrays": 2,
+  "degree": 1,
+  "codeids": [1, 2]
+}

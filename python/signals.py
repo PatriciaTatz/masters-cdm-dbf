@@ -40,8 +40,15 @@ class DiscreteSignal:
         #add rrcfilter
         self.transmit, self.symbols = self.mf.rrcfilter(self.symbols, self.conf.fs)
 
-    def add_awgn(self, signal, SNR):
-        return ch.awgn(signal,SNR)
+    def add_awgn_to_elems(self, clean_signals, SNR):
+        txdirty = [] 
+        for i, element_signal in enumerate(self.elements):
+            #this will add noise, unique AWGN, to each element 
+            #overwrite original signal 
+            #do not return anything 
+            txdirty.append(ch.awgn(clean_signals, SNR))
+        return txdirty 
+        
 
     def create_timeseries(self):
         #the timestep is the symbol period divided by how much each sample was upsampled by the RRC filter
@@ -56,6 +63,8 @@ class DiscreteSignal:
         for i in range(1,self.conf.no_elem):
             signalNs = self.transmit*np.exp(1j*i*psi) 
             self.elements.append(signalNs)
+
+
 
 
 if __name__ == "__main__":

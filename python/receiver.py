@@ -7,6 +7,7 @@ import utils as u
 from config import CDMcfg
 import matplotlib.pyplot as plt 
 
+
 class Receiver():
     def __init__(self, config, plot="off"):
         self.conf  = config 
@@ -74,7 +75,7 @@ class Receiver():
                 0
             )
 
-        return signal
+        return spread, despread
 
 
 

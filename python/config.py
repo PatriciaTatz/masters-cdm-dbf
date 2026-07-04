@@ -15,6 +15,8 @@ class CDMcfg():
     no_elem: int = 1 
     degree: int = 1
     span: int = 8
+    codeids: np.ndarray = field(default_factory=lambda: np.array([]))
+
 
     def __post_init__(self):
         #calculate and assign derived parameter
@@ -23,4 +25,5 @@ class CDMcfg():
         self.fs = self.sps_symbol / self.ts 
         self.b = self.rb * (1 + self.alpha)
         self.rc = self.rb * self.lc
-        self.codeids = np.arange(self.no_elem)
+        if len(self.codeids) == 0:
+            self.codeids = np.arange(1, self.lc)
