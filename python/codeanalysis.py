@@ -39,28 +39,25 @@ class CodeSelector:
             }
 
         csd_height, ccf_pk = self.ccf()
-        self.edge_weight[f"{i}-{j}"] += csd_height + ccf_pk[0][0] + ccf_pk[1][0]
+        for i in range(len(self.allcodes)):
+            for j in range(i+1, len(self.allcodes)):
+                self.edge_weight[f"{i}-{j}"] += csd_height + ccf_pk[0][0] + ccf_pk[1][0]
 
-        return CodeWeights(node, edges)
+        return CodeWeights(self.node_weight, self.edge_weight)
 
     def sf(self):
         """
         Compute the spectral flatness (SF) for each code.
-
         Spectral flatness measures how noise-like a spectrum is:
-
             SF = geometric mean / arithmetic mean
-
         Values near:
             1 -> flat, noise-like spectrum
             0 -> peaky, tonal spectrum
-
         Ranking:
             Higher spectral flatness is better.
-
         Returns:
             sf_score : ndarray
-                Normalized spectral flatness score for each code.
+            Normalized spectral flatness score for each code.
         """
 
         sf_score = []
@@ -97,21 +94,20 @@ class CodeSelector:
         """
         Compute the periodic autocorrelation function (ACF) for each code and
         measure the width of the zero-lag peak.
-
         Stores:
             self.acf_data : list of tuples
                 (acf, widths, width_heights, left_ips, right_ips)
                 Used for plotting 
-
+        Values near:
+            1 -> Has longer decay at zero lag 
+            0 -> Minimal decay at zero lag
         Returns:
-            acf_score : normalized peak-width score
+            acf_score : ndarray
         """
 
         self.acfplot = []
         acf_score = []
-
-        zero_lag = self.Lc // 2
-
+        zero_lag = self.Lc // 2 
         for code in self.allcodes:
             # Periodic autocorrelation (Wiener-Khinchin theorem)
             acf = np.real(
@@ -120,7 +116,6 @@ class CodeSelector:
                     np.conj(np.fft.fft(code))
                 )
             )
-
             # Shift zero lag to centre and normalise
             acf = np.fft.fftshift(acf) / self.Lc
 
@@ -135,7 +130,6 @@ class CodeSelector:
             self.acfplot.append(
                 (acf, widths, width_heights, left_ips, right_ips)
             )
-
             # Narrower peaks are better
             acf_score.append(widths[0])
 
@@ -175,7 +169,7 @@ class CodeSelector:
                 if not isclose(self.fbins[1], 1/self.Lc): raise ValueError("First frequency bin not close to 1/Lc!!")
                 csd_height =  float(self.fbins[1])
 
-        return csd_heights, ccf_pk
+        return csd_height, ccf_pk
 
         
     def find_best_clique(self, weights, no_elem):
@@ -184,8 +178,7 @@ class CodeSelector:
         best_weight = float('inf')
         worst_weight = float('-inf')
 
-        valid_codes = [i for i in range(self.Lc) if i not in self.disqualified]
-        print(valid_codes)
+        valid_codes = [i for i in range(self.Lc)]
         if len(valid_codes)<no_elem: raise("Not enough valid codes for this N array size!")
 
         for clique in itertools.combinations(valid_codes,no_elem):
@@ -207,10 +200,10 @@ class CodeSelector:
         if output == "ACF":
             for j in range(len(self.allcodes)):
                 lags = np.arange(-self.Lc//2, self.Lc//2)
-                acf = self.acf[j][0]
-                height = self.acf[j][2]
-                lips = np.interp(self.acf[j][3], np.arange(self.Lc), lags) 
-                rips = np.interp(self.acf[j][4], np.arange(self.Lc), lags) 
+                acf = self.acfplot[j][0]
+                height = self.acfplot[j][2]
+                lips = np.interp(self.acfplot[j][3], np.arange(self.Lc), lags) 
+                rips = np.interp(self.acfplot[j][4], np.arange(self.Lc), lags) 
 
                 #plot and save images 
                 plt.figure()
@@ -306,12 +299,7 @@ if __name__ == "__main__":
 
 
     WHcodes = CodeSelector(WHcfg)
-
     weights = WHcodes.generate_weights()
     best, worst = WHcodes.find_best_clique(weights, WHcfg.no_elem)
-
-    WHcodes.plot("ACF")
-    WHcodes.plot("CCF")
-    WHcodes.plot("CSD")
 
     WHcodes.plot("network", "best")
