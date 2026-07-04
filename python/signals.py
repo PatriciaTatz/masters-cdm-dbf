@@ -3,14 +3,17 @@ Simulate effects of channel
 - AWGN
 - Doppler shift 
 """
-import commpy.channels as ch
-from math import pi 
-import random 
-import numpy as np  
+import random
+from math import pi
+
+import commpy.channels as ch  # type:ignore[import-untyped]
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.signal import welch
+
 from components import Filter, SpecAn
 from config import CDMcfg
-import matplotlib.pyplot as plt 
-from scipy.signal import welch
+
 
 class DiscreteSignal:
     #Method to generate discrete signal on the phase array 
@@ -42,11 +45,11 @@ class DiscreteSignal:
 
     def add_awgn_to_elems(self, clean_signals, SNR):
         txdirty = [] 
-        for i, element_signal in enumerate(self.elements):
+        for i, element_signal in enumerate(clean_signals):
             #this will add noise, unique AWGN, to each element 
             #overwrite original signal 
             #do not return anything 
-            txdirty.append(ch.awgn(clean_signals, SNR))
+            txdirty.append(ch.awgn(element_signal, SNR))
         return txdirty 
         
 

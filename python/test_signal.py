@@ -1,9 +1,10 @@
-import pytest
+import matplotlib.pyplot as plt
 import numpy as np
-import matplotlib.pyplot as plt 
-from scipy.signal import find_peaks, welch, peak_widths
-from signals import DiscreteSignal
+import pytest
+from scipy.signal import find_peaks, peak_widths, welch
+
 from config import CXBF
+from signals import DiscreteSignal
 
 #test for signal 
 

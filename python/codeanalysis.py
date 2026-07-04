@@ -3,19 +3,20 @@ analyse code sequences and find optimal set
 assuming that its true Lc  = Narrays * 2 
 """
 
-from components import CDMx
-from config import CDMcfg   
-from models import CodeWeights
-
-from scipy.signal import find_peaks, peak_widths, correlate, correlation_lags, csd
-import matplotlib.pyplot as plt 
-import matplotlib.colors as mcolors 
-
-import numpy as np 
-from scipy.fft import fft, fftfreq
 import itertools
 from math import isclose
+
+import matplotlib.colors as mcolors
+import matplotlib.pyplot as plt
 import networkx as nx
+import numpy as np
+from scipy.fft import fft, fftfreq
+from scipy.signal import (correlate, correlation_lags, csd, find_peaks,
+                          peak_widths)
+
+from components import CDMx
+from config import CDMcfg
+from models import CodeWeights
 
 
 class CodeSelector:

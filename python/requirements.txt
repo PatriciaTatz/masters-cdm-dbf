@@ -1,4 +1,13 @@
 #Required modoulates 
 scipy
-numpy 
-
+numpy
+matplotlib
+scikit-commpy
+komm
+mypy
+isort
+scipy-stubs
+types-networkx
+skyfield
+pytest
+networkx

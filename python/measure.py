@@ -6,10 +6,12 @@ Used to probe signal and make plots
     - find peak distance 
 
 """
-from scipy.fft import fft, fftfreq
+import matplotlib.pyplot as plt
 import numpy as np
+from scipy.fft import fft, fftfreq
+
 from receiver import Receiver
-import matplotlib.pyplot as plt 
+
 
 class SpecAn:
     def __init__(self):

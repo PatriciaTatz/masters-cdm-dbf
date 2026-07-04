@@ -1,12 +1,18 @@
+from dataclasses import replace
+from typing import Any
+
+import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.ticker import LogFormatterMathtext, LogLocator
 from scipy.special import erfc
-from receiver import Receiver
+
 from codeanalysis import CodeSelector
 from config import CDMcfg
+from receiver import Receiver
 from signals import DiscreteSignal
-import matplotlib.pyplot as plt 
-from matplotlib.ticker import LogLocator, LogFormatterMathtext
-from dataclasses import replace 
+
+
+SignalT = np.ndarray[tuple[int], np.dtype[np.float64]]
 
 class BER:
     def __init__(self, config, signal):
@@ -14,7 +20,11 @@ class BER:
         self.rx = Receiver(self.conf)
         self.signal = signal
 
-    def symbol_sampler(self, signal, dt) -> list[int]:
+    def symbol_sampler(
+        self,
+        signal: SignalT,
+        dt: float,
+    ) -> SignalT:
         sps = int(1/(self.conf.rb*dt))
         symbols_at_rb = signal[::sps]
         return symbols_at_rb
@@ -30,7 +40,6 @@ class BER:
         arrpath = 0 
         txclean = self.signal.elements
         txsymbols = self.symbol_sampler(txclean, self.signal.dt)
-        txbits = (txsymbols[0] > 0).astype(int)
         #BER simulation 
         for i, snr in enumerate(self.snr_range):
             print("snr=",snr)
@@ -53,7 +62,6 @@ class BER:
                     1/self.conf.fs 
                 )
  
-                rxbits = (rxsymbols > 0).astype(int)
                 """ 
                 plt.figure()
                 plt.plot(sig.input, '-o', label='Original Rx Signal')
@@ -66,7 +74,7 @@ class BER:
                 """
 
                 #get bit error rate per sim, so this is no false matches / total bits 
-                ber_sum += np.mean(txbits!=rxbits)
+                ber_sum += np.mean(txsymbols!=rxsymbols)
 
             #average all the ber sum for each sim, so this is bersum divided by max sims 
             self.ber_curve.append(ber_sum / maxSims)

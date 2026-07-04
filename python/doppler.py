@@ -2,10 +2,10 @@
 To calculate max angle and doppler shift a SSO Leo Comms satellite
 """
 
+import matplotlib.pyplot as plt
+import numpy as np
 from skyfield.api import load, wgs84
 from skyfield.iokit import parse_tle_file
-import matplotlib.pyplot as plt 
-import numpy as np 
 
 #load TLE 
 #I've chosen LEO Vantage 1 which is an SSO LEO Comms satellite

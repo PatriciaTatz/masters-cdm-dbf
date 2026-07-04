@@ -8,16 +8,17 @@ RF components
 - Matched Filter 
 """
 
-from scipy.signal import max_len_seq, resample_poly
-import numpy as np  
-from enum import Enum 
-import commpy.filters as filter
-from commpy.sequences import pnsequence
-import komm as km
-import matplotlib.pyplot as plt 
-from math import log2, ceil
+from enum import Enum
+from math import ceil, log2
 
-from models import DecorrOutput, SpreadOutput, Specan
+import commpy.filters as filter  # type:ignore[import-untyped]
+import komm as km  # type:ignore[import-untyped]
+import matplotlib.pyplot as plt
+import numpy as np
+from commpy.sequences import pnsequence  # type:ignore[import-untyped]
+from scipy.signal import max_len_seq, resample_poly
+
+from models import DecorrOutput, Specan, SpreadOutput
 
 
 class CDMx:

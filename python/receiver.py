@@ -1,11 +1,12 @@
 # TODO you can use isort to sort these
-from components import CDMx, SpecAn
-from signals import DiscreteSignal
-from scipy.signal import upfirdn, resample_poly
+import matplotlib.pyplot as plt
 import numpy as np
+from scipy.signal import resample_poly, upfirdn
+
 import utils as u
+from components import CDMx, SpecAn
 from config import CDMcfg
-import matplotlib.pyplot as plt 
+from signals import DiscreteSignal
 
 
 class Receiver():
@@ -185,6 +186,6 @@ if __name__ == "__main__":
     signal = DiscreteSignal(config)
 
     #initiate and assemble receiver 
-    rx = Receiver(config, "spread, recovered")
+    rx = Receiver(config, "signal, spread, recovered")
     rx.setup(signal)
     rx.assemble() 
