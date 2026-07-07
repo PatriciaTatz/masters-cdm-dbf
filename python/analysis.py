@@ -25,53 +25,48 @@ class BER:
         signal: SignalT,
         dt: float,
     ) -> SignalT:
-        sps = int(1/(self.conf.rb*dt))
+        sps = int(round(1 / (self.conf.rb * dt)))
         symbols_at_rb = signal[::sps]
         return symbols_at_rb
 
     def sim(self, maxSims, maxSNR):
-
         self.snr_range = np.arange(0,maxSNR, 1)
         self.ber_curve = []
-
+        
         snr_linear = 10**(self.snr_range / 10) #compute from dB to linear scale to put into erfc 
         self.ber_theory = 0.5 * erfc(np.sqrt(snr_linear))
         
         arrpath = 0 
-        txclean = self.signal.elements
-        txsymbols = self.symbol_sampler(txclean, self.signal.dt)
+        txclean = self.signal.transmit.copy()
+        txsymbols = self.signal.txsymbols.copy()
+
         #BER simulation 
         for i, snr in enumerate(self.snr_range):
             print("snr=",snr)
-
             ber_sum = 0
             for txidx in range(maxSims):
 
                 #Add noise to the transmit signal and it needs to be done for each independent sim 
-                self.signal.elements = self.signal.add_awgn_to_elems(txclean, SNR=snr)
-
+                element_signals = self.signal.create_elementsignals(txclean, noise="on", snr=snr)
+                """
                 #setup rx, note this simulates for all path 
                 self.rx.setup(self.signal)
 
                 #run cdm for all paths 
-                _ , recovered_signal = self.rx.assemble() 
+                spread_signal , recovered_signal = self.rx.assemble() 
 
                 #sample at symbole rate for arrpath only 
                 rxsymbols = self.symbol_sampler(
                     recovered_signal.signals[arrpath], 
-                    1/self.conf.fs 
-                )
+                    1/spread_signal.fs
+                ) """
  
-                """ 
-                plt.figure()
-                plt.plot(sig.input, '-o', label='Original Rx Signal')
-                plt.plot(sig.Despread[arrpath][0], '--o', label='Decorrelated Signal')
-                plt.title(f"SNR={snr}")
-                plt.legend()
-                plt.grid()
-                plt.show()
-                print(rxbits) 
-                """
+                rxsymbols = self.symbol_sampler(
+                    element_signals[arrpath], 
+                    1/self.conf.fs
+                )         
+   
+                rxsymbols = np.sign(np.real(rxsymbols))
 
                 #get bit error rate per sim, so this is no false matches / total bits 
                 ber_sum += np.mean(txsymbols!=rxsymbols)
@@ -123,14 +118,17 @@ if __name__ == "__main__":
     Tb = 1/Rb
     symbols = 100
     totaltime = symbols*Tb
+    lc = 16
+    no_elem = 2
 
+    """ 
     config_all_codes = CDMcfg(
         rb=Rb,
-        lc=16,
+        lc=lc,
         sps_chip=2,
         alpha=0.5,
         simtime=totaltime,
-        no_elem=5
+        no_elem=no_elem
     )
 
     WHcodes = CodeSelector(config_all_codes)
@@ -139,34 +137,34 @@ if __name__ == "__main__":
         weights, 
         config_all_codes.no_elem
         )
+    """
 
     config_best_codes = CDMcfg(
         rb=Rb,
-        lc=16,
+        lc=lc,
         sps_chip=2,
         alpha=0.5,
         simtime=totaltime,
-        no_elem=5,
-        codeids=best
+        no_elem=no_elem,
     )
 
     config_worst_codes = CDMcfg(
         rb=Rb,
-        lc=16,
+        lc=lc,
         sps_chip=2,
         alpha=0.5,
         simtime=totaltime,
-        no_elem=5,
-        codeids=worst
+        no_elem=no_elem,
     )
 
 
     #create signals based on all codes but note it does not use it 
-    signal = DiscreteSignal(config_all_codes)
+    best_signal = DiscreteSignal(config_best_codes)
+    worst_signal = DiscreteSignal(config_worst_codes)
 
     #run sim with config for best and config for worst for the same signal 
-    ber_best = BER(config_best_codes, signal)
-    ber_worst = BER(config_worst_codes, signal)
+    ber_best = BER(config_best_codes, best_signal)
+    ber_worst = BER(config_worst_codes, worst_signal)
 
     snr_range, best_ber_curve, ber_theory = ber_best.sim(10**3, 5)
     snr_range, worst_ber_curve, ber_theory = ber_worst.sim(10**3, 5)

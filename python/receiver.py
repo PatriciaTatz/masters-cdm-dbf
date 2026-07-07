@@ -1,4 +1,5 @@
-# TODO you can use isort to sort these
+from enum import Enum, auto
+
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.signal import resample_poly, upfirdn
@@ -9,12 +10,21 @@ from config import CDMcfg
 from signals import DiscreteSignal
 
 
+class PlotType(Enum):
+    signal = auto()
+    spread = auto()
+    sum = auto()
+    recovered = auto()
+
+    @classmethod
+    def all(cls) -> "set[PlotType]":
+        return {t for t in cls}
+
+
 class Receiver():
-    def __init__(self, config, plot="off"):
+    def __init__(self, config, plot: set[PlotType] = set()):
         self.conf  = config 
         self.plot = plot
-        if self.plot == "all":
-            self.plot="signal,spread,sum,recovered"
 
     def setup(self, signal):
         self.time = np.arange(len(signal.elements[0]))/self.conf.fs
@@ -22,12 +32,12 @@ class Receiver():
         self.codes = self.cdmx.generate_codes()
         self.rxsignals = signal.elements.copy()
 
-        if "signal" in self.plot:
+        if PlotType.signal in self.plot:
             self.signal_plot(
                 "Original",
                 signal.time,
                 signal.elements[0],
-                signal.symbols,
+                signal.rrcsymbols,
                 self.conf.fs
             )
         
@@ -40,38 +50,37 @@ class Receiver():
             self.rxsignals,
             self.codes,
         )
-
-        if "spread" in self.plot:
+        if PlotType.spread in self.plot:
             self.spread_plot(
                 self.time, self.rxsignals,  
                 spread.time, spread.signals, 
-                signal.symbols,
+                signal.rrcsymbols,
                 spread.fs,
                 0
             )
 
+
         #====================
         #     COMBINER      |
         #====================
-        self.sum = [sum(values) for values in zip(*spread.signals)]
-
-        if "sum" in self.plot: 
-            self.sum_plot()
+        summed_signal = [sum(values) for values in zip(*spread.signals)]
+        if PlotType.sum in self.plot: 
+            self.sum_plot(spread.time, summed_signal)
 
         #====================
         #     DESPREAD      |
         #====================
         despread = self.cdmx.despreader(
-            self.sum,
+            summed_signal,
             spread.codes,
             spread.fs
             )
 
-        if "recovered" in self.plot:
+        if PlotType.recovered in self.plot:
             self.spread_plot(
                 signal.time, signal.elements,  
                 despread.time, despread.signals,
-                signal.symbols,
+                signal.rrcsymbols,
                 spread.fs,
                 0
             )
@@ -80,9 +89,9 @@ class Receiver():
 
 
 
-    def sum_plot(self):
+    def sum_plot(self, time, signal):
         plt.figure()
-        plt.plot(self.time, self.sum)
+        plt.plot(time, signal)
         plt.title(f"Combined Signal from {self.conf.no_elem} Elements")
         plt.xlabel("Time")
         plt.ylabel("Amplitude")
@@ -186,6 +195,6 @@ if __name__ == "__main__":
     signal = DiscreteSignal(config)
 
     #initiate and assemble receiver 
-    rx = Receiver(config, "signal, spread, recovered")
+    rx = Receiver(config, PlotType.all())
     rx.setup(signal)
     rx.assemble() 

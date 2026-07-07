@@ -24,9 +24,9 @@ class DiscreteSignal:
 
         #generate signal/s
         self.mf = Filter(conf)
-        self.create_symbols() #create symbols, rrc filtered
-        self.create_timeseries()#create time series based on input symbol rate
-        self.create_elementsignals()
+        txsignal = self.create_symbols() #create symbols, rrc filtered
+        self.create_timeseries(txsignal) #create time series based on input symbol rate
+        self.create_elementsignals(txsignal)
 
     def create_symbols(self):
         #modType, Ns, Ts: required
@@ -37,36 +37,33 @@ class DiscreteSignal:
 
         #randomized symbols 
         no_symbols = int(self.conf.simtime*self.conf.rb)
-        self.symbols = np.random.choice(values, no_symbols) 
+        self.txsymbols = np.random.choice(values, no_symbols) 
         #self.bpsksymbols = [1, -1, 1, -1, 1, 1, -1, -1, 1, 1]
 
         #add rrcfilter
-        self.transmit, self.symbols = self.mf.rrcfilter(self.symbols, self.conf.fs)
+        self.transmit, self.rrcsymbols = self.mf.rrcfilter(self.txsymbols, self.conf.fs)
+        return self.transmit
 
-    def add_awgn_to_elems(self, clean_signals, SNR):
-        txdirty = [] 
-        for i, element_signal in enumerate(clean_signals):
-            #this will add noise, unique AWGN, to each element 
-            #overwrite original signal 
-            #do not return anything 
-            txdirty.append(ch.awgn(element_signal, SNR))
-        return txdirty 
-        
 
-    def create_timeseries(self):
+    def create_timeseries(self, signal):
         #the timestep is the symbol period divided by how much each sample was upsampled by the RRC filter
         self.dt = 1 / self.conf.fs 
-        self.time =  np.arange(len(self.transmit)) * self.dt
+        self.time =  np.arange(len(signal)) * self.dt
         
-    def create_elementsignals(self):
+    def create_elementsignals(self, signal, noise="off", snr=1):
         #apply phase rotation as delay is too small to be seen as lagged samples. Why? 
         psi = pi 
-        #boresight element has no shift create_elementsignals
-        self.elements = [self.transmit]
-        for i in range(1,self.conf.no_elem):
-            signalNs = self.transmit*np.exp(1j*i*psi) 
-            self.elements.append(signalNs)
 
+        #boresight element has no shift create_elementsignals
+        if noise == "on": 
+            signal = ch.awgn(signal, snr)
+
+        #each time this is recreated
+        self.elements = [signal]
+        for i in range(1,self.conf.no_elem):
+            signalNs = signal*np.exp(1j*i*psi) 
+            self.elements.append(signalNs)
+        return self.elements 
 
 
 
@@ -107,7 +104,7 @@ if __name__ == "__main__":
     plt.figure()
     plt.plot(signal.time*1e9, signal.transmit, '--o', label="RRC Filtered Tx Signal")
     plt.title(f"Signal Generator, Tsim={config.simtime*1e9:g}ns")
-    plt.stem(signal.time[:len(signal.symbols)]*1e9,signal.symbols, 'red', label="Upsampled Symbols")
+    plt.stem(signal.time[:len(signal.rrcsymbols)]*1e9,signal.rrcsymbols, 'red', label="Upsampled Symbols")
     plt.grid()
     plt.xlabel("Time (nsec)")
     plt.ylabel("Amplitude")
