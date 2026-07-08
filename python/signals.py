@@ -50,14 +50,9 @@ class DiscreteSignal:
         self.dt = 1 / self.conf.fs 
         self.time =  np.arange(len(signal)) * self.dt
         
-    def create_elementsignals(self, signal, noise="off", snr=1):
+    def create_elementsignals(self, signal):
         #apply phase rotation as delay is too small to be seen as lagged samples. Why? 
         psi = pi 
-
-        #boresight element has no shift create_elementsignals
-        if noise == "on": 
-            signal = ch.awgn(signal, snr)
-
         #each time this is recreated
         self.elements = [signal]
         for i in range(1,self.conf.no_elem):
