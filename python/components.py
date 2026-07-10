@@ -72,8 +72,10 @@ class CDMx:
             expanded_code = np.tile(code_sequence, tile_repeats)[:len(resampled)]
             exp_codes.append(expanded_code)
 
+            #FORTEST
             spread_signal = resampled*expanded_code 
             ss.append(spread_signal)
+            #ss.append(resampled)
 
         time = np.arange(len(ss[0])) * (1/fs)
         return SpreadOutput(ss, time, exp_codes, fs)
@@ -87,7 +89,10 @@ class CDMx:
         for i in range(self.conf.no_elem):
             despread_signal = sumsignal*codes[i]
             dss.append(despread_signal)
-    
+            
+            #FORTEST:
+            #despread_signal = sumsignal[i]
+
             signal, symbols = self.mf.rrcfilter(
                 despread_signal,
                 fs,
@@ -108,7 +113,7 @@ class Filter:
         self.span = conf.span 
 
     def rrcfilter(self, signal, fs, mode="txmode"):
-        sps_symbol = int(round(fs / self.rb))
+        sps_symbol = int(round(fs / self.rb)) #also in config 
         ts = 1 / self.rb 
         ntaps = self.span*sps_symbol + 1  #must be odd, total length of the filter 
 
@@ -130,7 +135,7 @@ class Filter:
         if mode == "rxmode":
             symbols = filtered_nodelay[::sps_symbol]
 
-        return filtered_nodelay/np.abs(np.max(filtered_nodelay)), symbols  
+        return filtered_nodelay, symbols  
 
 
 class SpecAn: 

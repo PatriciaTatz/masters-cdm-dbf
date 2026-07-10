@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-
 import numpy as np
 
 
@@ -25,3 +24,5 @@ class Specan:
 class CodeWeights: 
     node: list[np.ndarray]
     edge: list[np.ndarray]
+
+

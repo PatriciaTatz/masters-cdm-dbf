@@ -59,13 +59,15 @@ class Receiver():
                 0
             )
 
-
         #====================
         #     COMBINER      |
         #====================
         summed_signal = [sum(values) for values in zip(*spread.signals)]
         if PlotType.sum in self.plot: 
             self.sum_plot(spread.time, summed_signal)
+        
+        #FORTEST
+        #summed_signal = spread.signals
 
         #====================
         #     DESPREAD      |
