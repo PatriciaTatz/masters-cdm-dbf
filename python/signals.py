@@ -26,7 +26,7 @@ class DiscreteSignal:
         self.mf = Filter(conf)
         txsignal = self.create_symbols() #create symbols, rrc filtered
         self.create_timeseries(txsignal) #create time series based on input symbol rate
-        self.create_elementsignals(txsignal)
+        self.create_elementsignals(txsignal, 0)
 
     def create_symbols(self):
         #modType, Ns, Ts: required
@@ -44,27 +44,24 @@ class DiscreteSignal:
         self.transmit, self.rrcsymbols = self.mf.rrcfilter(self.txsymbols, self.conf.fs)
         return self.transmit
 
-
     def create_timeseries(self, signal):
         #the timestep is the symbol period divided by how much each sample was upsampled by the RRC filter
         self.dt = 1 / self.conf.fs 
         self.time =  np.arange(len(signal)) * self.dt
         
-    def create_elementsignals(self, signal):
+    def create_elementsignals(self, signal, noise):
         #apply phase rotation as delay is too small to be seen as lagged samples. Why? 
         psi = pi 
         #each time this is recreated
         self.elements = [signal]
         for i in range(1,self.conf.no_elem):
             signalNs = signal*np.exp(1j*i*psi) 
-            self.elements.append(signalNs)
+            self.elements.append(signalNs + noise)
         return self.elements 
-
 
 
 if __name__ == "__main__":
     #show how to initiate the signal for whatever use 
-
     """
     Ts: symbol period = e.g. 10 seconds
     samples_symbol: samples per symbol 

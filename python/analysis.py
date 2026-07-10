@@ -73,16 +73,17 @@ class BER:
             eb = 1
             noise_var = eb / (2*ebno)
             noise_std = np.sqrt(noise_var)
+            signal = self.signal.transmit.copy()
 
             totalerrors = 0
             totalbits = 0
             for txidx in range(maxSims):
                 #Add noise to the transmit signal and it needs to be done for each independent transmission tx
                 noise = noise_std*np.random.randn(signal_len)
-                noisysignal = self.signal.transmit + noise
                 
-                self.signal.create_elementsignals(noisysignal)
-
+                #FORTEST
+                #noisysignal = self.signal.transmit + noise
+                self.signal.elements = self.signal.create_elementsignals(signal, noise)
                 #setup rx, note this simulates for all path 
                 self.rx.setup(self.signal)
 
@@ -159,10 +160,10 @@ if __name__ == "__main__":
     #configure
     Rb = 1
     Tb = 1/Rb
-    symbols = 20
+    symbols = 100
     totaltime = symbols*Tb
     lc = 16
-    no_elem = 1
+    no_elem = 2
 
     
     config_all_codes = CDMcfg(
