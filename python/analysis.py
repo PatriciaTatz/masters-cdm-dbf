@@ -6,6 +6,8 @@ import numpy as np
 from matplotlib.ticker import LogFormatterMathtext, LogLocator
 from scipy.special import erfc
 import copy 
+from dataclasses import replace
+
 
 from codeanalysis import CodeSelector
 from config import CDMcfg
@@ -134,7 +136,7 @@ def plot_curve(ebno_db, ber_best, ber_worst, ber_theory):
         markersize=6,
         label='Worst Clique'
     )
-    
+    """
     ax.semilogy(
         ebno_db,
         ber_theory,
@@ -142,7 +144,7 @@ def plot_curve(ebno_db, ber_best, ber_worst, ber_theory):
         linewidth=2,
         label='Theoretical BPSK BER'
     )  
-    
+    """
     # Log-scale tick formatting
     ax = plt.gca()
 
@@ -158,15 +160,15 @@ def plot_curve(ebno_db, ber_best, ber_worst, ber_theory):
 
 if __name__ == "__main__":
     #configure
-    Rb = 1
+    Rb = 6.25e6
     Tb = 1/Rb
     symbols = 100
     totaltime = symbols*Tb
-    lc = 16
-    no_elem = 2
-
+    lc = 32
+    no_elem = 5
     
-    config_all_codes = CDMcfg(
+
+    baseconfig = CDMcfg(
         rb=Rb,
         lc=lc,
         sps_chip=2,
@@ -175,38 +177,22 @@ if __name__ == "__main__":
         no_elem=no_elem
     )
 
-    WHcodes = CodeSelector(config_all_codes)
+    WHcodes = CodeSelector(baseconfig)
     weights = WHcodes.generate_weights()
     best, worst  = WHcodes.find_best_clique(
         weights, 
-        config_all_codes.no_elem
+        baseconfig.no_elem
         )
 
-    config_best_codes = CDMcfg(
-        rb=Rb,
-        lc=lc,
-        sps_chip=2,
-        alpha=0.5,
-        simtime=totaltime,
-        no_elem=no_elem,
-    )
-
-    config_worst_codes = CDMcfg(
-        rb=Rb,
-        lc=lc,
-        sps_chip=2,
-        alpha=0.5,
-        simtime=totaltime,
-        no_elem=no_elem,
-    )
-
-    #create signals based on all codes but note it does not use it 
-    best_signal = DiscreteSignal(config_best_codes)
-    worst_signal = DiscreteSignal(config_worst_codes)
+    #create signal
+    signal = DiscreteSignal(baseconfig)
 
     #run sim with config for best and config for worst for the same signal 
-    ber_best = BER(config_best_codes, best_signal)
-    ber_worst = BER(config_worst_codes, worst_signal)
+    config_best_codes = replace(baseconfig, codeids=best)
+    config_worst_codes = replace(baseconfig, codeids=worst)
+
+    ber_best = BER(config_best_codes, signal)
+    ber_worst = BER(config_worst_codes, signal)
 
     ebno_db, ber_best_curve, ber_theory = ber_best.sim(10**3, 5)
     ebno_db, ber_worst_curve, _ = ber_worst.sim(10**3, 5)
