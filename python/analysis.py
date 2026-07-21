@@ -63,6 +63,7 @@ class BER:
         )  
         arrpath = 0 
         signal_len = len(self.signal.transmit)
+        signal = self.signal.transmit.copy()
 
         #signalpower = np.mean(no.abs(txsignal)**2)
 
@@ -75,17 +76,21 @@ class BER:
             eb = 1
             noise_var = eb / (2*ebno)
             noise_std = np.sqrt(noise_var)
-            signal = self.signal.transmit.copy()
+
 
             totalerrors = 0
             totalbits = 0
             for txidx in range(maxSims):
                 #Add noise to the transmit signal and it needs to be done for each independent transmission tx
-                noise = noise_std*np.random.randn(signal_len)
+                noise = []
+                noise_arr = np.random.randn(signal_len)
+                for i in range(self.conf.no_elem):
+                    
+                    noise.append(noise_std*noise_arr)
                 
                 #FORTEST
-                #noisysignal = self.signal.transmit + noise
-                self.signal.elements = self.signal.create_elementsignals(signal, noise)
+                self.signal.create_elementsignals(signal, noise)
+
                 #setup rx, note this simulates for all path 
                 self.rx.setup(self.signal)
 
@@ -117,43 +122,30 @@ class BER:
             ber_curve.append(totalerrors / totalbits)
         return ebno_db, ber_curve, ber_theory
 
-def plot_curve(ebno_db, ber_best, ber_worst, ber_theory):
+def plot_curve(ebno_db, ber_array, ber_titles, ber_mrks):
 # Plot BER curve
     fig, ax = plt.subplots(figsize=(7,5))
-    ax.semilogy(
-        ebno_db,
-        ber_best,
-        marker='o',
-        linewidth=2,
-        markersize=6,
-        label='Best Clique'
-    )
-    ax.semilogy(
-        ebno_db,
-        ber_worst,
-        marker='o',
-        linewidth=2,
-        markersize=6,
-        label='Worst Clique'
-    )
-    """
-    ax.semilogy(
-        ebno_db,
-        ber_theory,
-        '--',
-        linewidth=2,
-        label='Theoretical BPSK BER'
-    )  
-    """
-    # Log-scale tick formatting
-    ax = plt.gca()
+    for i in range(len(ber_array)):
+        ax.semilogy(
+            ebno_db,
+            ber_array[i],
+            ber_mrks[i],
+            linewidth=2,
+            markersize=6,
+            label=ber_titles[i]
+        )
+
 
     # Major ticks at powers of 10
-    ax.yaxis.set_major_locator(LogLocator(base=10.0))
+    ax.set_yscale('log')
+    ax.yaxis.set_major_locator(LogLocator(base=10))
+    ax.yaxis.set_major_formatter(LogFormatterMathtext(base=10))
+
 
     # Format as 10^-6 instead of 1e-6
-    ax.yaxis.set_major_formatter(LogFormatterMathtext())
-
+    plt.xlabel("Eb/No (dB)")
+    plt.ylabel("Bit Error Rate")
+    plt.title(f"BER of Element Path = 1")
     plt.grid(True, which='both', linestyle='--', alpha=0.6)
     plt.legend()
 
@@ -164,8 +156,8 @@ if __name__ == "__main__":
     Tb = 1/Rb
     symbols = 100
     totaltime = symbols*Tb
-    lc = 32
-    no_elem = 5
+    lc = 16
+    no_elem = 1
     
 
     baseconfig = CDMcfg(
@@ -175,7 +167,7 @@ if __name__ == "__main__":
         alpha=0.5,
         simtime=totaltime,
         no_elem=no_elem
-    )
+        )
 
     WHcodes = CodeSelector(baseconfig)
     weights = WHcodes.generate_weights()
@@ -186,16 +178,29 @@ if __name__ == "__main__":
 
     #create signal
     signal = DiscreteSignal(baseconfig)
-
+    """
     #run sim with config for best and config for worst for the same signal 
-    config_best_codes = replace(baseconfig, codeids=best)
-    config_worst_codes = replace(baseconfig, codeids=worst)
+    config_best_codes = replace(baseconfig, codeids=[1])
+    #config_worst_codes = replace(baseconfig, codeids=worst)
 
     ber_best = BER(config_best_codes, signal)
-    ber_worst = BER(config_worst_codes, signal)
+    #ber_worst = BER(config_worst_codes, signal)
 
     ebno_db, ber_best_curve, ber_theory = ber_best.sim(10**3, 5)
-    ebno_db, ber_worst_curve, _ = ber_worst.sim(10**3, 5)
+    np.save("ebno", ebno_db)
+    np.save("ber_sharedAWGN", ber_best_curve)
+    np.save("ber_theory", ber_theory)
 
-    plot_curve(ebno_db, ber_best_curve, ber_worst_curve, ber_theory)
+    """
+    ebno_range = np.load("ebno.npy")
+    ber_shared = np.load("ber_sharedAWGN.npy")
+    ber_indie = np.load("ber_indieAWGN.npy")
+    ber_theory = np.load("ber_theory.npy")
+    #ebno_db, ber_worst_curve, _ = ber_worst.sim(10**3, 5)
+    ber_data = [ber_shared, ber_indie, ber_theory]
+    ber_titles = ['Shared AWGN', 'Independent AWGN', 'Theoretical BER']
+    ber_mrks = ['-o', '-o', '--g']
+
+    plot_curve(ebno_range, ber_data, ber_titles, ber_mrks)
     plt.show()
+    

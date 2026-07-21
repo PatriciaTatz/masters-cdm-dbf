@@ -16,7 +16,8 @@ import komm as km  # type:ignore[import-untyped]
 import matplotlib.pyplot as plt
 import numpy as np
 from commpy.sequences import pnsequence  # type:ignore[import-untyped]
-from scipy.signal import max_len_seq, resample_poly
+from scipy.signal import max_len_seq, resample_poly, welch
+import matplotlib.pyplot as plt 
 
 from models import DecorrOutput, Specan, SpreadOutput
 
@@ -71,7 +72,17 @@ class CDMx:
             tile_repeats = int(np.ceil(len(resampled) / len(code_sequence)))
             expanded_code = np.tile(code_sequence, tile_repeats)[:len(resampled)]
             exp_codes.append(expanded_code)
-
+            """
+            plt.figure()
+            plt.plot(expanded_code, '--o', label=f"Code: {codes[i]}")
+            plt.plot(resampled, '-o', label="Resampled Rx Signal")
+            plt.legend(loc='upper right')
+            plt.title("Discrete Signal Mixing: Code x Signal", fontsize=14)
+            plt.ylabel("Amplitude")
+            plt.xlabel("Sample index")
+            plt.grid()
+            plt.show()
+            """
             #FORTEST
             spread_signal = resampled*expanded_code 
             ss.append(spread_signal)
@@ -92,6 +103,8 @@ class CDMx:
             
             #FORTEST:
             #despread_signal = sumsignal[i]
+
+
 
             signal, symbols = self.mf.rrcfilter(
                 despread_signal,
@@ -134,30 +147,51 @@ class Filter:
 
         if mode == "rxmode":
             symbols = filtered_nodelay[::sps_symbol]
+            filtered_nodelay /= np.max(np.abs(filtered_nodelay))
 
         return filtered_nodelay, symbols  
 
 
 class SpecAn: 
-    def calculate_psd(self ,fs, signal,threshold=-40):
-        fft_data = np.fft.fft(signal)
-        fft_data = np.fft.fftshift(fft_data)
+    def calculate_psd(self ,fs, signal,psdtype="normal"):
+        f, Pxx = welch(
+            signal,
+            fs=fs,
+            window='hann',
+            nperseg=4096,
+            scaling='density',
+            return_onesided=False,
+            noverlap=0
+        )
 
-        power = np.abs(fft_data)**2
-        Pxx = power / np.sum(power) 
-        f = np.fft.fftshift(np.fft.fftfreq(len(signal), 1/fs))
-        
-        Pxx_dB = 10*np.log10(Pxx + 1e-12)
+        f = np.fft.fftshift(f)
+        Pxx = np.fft.fftshift(Pxx)
 
-        peak = np.max(Pxx_dB)
-        mask = Pxx_dB > (peak + threshold)
+        Pxx_dB = 10*np.log10(Pxx + 1e-12) 
+        Pxx_dB = Pxx_dB - np.max(Pxx_dB) #normalise
 
-        idx = np.where(mask)[0]
+        if psdtype =="normal":
+            df = np.abs(f[1]-f[0])
+            power = Pxx* df
+            power = power / np.sum(power)
 
-        f_low = f[idx[0]]
-        f_high = f[idx[-1]]
+            cdf = np.cumsum(power)
 
-        bw = f_high - f_low
+            f_low  = f[np.searchsorted(cdf, 0.00005)]
+            f_high = f[np.searchsorted(cdf, 0.99995)]
+
+            bw = f_high - f_low
+        else: 
+            peak = np.max(Pxx_dB)
+
+            mask = Pxx_dB > (peak + psdtype)
+
+            idx = np.where(mask)[0]
+
+            f_low = f[idx[0]]
+            f_high = f[idx[-1]]
+
+            bw = f_high - f_low
         return Specan(f, Pxx_dB, bw)
 
 

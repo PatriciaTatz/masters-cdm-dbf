@@ -26,7 +26,7 @@ class DiscreteSignal:
         self.mf = Filter(conf)
         txsignal = self.create_symbols() #create symbols, rrc filtered
         self.create_timeseries(txsignal) #create time series based on input symbol rate
-        self.create_elementsignals(txsignal, 0)
+        self.create_elementsignals(txsignal, [0,0])
 
     def create_symbols(self):
         #modType, Ns, Ts: required
@@ -38,7 +38,10 @@ class DiscreteSignal:
         #randomized symbols 
         no_symbols = int(self.conf.simtime*self.conf.rb)
         self.txsymbols = np.random.choice(values, no_symbols) 
-        #self.bpsksymbols = [1, -1, 1, -1, 1, 1, -1, -1, 1, 1]
+        #np.save("input", self.txsymbols)
+
+        #FOR REPORT_REPEATABLE RESULTS
+        #self.txsymbols = np.load("input.npy")
 
         #add rrcfilter
         self.transmit, self.rrcsymbols = self.mf.rrcfilter(self.txsymbols, self.conf.fs)
@@ -53,11 +56,42 @@ class DiscreteSignal:
         #apply phase rotation as delay is too small to be seen as lagged samples. Why? 
         psi = pi 
         #each time this is recreated
-        self.elements = [signal]
+        self.elements = [signal + noise[0]]
         for i in range(1,self.conf.no_elem):
             signalNs = signal*np.exp(1j*i*psi) 
-            self.elements.append(signalNs + noise)
+            self.elements.append(signalNs + noise[i])
         return self.elements 
+
+    def show_signal_plot(self):
+        plt.figure()
+        plt.plot(self.time, self.transmit, '-o', label="RRC-Shaped Tx Signal")
+        plt.title(f"Tx Signal on Element=1")
+        plt.stem(self.time[:len(self.rrcsymbols)],self.rrcsymbols, 'orange', label="Symbols")
+        plt.legend()
+        plt.grid()
+        plt.xlabel("Time (seconds)")
+        plt.ylabel("Amplitude")
+
+        plt.figure()
+        plt.title(f"Power Spectrum Density of Tx Signal on Element=1")
+        specan = SpecAn().calculate_psd(
+            self.conf.fs,
+            self.elements[0],
+            psdtype="normal"
+            )
+        plt.plot(specan.f/1e6, specan.Pxx_dB, label="PSD")
+        plt.text(
+            0.02, 0.95,
+            f"99.9% BW={specan.bw/1e6:.2f}MHz",
+            transform=plt.gca().transAxes,
+            ha='left',
+            va='top',
+            bbox=dict(facecolor='white', edgecolor='black')
+        )
+        plt.ylabel("Power (dB)")
+        plt.xlabel("Frequency (MHz)")
+        plt.grid()
+        plt.show()  
 
 
 if __name__ == "__main__":
@@ -75,7 +109,7 @@ if __name__ == "__main__":
 
     Rb = 6.25e6
     Tb = 1/Rb
-    symbols = 6
+    symbols = 2000
     totaltime = symbols*Tb
 
     config = CDMcfg(
@@ -92,39 +126,5 @@ if __name__ == "__main__":
 
     #==================================
     #PLOTRESULTS
-    #==================================
-    plt.figure()
-    plt.plot(signal.time*1e9, signal.transmit, '--o', label="RRC Filtered Tx Signal")
-    plt.title(f"Signal Generator, Tsim={config.simtime*1e9:g}ns")
-    plt.stem(signal.time[:len(signal.rrcsymbols)]*1e9,signal.rrcsymbols, 'red', label="Upsampled Symbols")
-    plt.grid()
-    plt.xlabel("Time (nsec)")
-    plt.ylabel("Amplitude")
-    plt.legend()
-
-    plt.figure()
-    plt.title(f"PSD of Tx Signal")
-    specan = SpecAn().calculate_psd(
-        config.fs,
-        signal.elements[0],
-        threshold=-3
-        )
-    plt.plot(specan.f/1e6, specan.Pxx_dB, label="PSD")
-    plt.text(
-        0.02, 0.95,
-        f"99.9% BW={specan.bw/1e6:.2f}MHz",
-        transform=plt.gca().transAxes,
-        ha='left',
-        va='top',
-        bbox=dict(facecolor='white', edgecolor='black')
-    )
-    plt.grid()
-
-    plt.figure()
-    plt.grid()
-    plt.title("Two element signals with phase delay")
-    plt.plot(signal.time*1e9, signal.elements[0], '-', label="Element 1")
-    plt.plot(signal.time*1e9, signal.elements[1], '-', label="Element 2")
-    plt.xlabel("Time (nsecs)")
-    plt.legend()
-    plt.show()
+    #=================================
+    signal.show_signal_plot()

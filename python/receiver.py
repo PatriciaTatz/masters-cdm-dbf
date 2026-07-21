@@ -34,7 +34,7 @@ class Receiver():
 
         if PlotType.signal in self.plot:
             self.signal_plot(
-                "Original",
+                "",
                 signal.time,
                 signal.elements[0],
                 signal.rrcsymbols,
@@ -50,6 +50,8 @@ class Receiver():
             self.rxsignals,
             self.codes,
         )
+        
+        """
         if PlotType.spread in self.plot:
             self.spread_plot(
                 self.time, self.rxsignals,  
@@ -58,6 +60,7 @@ class Receiver():
                 spread.fs,
                 0
             )
+        """
 
         #====================
         #     COMBINER      |
@@ -69,6 +72,16 @@ class Receiver():
         #FORTEST
         #summed_signal = spread.signals
 
+        
+        if PlotType.spread in self.plot:
+            self.spread_plot(
+                self.time, self.rxsignals,  
+                spread.time, np.array(summed_signal), 
+                signal.rrcsymbols,
+                spread.fs,
+                0
+            )
+        
         #====================
         #     DESPREAD      |
         #====================
@@ -79,7 +92,7 @@ class Receiver():
             )
 
         if PlotType.recovered in self.plot:
-            self.spread_plot(
+            self.despread_plot(
                 signal.time, signal.elements,  
                 despread.time, despread.signals,
                 signal.rrcsymbols,
@@ -88,8 +101,6 @@ class Receiver():
             )
 
         return spread, despread
-
-
 
     def sum_plot(self, time, signal):
         plt.figure()
@@ -102,27 +113,25 @@ class Receiver():
 
     def signal_plot(self, title, time, asignal, symbols, Fsample):
         plt.figure()
-        plt.plot(time, asignal, '-o', label="RRC Tx Signal")
-        plt.title(f"{title} Rx Signal for Tsim={config.simtime}")
-        #plt.axvline(x=time[6], color='red', linestyle='--', linewidth=2)
-        #plt.axvline(x=time[10], color='red', linestyle='--', linewidth=2)
-        plt.stem(signal.time[:len(symbols)],symbols, 'orange', label="Symbols")
+        plt.plot(time, asignal, '-o', label="RRC Filtered Signal")
+        plt.title(f"{title} Tx Signal")
+        plt.stem(signal.time[:len(symbols)],symbols, 'orange', label="Upsampled Symbols")
         plt.legend()
         plt.grid()
         plt.xlabel("Time (seconds)")
         plt.ylabel("Amplitude")
 
         plt.figure()
-        plt.title(f"PSD of {title} Rx Signal")
+        plt.title(f"PSD of {title} Tx Signal")
         specan = SpecAn().calculate_psd(
             self.conf.fs,
             asignal,
-            threshold=-3
+            psdtype=-30
             )
         plt.plot(specan.f/1e6, specan.Pxx_dB, label="PSD")
         plt.text(
             0.02, 0.95,
-            f"99.9% BW={specan.bw/1e6:.2f}MHz",
+            f"Est. BW={specan.bw/1e6:.2f}MHz",
             transform=plt.gca().transAxes,
             ha='left',
             va='top',
@@ -134,27 +143,81 @@ class Receiver():
         plt.show()
 
     def spread_plot(self,tbefore, before_signal, tafter, after_signal, symbols, fs, index=0):
+        plt.rcParams['font.size'] = 18 
+        
+        """
         plt.figure()
-        plt.title(f"Spread Signal of Element {index}")
-        plt.plot(tbefore, before_signal[index], '--ob', label=f"Before element {index} signal")
-        plt.plot(tafter, after_signal[index], '-og', label="After spread")
+        plt.title(f"Spread Element={index+1} Signal")
+        plt.plot(tbefore, before_signal[index], '--ob', label=f"Tx signal")
+        plt.plot(tafter, after_signal[index], '-og', label="Spread signal")
+        plt.xlabel("Time (seconds)")
+        plt.ylabel("Amplitude")
+        #plt.stem(tbefore[:len(symbols)],symbols, 'orange')
+        plt.legend()
+        plt.grid()
+        """
+
+        plt.figure()
+        plt.title(f"Spread Composite Signal")
+        plt.plot(tafter, after_signal, '-', label="Composite signal")
+        plt.xlabel("Time (seconds)")
+        plt.ylabel("Amplitude")
+        #plt.stem(tbefore[:len(symbols)],symbols, 'orange')
+        #plt.legend()
+        plt.grid()
+
+        specan = SpecAn().calculate_psd(
+            fs,
+            after_signal,
+            psdtype="normal")
+        
+        #FORPLOT
+        #np.save(f"sps_{self.conf.lc}_psd_f", specan.f)
+        #np.save(f"sps_{self.conf.lc}_psd_Pxx_dB", specan.Pxx_dB)
+
+        plt.figure()
+        plt.plot(specan.f/1e6, specan.Pxx_dB, '-' ,label="PSD")
+        plt.xlabel("Frequency (MHz)")
+        plt.ylabel("Amplitude")
+        plt.title(f"PSD Spread Element={index+1} Signal")
+        plt.text(
+            0.02, 0.95,
+            f"Est. BW={specan.bw/1e6:.2f}MHz",
+            transform=plt.gca().transAxes,
+            ha='left',
+            va='top',
+            bbox=dict(facecolor='white', edgecolor='black')
+        )
+        plt.ylabel("Power (dB)")
+        plt.ylim(-80, 0)
+        plt.yticks(np.arange(-80, 1, 20))
+        plt.xlabel("Frequency (MHz)")
+        plt.grid()
+        plt.show()
+
+    def despread_plot(self,tbefore, before_signal, tafter, after_signal, symbols, fs, index=0):
+        plt.figure()
+        plt.title(f"Decorrelated Element={index+1} Signal")
+        plt.plot(tbefore, before_signal[index], '--b', label=f"Tx signal")
+        plt.plot(tafter, after_signal[index], '-g', label="Recovered signal")
         #plt.stem(tbefore[:len(symbols)]*1e9,symbols, 'orange')
         plt.legend()
         plt.grid()
 
-
         specan = SpecAn().calculate_psd(
             fs,
             after_signal[index],
-            threshold=-26)
+            psdtype=-50)
+
 
         plt.figure()
         plt.plot(specan.f/1e6, specan.Pxx_dB, label="PSD")
         plt.xlabel("Frequency (MHz)")
         plt.ylabel("Amplitude")
+        plt.title(f"PSD Decorrelated Element={index+1} Signal")
         plt.text(
             0.02, 0.95,
-            f"99.99% BW={specan.bw/1e6:.2f}MHz",
+            f"Est. BW={specan.bw/1e6:.2f}MHz",
             transform=plt.gca().transAxes,
             ha='left',
             va='top',
@@ -178,10 +241,10 @@ if __name__ == "__main__":
     # ==============================
     # PARAMETERS 
     # ==============================
-
+    
     Rb = 6.25e6
     Tb = 1/Rb
-    symbols = 100
+    symbols = 300
     totaltime = symbols*Tb
 
     config = CDMcfg(
@@ -191,8 +254,8 @@ if __name__ == "__main__":
         alpha = 0.5,
         simtime = totaltime,
         no_elem = 2
-    )
-
+        )
+    
     #create signal 
     signal = DiscreteSignal(config)
 
@@ -200,3 +263,28 @@ if __name__ == "__main__":
     rx = Receiver(config, PlotType.all())
     rx.setup(signal)
     rx.assemble() 
+
+
+    """ 
+    plt.rcParams['font.size'] = 20 
+    f1 = np.load(f"sps_4_psd_f.npy")
+    Pxx1 = np.load(f"sps_4_psd_Pxx_dB.npy")
+    f2 = np.load(f"sps_16_psd_f.npy")
+    Pxx2 = np.load(f"sps_16_psd_Pxx_dB.npy")
+        
+    plt.figure()
+    plt.plot(f1/1e6,  Pxx1, '-' ,label="Lc=4")
+    plt.plot(f2/1e6,  Pxx2, '-' ,label="Lc=16")
+
+    plt.xlabel("Frequency (MHz)")
+    plt.ylabel("Amplitude")
+    plt.title("PSD of Spread Composite Signal")
+
+    plt.ylabel("Power (dB)")
+    plt.xlabel("Frequency (MHz)")
+    plt.legend()
+   
+    plt.grid()
+    plt.show()
+    """
+    

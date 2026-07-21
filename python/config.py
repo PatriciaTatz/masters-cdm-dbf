@@ -16,7 +16,7 @@ class CDMcfg():
     codefam: str = "WH"
     no_elem: int = 1 
     degree: int = 1
-    span: int = 8
+    span: int = 10
     codeids: np.ndarray = field(default_factory=lambda: np.array([]))
 
 
