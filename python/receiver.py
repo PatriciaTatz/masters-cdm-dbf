@@ -5,7 +5,7 @@ import numpy as np
 from scipy.signal import resample_poly, upfirdn
 
 import utils as u
-from components import CDMx, SpecAn, Beamformer
+from components import CDMx, SpecAn, Beamformer, Filter
 from config import CDMcfg
 from signals import DiscreteSignal
 
@@ -30,6 +30,8 @@ class Receiver():
         self.time = np.arange(len(signal.elements[0]))/self.conf.fs
         self.cdmx = CDMx(self.conf)
         self.bf = Beamformer()
+        self.filter = Filter(self.conf)
+
         self.codes = self.cdmx.generate_codes()
         self.rxsignals = signal.elements.copy()
         self.psi_delays = signal.psi
@@ -48,7 +50,9 @@ class Receiver():
         #====================
         #       LPF         |
         #====================
-
+        self.rxsignals = self.filter.butterworth_lpf(
+            self.rxsignals, 
+        )
 
 
         #====================
@@ -211,7 +215,7 @@ class Receiver():
 
         plt.figure()
         plt.title(f"Decorrelated Element={index+1} Signal")
-        plt.plot(tbefore, before_signal, '--b', label=f"Tx signal")
+        plt.plot(tbefore, before_signal[index], '--b', label=f"Tx signal")
         plt.plot(tafter, after_signal[index], '-g', label="Normalised recovered signal")
         plt.legend()
         plt.grid()

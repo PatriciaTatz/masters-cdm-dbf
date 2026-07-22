@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.ticker import LogFormatterMathtext, LogLocator
 from scipy.special import erfc
-from scipy.signal import butter, filtfilt
 import copy 
 from dataclasses import replace
 
@@ -92,13 +91,6 @@ class BER:
                 noise = []
                 for i in range(self.conf.no_elem):
                     noise_arr = np.random.randn(signal_len)
-                    
-                    noise_arr = self.lowpass(
-                        noise_arr,
-                        fs=self.conf.fs,
-                        cutoff=self.conf.rb
-                    )
-                    
                     noise.append(noise_std*noise_arr)
                 self.signal.add_element_noise(signal, noise)
 

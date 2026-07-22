@@ -16,7 +16,7 @@ import komm as km  # type:ignore[import-untyped]
 import matplotlib.pyplot as plt
 import numpy as np
 from commpy.sequences import pnsequence  # type:ignore[import-untyped]
-from scipy.signal import max_len_seq, resample_poly, welch
+from scipy.signal import max_len_seq, resample_poly, welch, butter, filtfilt
 import matplotlib.pyplot as plt 
 
 from models import DecorrOutput, Specan, SpreadOutput
@@ -89,7 +89,7 @@ class CDMx:
             #ss.append(resampled)
 
         #check = np.dot(exp_codes[0], exp_codes[1])
-        
+
         time = np.arange(len(ss[0])) * (1/fs)
         return SpreadOutput(ss, time, exp_codes, fs)
  
@@ -122,6 +122,7 @@ class Filter:
         self.alpha = conf.alpha
         self.rb = conf.rb
         self.span = conf.span 
+        self.fs = conf.fs
 
     def rrcfilter(self, signal, fs, mode="txmode"):
         sps_symbol = int(round(fs / self.rb)) #also in config 
@@ -150,6 +151,16 @@ class Filter:
             filtered_nodelay /= np.max(np.abs(filtered_nodelay))
 
         return filtered_nodelay, symbols  
+
+    def butterworth_lpf(self, signal):
+        nyquist = self.fs/2 
+        cutoff = self.rb
+        b, a = butter(
+            N=8, 
+            Wn = cutoff/nyquist, 
+            btype="low"
+        )
+        return filtfilt(b,a,signal)
 
 
 class Beamformer:    
