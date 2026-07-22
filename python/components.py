@@ -156,7 +156,7 @@ class Filter:
         nyquist = self.fs/2 
         cutoff = self.rb
         b, a = butter(
-            N=8, 
+            N=4, 
             Wn = cutoff/nyquist, 
             btype="low"
         )
