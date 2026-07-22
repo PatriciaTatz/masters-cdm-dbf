@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.ticker import LogFormatterMathtext, LogLocator
 from scipy.special import erfc
+from scipy.signal import butter, filtfilt
 import copy 
 from dataclasses import replace
 
@@ -77,31 +78,41 @@ class BER:
             noise_var = eb / (2*ebno)
             noise_std = np.sqrt(noise_var)
 
-
             totalerrors = 0
             totalbits = 0
+            
+
             for txidx in range(maxSims):
-                #Add noise to the transmit signal and it needs to be done for each independent transmission tx
+                #Add noise to the transmit signal and it needs to be done for each independent transmission tx                
+                #add noise to each element path 
+
+                #noise_arr = np.random.randn(signal_len)
+                #noise = [noise_std*noise_arr]
+                #noise.append(np.zeros(len(noise_arr)))
                 noise = []
-                noise_arr = np.random.randn(signal_len)
                 for i in range(self.conf.no_elem):
+                    noise_arr = np.random.randn(signal_len)
+                    
+                    noise_arr = self.lowpass(
+                        noise_arr,
+                        fs=self.conf.fs,
+                        cutoff=self.conf.rb
+                    )
                     
                     noise.append(noise_std*noise_arr)
-                
-                #FORTEST
-                self.signal.create_elementsignals(signal, noise)
+                self.signal.add_element_noise(signal, noise)
 
                 #setup rx, note this simulates for all path 
                 self.rx.setup(self.signal)
 
                 #run cdm for all paths 
-                spread_signal, despread_signal = self.rx.assemble() 
+                decorr_signal = self.rx.assemble() 
 
                 #sample at symbole rate for arrpath only 
                 rxbits = self.symbol_sampler(
-                    despread_signal.time,
-                    despread_signal.signals[arrpath], 
-                    1/spread_signal.fs
+                    decorr_signal.time,
+                    decorr_signal.signals[arrpath], 
+                    1/decorr_signal.fs
                 )  
    
                 """
@@ -112,20 +123,22 @@ class BER:
                     noisysignal, 
                     1/self.conf.fs
                 )  
-                """
+                #for without filter 
                 #rxsymbols = txsymbols + noise
+                """
+
                 #get bit error rate per transmission, so this is no false matches / total bits 
                 totalerrors += np.sum(txbits!=rxbits)
                 totalbits += len(txbits)
 
             #average all the ber sum for each sim, so this is bersum divided by max sims 
             ber_curve.append(totalerrors / totalbits)
-        return ebno_db, ber_curve, ber_theory
+        return ebno_db, [ber_curve, ber_theory]
 
 def plot_curve(ebno_db, ber_array, ber_titles, ber_mrks):
 # Plot BER curve
     fig, ax = plt.subplots(figsize=(7,5))
-    for i in range(len(ber_array)):
+    for i in range(len(ber_titles)):
         ax.semilogy(
             ebno_db,
             ber_array[i],
@@ -145,7 +158,7 @@ def plot_curve(ebno_db, ber_array, ber_titles, ber_mrks):
     # Format as 10^-6 instead of 1e-6
     plt.xlabel("Eb/No (dB)")
     plt.ylabel("Bit Error Rate")
-    plt.title(f"BER of Element Path = 1")
+    plt.title(f"BER of Element Path = 1 with Nelem=3")
     plt.grid(True, which='both', linestyle='--', alpha=0.6)
     plt.legend()
 
@@ -157,7 +170,7 @@ if __name__ == "__main__":
     symbols = 100
     totaltime = symbols*Tb
     lc = 16
-    no_elem = 1
+    no_elem = 3
     
 
     baseconfig = CDMcfg(
@@ -175,32 +188,36 @@ if __name__ == "__main__":
         weights, 
         baseconfig.no_elem
         )
-
+    
+    
     #create signal
     signal = DiscreteSignal(baseconfig)
-    """
+    
     #run sim with config for best and config for worst for the same signal 
-    config_best_codes = replace(baseconfig, codeids=[1])
-    #config_worst_codes = replace(baseconfig, codeids=worst)
+    config_best_codes = replace(baseconfig, codeids=best)
+    config_worst_codes = replace(baseconfig, codeids=worst)
 
     ber_best = BER(config_best_codes, signal)
     #ber_worst = BER(config_worst_codes, signal)
 
-    ebno_db, ber_best_curve, ber_theory = ber_best.sim(10**3, 5)
-    np.save("ebno", ebno_db)
-    np.save("ber_sharedAWGN", ber_best_curve)
-    np.save("ber_theory", ber_theory)
+    ebno_db, ber_data = ber_best.sim(10**3, 4)
+    ber_titles = ['CDM-DBF Simulation', 'Theoretical BER']
+    ber_mrks = ['-o', '--g']
+    plot_curve(ebno_db, ber_data, ber_titles, ber_mrks)
+    plt.show()
 
     """
+    np.save("ebno", ebno_db)
+    np.save("ber_sharedAWGN_4_3_not_normalised", ber_best_curve)
+    np.save("ber_theory", ber_theory)
+    #PLOTTER
     ebno_range = np.load("ebno.npy")
-    ber_shared = np.load("ber_sharedAWGN.npy")
-    ber_indie = np.load("ber_indieAWGN.npy")
+    ber_shared = np.load("ber_sharedAWGN_4_3_not_normalised.npy")
+    ber_indie = np.load("ber_indieAWGN_4_3_not_normalised.npy")
     ber_theory = np.load("ber_theory.npy")
-    #ebno_db, ber_worst_curve, _ = ber_worst.sim(10**3, 5)
     ber_data = [ber_shared, ber_indie, ber_theory]
     ber_titles = ['Shared AWGN', 'Independent AWGN', 'Theoretical BER']
     ber_mrks = ['-o', '-o', '--g']
-
     plot_curve(ebno_range, ber_data, ber_titles, ber_mrks)
     plt.show()
-    
+    """
