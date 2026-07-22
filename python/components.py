@@ -55,7 +55,7 @@ class CDMx:
             ups = 1
             ds = 1
         
-        newfs = oldfs * ups / ds #rarely a perfect match
+        newfs = oldfs * ups / ds #for imperfect match
         rs = resample_poly(signal, ups, ds)
 
         return rs, newfs
@@ -88,6 +88,8 @@ class CDMx:
             ss.append(spread_signal)
             #ss.append(resampled)
 
+        #check = np.dot(exp_codes[0], exp_codes[1])
+        
         time = np.arange(len(ss[0])) * (1/fs)
         return SpreadOutput(ss, time, exp_codes, fs)
  
@@ -96,26 +98,22 @@ class CDMx:
         #Despread signal by multiplying with code block
         dss = [] #despread
         decorr = [] #decorrelated with rrc filter
-
         for i in range(self.conf.no_elem):
             despread_signal = sumsignal*codes[i]
             dss.append(despread_signal)
             
             #FORTEST:
             #despread_signal = sumsignal[i]
-
-
-
             signal, symbols = self.mf.rrcfilter(
                 despread_signal,
                 fs,
                 mode="rxmode"
                 )
-            
             decorr.append(signal)
-        #removes delay 
+
+        #removes delay and expected to be unchanged time from spreading
         time = np.arange(len(decorr[0]))*(1/fs)
-        return DecorrOutput(decorr, time)
+        return DecorrOutput(decorr, time, fs)
 
 
 
@@ -147,10 +145,26 @@ class Filter:
 
         if mode == "rxmode":
             symbols = filtered_nodelay[::sps_symbol]
+            #combined gain is not affected by this since its from adding multiple signal paths
+            #not related to chip gain so keep it 
             filtered_nodelay /= np.max(np.abs(filtered_nodelay))
 
         return filtered_nodelay, symbols  
 
+
+class Beamformer:    
+    def align_combine_signals(self,psi,sig):
+        #output aligned signals and combined
+        beamformed = sig[0].copy()
+        #align rest of signals 
+        for i in range(1,len(sig)):
+            #applying the phase in opposite sign 
+            beamformed += sig[i]*np.exp(+1j*psi[i])
+    
+        return beamformed 
+
+    
+    
 
 class SpecAn: 
     def calculate_psd(self ,fs, signal,psdtype="normal"):

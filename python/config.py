@@ -18,8 +18,6 @@ class CDMcfg():
     degree: int = 1
     span: int = 10
     codeids: np.ndarray = field(default_factory=lambda: np.array([]))
-
-
     def __post_init__(self):
         #calculate and assign derived parameter
         self.sps_symbol = 10 #becomes sps_chip*(1+alpha)*Lc

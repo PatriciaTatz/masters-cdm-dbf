@@ -6,6 +6,7 @@ import numpy as np
 class DecorrOutput:
     signals: list[np.ndarray]
     time: np.ndarray
+    fs: float
 
 @dataclass
 class SpreadOutput:
@@ -24,5 +25,4 @@ class Specan:
 class CodeWeights: 
     node: list[np.ndarray]
     edge: list[np.ndarray]
-
 

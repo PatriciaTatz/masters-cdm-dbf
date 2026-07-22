@@ -10,6 +10,7 @@ import commpy.channels as ch  # type:ignore[import-untyped]
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.signal import welch
+from math import sin 
 
 from components import Filter, SpecAn
 from config import CDMcfg
@@ -26,7 +27,7 @@ class DiscreteSignal:
         self.mf = Filter(conf)
         txsignal = self.create_symbols() #create symbols, rrc filtered
         self.create_timeseries(txsignal) #create time series based on input symbol rate
-        self.create_elementsignals(txsignal, [0,0,0])
+        self.create_elementsignals(txsignal)
 
     def create_symbols(self):
         #modType, Ns, Ts: required
@@ -37,11 +38,11 @@ class DiscreteSignal:
 
         #randomized symbols 
         no_symbols = int(self.conf.simtime*self.conf.rb)
-        #self.txsymbols = np.random.choice(values, no_symbols) 
+        self.txsymbols = np.random.choice(values, no_symbols) 
         #np.save("input", self.txsymbols)
 
         #FOR REPORT_REPEATABLE RESULTS
-        self.txsymbols = np.load("input.npy")
+        #self.txsymbols = np.load("input.npy")
 
         #add rrcfilter
         self.transmit, self.rrcsymbols = self.mf.rrcfilter(self.txsymbols, self.conf.fs)
@@ -52,28 +53,39 @@ class DiscreteSignal:
         self.dt = 1 / self.conf.fs 
         self.time =  np.arange(len(signal)) * self.dt
         
-    def create_elementsignals(self, signal, noise):
+    def create_elementsignals(self, signal):
         #apply phase rotation as delay is too small to be seen as lagged samples. Why? 
         #psi = pi 
         #applying d <= lambda/2 and lambda is for 10GHz (lambda=30mm) for Xband operations
         d = 0.015
         c = 3*10**8
-        theta = pi/2 
+        theta = pi/2
+        lam = 0.03
+        fd = 0
         #each time this is recreated
-        self.elements = [signal + noise[0]]
-        self.psi = []
+        self.elements = [signal]
+        self.psi = [0]
         for i in range(1,self.conf.no_elem):
-            psi_i = ((i-1)*d*sin(theta))/c 
-            signalNs = signal*np.exp(1j*i*psi) 
-            self.elements.append(signalNs + noise[i])
+            tau_i = d*sin(theta)
+            psi_i = 2*pi*i*tau_i/lam
+            signalNs = signal*np.exp(-1j*psi_i)*np.exp(+1j*2*pi*fd*self.time) 
+            self.elements.append(signalNs)
             self.psi.append(psi_i)
         return self.elements 
 
+    def add_element_noise(self, signal, noise):
+        for i in range(self.conf.no_elem):
+            self.elements[i] = signal + noise[i]
+
+
     def show_signal_plot(self):
         plt.figure()
-        plt.plot(self.time, self.transmit, '-o', label="RRC-Shaped Tx Signal")
+        for i in range(len(self.elements)):
+            plt.plot(self.time, self.elements[i], '-', label=f"Element {i} Signal")
+
+        #plt.plot(self.time, self.transmit, '-o', label="RRC-Shaped Tx Signal")
         plt.title(f"Tx Signal on Element=1")
-        plt.stem(self.time[:len(self.rrcsymbols)],self.rrcsymbols, 'orange', label="Symbols")
+        #plt.stem(self.time[:len(self.rrcsymbols)],self.rrcsymbols, 'orange', label="Symbols")
         plt.legend()
         plt.grid()
         plt.xlabel("Time (seconds)")

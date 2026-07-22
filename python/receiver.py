@@ -5,7 +5,7 @@ import numpy as np
 from scipy.signal import resample_poly, upfirdn
 
 import utils as u
-from components import CDMx, SpecAn
+from components import CDMx, SpecAn, Beamformer
 from config import CDMcfg
 from signals import DiscreteSignal
 
@@ -29,9 +29,10 @@ class Receiver():
     def setup(self, signal):
         self.time = np.arange(len(signal.elements[0]))/self.conf.fs
         self.cdmx = CDMx(self.conf)
+        self.bf = Beamformer()
         self.codes = self.cdmx.generate_codes()
         self.rxsignals = signal.elements.copy()
-
+        self.psi_delays = signal.psi
         if PlotType.signal in self.plot:
             self.signal_plot(
                 "",
@@ -43,6 +44,13 @@ class Receiver():
         
         
     def assemble(self):
+
+        #====================
+        #       LPF         |
+        #====================
+
+
+
         #====================
         #     SPREADER      |
         #====================
@@ -50,17 +58,7 @@ class Receiver():
             self.rxsignals,
             self.codes,
         )
-        
-        """
-        if PlotType.spread in self.plot:
-            self.spread_plot(
-                self.time, self.rxsignals,  
-                spread.time, spread.signals, 
-                signal.rrcsymbols,
-                spread.fs,
-                0
-            )
-        """
+ 
 
         #====================
         #     COMBINER      |
@@ -77,11 +75,9 @@ class Receiver():
             self.spread_plot(
                 self.time, self.rxsignals,  
                 spread.time, np.array(summed_signal), 
-                signal.rrcsymbols,
                 spread.fs,
                 0
             )
-        
         #====================
         #     DESPREAD      |
         #====================
@@ -93,14 +89,24 @@ class Receiver():
 
         if PlotType.recovered in self.plot:
             self.despread_plot(
-                signal.time, signal.elements,  
+                self.time, self.rxsignals, 
                 despread.time, despread.signals,
-                signal.rrcsymbols,
-                spread.fs,
+                despread.fs,
                 0
             )
 
-        return spread, despread
+        
+        #====================
+        #     BEAMFORMED     |
+        #====================
+        """
+        bf = self.bf.align_combine_signals(
+            self.psi_delays,
+            despread.signals
+        )
+        """
+
+        return despread
 
     def sum_plot(self, time, signal):
         plt.figure()
@@ -115,7 +121,7 @@ class Receiver():
         plt.figure()
         plt.plot(time, asignal, '-o', label="RRC Filtered Signal")
         plt.title(f"{title} Tx Signal")
-        plt.stem(signal.time[:len(symbols)],symbols, 'orange', label="Upsampled Symbols")
+        plt.stem(time[:len(symbols)],symbols, 'orange', label="Upsampled Symbols")
         plt.legend()
         plt.grid()
         plt.xlabel("Time (seconds)")
@@ -142,7 +148,7 @@ class Receiver():
         plt.grid()
         plt.show()
 
-    def spread_plot(self,tbefore, before_signal, tafter, after_signal, symbols, fs, index=0):
+    def spread_plot(self,tbefore, before_signal, tafter, after_signal, fs, index=0):
         plt.rcParams['font.size'] = 18 
         
         """
@@ -162,14 +168,13 @@ class Receiver():
         plt.plot(tafter, after_signal, '-', label="Composite signal")
         plt.xlabel("Time (seconds)")
         plt.ylabel("Amplitude")
-        #plt.stem(tbefore[:len(symbols)],symbols, 'orange')
         #plt.legend()
         plt.grid()
 
         specan = SpecAn().calculate_psd(
             fs,
             after_signal,
-            psdtype="normal")
+            psdtype=-30)
         
         #FORPLOT
         #np.save(f"sps_{self.conf.lc}_psd_f", specan.f)
@@ -189,25 +194,32 @@ class Receiver():
             bbox=dict(facecolor='white', edgecolor='black')
         )
         plt.ylabel("Power (dB)")
-        plt.ylim(-80, 0)
-        plt.yticks(np.arange(-80, 1, 20))
+        plt.ylim(-30, 0)
+        plt.yticks(np.arange(-30, 1, 20))
         plt.xlabel("Frequency (MHz)")
         plt.grid()
         plt.show()
 
-    def despread_plot(self,tbefore, before_signal, tafter, after_signal, symbols, fs, index=0):
+    def despread_plot(self,
+        tbefore,
+        before_signal,
+        tafter,
+        after_signal,
+        fs,
+        index=0
+    ):
+
         plt.figure()
         plt.title(f"Decorrelated Element={index+1} Signal")
-        plt.plot(tbefore, before_signal[index], '--b', label=f"Tx signal")
-        plt.plot(tafter, after_signal[index], '-g', label="Recovered signal")
-        #plt.stem(tbefore[:len(symbols)]*1e9,symbols, 'orange')
+        plt.plot(tbefore, before_signal, '--b', label=f"Tx signal")
+        plt.plot(tafter, after_signal[index], '-g', label="Normalised recovered signal")
         plt.legend()
         plt.grid()
 
         specan = SpecAn().calculate_psd(
             fs,
             after_signal[index],
-            psdtype=-50)
+            psdtype=-49)
 
 
         plt.figure()
@@ -255,7 +267,6 @@ if __name__ == "__main__":
         simtime = totaltime,
         no_elem = 2
         )
-    
     #create signal 
     signal = DiscreteSignal(config)
 
