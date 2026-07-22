@@ -26,7 +26,7 @@ class DiscreteSignal:
         self.mf = Filter(conf)
         txsignal = self.create_symbols() #create symbols, rrc filtered
         self.create_timeseries(txsignal) #create time series based on input symbol rate
-        self.create_elementsignals(txsignal, [0,0])
+        self.create_elementsignals(txsignal, [0,0,0])
 
     def create_symbols(self):
         #modType, Ns, Ts: required
@@ -37,11 +37,11 @@ class DiscreteSignal:
 
         #randomized symbols 
         no_symbols = int(self.conf.simtime*self.conf.rb)
-        self.txsymbols = np.random.choice(values, no_symbols) 
+        #self.txsymbols = np.random.choice(values, no_symbols) 
         #np.save("input", self.txsymbols)
 
         #FOR REPORT_REPEATABLE RESULTS
-        #self.txsymbols = np.load("input.npy")
+        self.txsymbols = np.load("input.npy")
 
         #add rrcfilter
         self.transmit, self.rrcsymbols = self.mf.rrcfilter(self.txsymbols, self.conf.fs)
@@ -54,12 +54,19 @@ class DiscreteSignal:
         
     def create_elementsignals(self, signal, noise):
         #apply phase rotation as delay is too small to be seen as lagged samples. Why? 
-        psi = pi 
+        #psi = pi 
+        #applying d <= lambda/2 and lambda is for 10GHz (lambda=30mm) for Xband operations
+        d = 0.015
+        c = 3*10**8
+        theta = pi/2 
         #each time this is recreated
         self.elements = [signal + noise[0]]
+        self.psi = []
         for i in range(1,self.conf.no_elem):
+            psi_i = ((i-1)*d*sin(theta))/c 
             signalNs = signal*np.exp(1j*i*psi) 
             self.elements.append(signalNs + noise[i])
+            self.psi.append(psi_i)
         return self.elements 
 
     def show_signal_plot(self):
