@@ -154,7 +154,7 @@ class Filter:
 
     def butterworth_lpf(self, signal):
         nyquist = self.fs/2 
-        cutoff = self.rb
+        cutoff = 1.5*self.rb
         b, a = butter(
             N=4, 
             Wn = cutoff/nyquist, 
@@ -174,7 +174,6 @@ class Beamformer:
     
         return beamformed 
 
-    
     
 
 class SpecAn: 

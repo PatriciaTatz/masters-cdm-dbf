@@ -126,32 +126,24 @@ class BER:
             ber_curve.append(totalerrors / totalbits)
         return ebno_db, ber_curve
 
-    def plot_curve(self, ebno_db, ber_array, ber_titles, ber_mrks):
+def plot_curve(ebno_db, ber_array, ber_titles):
+    plt.figure()
+    for i in range(len(ber_titles)):
+        plt.semilogy(
+            ebno_db,
+            ber_array[i],
+            linestyle='--',
+            marker='o',
+            linewidth=2,
+            markersize=6,
+            label=ber_titles[i]
+        )
 
-    
-    # Plot BER curve
-        fig, ax = plt.subplots(figsize=(7,5))
-        for i in range(len(ber_titles)):
-            ax.semilogy(
-                ebno_db,
-                ber_array[i],
-                ber_mrks[i],
-                linewidth=2,
-                markersize=6,
-                label=ber_titles[i]
-            )
-
-        # Major ticks at powers of 10
-        ax.set_yscale('log')
-        ax.yaxis.set_major_locator(LogLocator(base=10))
-        ax.yaxis.set_major_formatter(LogFormatterMathtext(base=10))
-
-        # Format as 10^-6 instead of 1e-6
-        plt.xlabel("Eb/No (dB)")
-        plt.ylabel("Bit Error Rate")
-        plt.title(f"BER of Element Path = 1 with Nelem={self.conf.no_elem}")
-        plt.grid(True, which='both', linestyle='--', alpha=0.6)
-        plt.legend()
+    plt.xlabel("Eb/No (dB)")
+    plt.ylabel("Bit Error Rate")
+    plt.title(f"BER of Element Path = 1 with Nelem=2")
+    plt.grid(True, which='both', linestyle='--', alpha=0.6)
+    plt.legend()
 
 
 if __name__ == "__main__":
@@ -162,7 +154,7 @@ if __name__ == "__main__":
     totaltime = symbols*Tb
     lc = 32
     no_elem = 2
-    
+    allids = np.arange(lc)
 
     baseconfig = CDMcfg(
         rb=Rb,
@@ -170,7 +162,8 @@ if __name__ == "__main__":
         sps_chip=2,
         alpha=0.5,
         simtime=totaltime,
-        no_elem=no_elem
+        no_elem=no_elem,
+        codeids=allids
         )
 
     WHcodes = CodeSelector(baseconfig)
@@ -182,8 +175,29 @@ if __name__ == "__main__":
     
     #create signal
     signal = DiscreteSignal(baseconfig)
+
+    top_ten = [(2,3), (15,16), (1,2), (14,16), (15,17), (14,17), (12,19), (13,19), (12,18), (13,18)]
+    ber_title = ['Theoretical'] +[str(x) for x in top_ten]
+    ber_title = ['Theoretical'] +[str(x) for x in top_ten]
+    SNR = 5
+
+    ebno_db = np.arange(0, SNR)
+    ebno_linear = 10**(ebno_db/10)
+    ber_theory = 0.5*erfc(np.sqrt(ebno_linear))
+
+    ber_data = [ber_theory]
     
     #run sim with config for best and config for worst for the same signal 
+    for clique in top_ten:
+        config_coded = replace(baseconfig, codeids=list(clique))
+        ber = BER(config_coded, signal)
+        _, curve = ber.sim(10**3, SNR)
+        ber_data.append(curve)
+    
+    plot_curve(ebno_db, ber_data, ber_title)
+    plt.show()
+
+    """
     config_best_codes = replace(baseconfig, codeids=best)
     config_worst_codes = replace(baseconfig, codeids=worst)
 
@@ -192,17 +206,14 @@ if __name__ == "__main__":
 
     ber_best = BER(config_best_codes, signal)
     ber_worst = BER(config_worst_codes, signal)
-       
-    SNR = 5
+    ebno_db, best_curve = ber_best.sim(noSims, SNR)
+    _, worst_curve = ber_worst.sim(noSims,SNR)
+   
+    SNR = 2
     noSims = 10**3
     ebno_db = np.arange(0, SNR)
     ebno_linear = 10**(ebno_db/10)
     ber_theory = 0.5*erfc(np.sqrt(ebno_linear))
-
-
-    ebno_db, best_curve = ber_best.sim(noSims, SNR)
-    _, worst_curve = ber_worst.sim(noSims,SNR)
-
 
     ber_data = [best_curve, worst_curve, ber_theory]
     ber_titles = ['Best Clique',  'Worst Clique', 'Theoretical BER']
@@ -210,7 +221,6 @@ if __name__ == "__main__":
     ber_best.plot_curve(ebno_db, ber_data, ber_titles, ber_mrks)
     plt.show()
 
-    """
     np.save("ebno", ebno_db)
     np.save("ber_sharedAWGN_4_3_not_normalised", ber_best_curve)
     np.save("ber_theory", ber_theory)

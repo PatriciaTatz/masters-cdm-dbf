@@ -50,11 +50,11 @@ class Receiver():
         #====================
         #       LPF         |
         #====================
+        
         self.rxsignals = self.filter.butterworth_lpf(
             self.rxsignals, 
         )
-
-
+        
         #====================
         #     SPREADER      |
         #====================

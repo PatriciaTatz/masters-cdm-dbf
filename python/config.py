@@ -26,4 +26,4 @@ class CDMcfg():
         self.b = self.rb * (1 + self.alpha)
         self.rc = self.rb * self.lc
         if len(self.codeids) == 0:
-            self.codeids = np.arange(1, self.lc)
+            self.codeids = np.arange(1,self.lc)
