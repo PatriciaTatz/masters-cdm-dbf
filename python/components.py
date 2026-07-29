@@ -166,9 +166,9 @@ class Filter:
 
         return filtered_nodelay, symbols  
 
-    def butterworth_lpf(self, signal):
+    def butterworth_lpf(self, cutoff, signal):
         nyquist = self.fs/2 
-        cutoff = self.rb
+        #cutoff = 1.5*self.rb
         b, a = butter(
             N=4, 
             Wn = cutoff/nyquist, 

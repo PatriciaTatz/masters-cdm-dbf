@@ -27,6 +27,19 @@ class DiscreteSignal:
         self.mf = Filter(conf)
         txsignal = self.create_symbols() #create symbols, rrc filtered
         self.create_timeseries(txsignal) #create time series based on input symbol rate
+
+        """
+        #ADD INTERFERENCE - removed by despreading process & MF 
+        N = len(txsignal)
+        BW_int = 1e6
+        Rs = BW_int
+        sps = int(self.conf.fs / Rs)
+        bits = np.random.choice([-1, 1], int(np.ceil(N/sps)))
+        symbols = np.repeat(bits, sps)[:N]
+        interference =  symbols * np.exp(1j*2*np.pi*7.5e6*self.time)
+
+        txsignal += np.real(interference)
+        """        
         self.create_elementsignals(txsignal)
 
     def create_symbols(self):
@@ -46,6 +59,8 @@ class DiscreteSignal:
 
         #add rrcfilter
         self.transmit, self.rrcsymbols = self.mf.rrcfilter(self.txsymbols, self.conf.fs)
+
+        #np.save("transmit_clean", self.transmit)
         return self.transmit
 
     def create_timeseries(self, signal):
@@ -99,6 +114,7 @@ class DiscreteSignal:
             psdtype="normal"
             )
         plt.plot(specan.f/1e6, specan.Pxx_dB, label="PSD")
+        """
         plt.text(
             0.02, 0.95,
             f"99.9% BW={specan.bw/1e6:.2f}MHz",
@@ -107,6 +123,7 @@ class DiscreteSignal:
             va='top',
             bbox=dict(facecolor='white', edgecolor='black')
         )
+        """
         plt.ylabel("Power (dB)")
         plt.xlabel("Frequency (MHz)")
         plt.grid()

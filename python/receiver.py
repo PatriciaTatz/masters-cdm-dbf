@@ -38,6 +38,7 @@ class Receiver():
         self.rxsignals = signal.elements.copy()
         self.psi_delays = signal.psi
 
+        """
         if PlotType.signal in self.plot:
             self.signal_plot(
                 "Rx Signal at Element 1",
@@ -55,17 +56,27 @@ class Receiver():
                 signal.rrcsymbols,
                 self.conf.fs
             )
-        
+        """
     def assemble(self):
         
-
+        
         #====================
         #       LPF         |
         #===================
         
         self.rxsignals = self.filter.butterworth_lpf(
+            1.5*self.conf.rb,
             self.rxsignals, 
         )
+        
+        if PlotType.signal in self.plot:
+            self.signal_plot(
+                "Rx Signal at Element 1",
+                signal.time,
+                self.rxsignals[0],
+                signal.rrcsymbols,
+                self.conf.fs
+            )
         
         #====================
         #     SPREADER      |
@@ -75,15 +86,15 @@ class Receiver():
             self.codes,
         )
 
-        
+        """
         if PlotType.spread in self.plot:
             self.spread_plot(
                 self.time, self.rxsignals,  
                 spread.time, spread.signals, 
                 spread.fs,
-                0
+                1
             )
-        
+        """
         #====================
         #     COMBINER      |
         #====================
@@ -94,7 +105,7 @@ class Receiver():
         #FORTEST
         #summed_signal = spread.signals
 
-        """
+        
         if PlotType.spread in self.plot:
             self.spread_plot(
                 self.time, self.rxsignals,  
@@ -102,7 +113,7 @@ class Receiver():
                 spread.fs,
                 0
             )
-        """
+        
         #====================
         #     DESPREAD      |
         #====================
@@ -111,20 +122,21 @@ class Receiver():
             spread.codes,
             spread.fs
             )
-        
+
         if PlotType.recovered in self.plot:
             self.despread_plot(
                 self.time, self.rxsignals, 
                 despread.time, despread.signals,
                 despread.fs,
-                1
+                0
             )
+
 
         
         #====================
         #     BEAMFORMED     |
         #====================
-        """
+        
         bf = self.bf.align_combine_signals(
             self.psi_delays,
             despread.signals
@@ -137,7 +149,7 @@ class Receiver():
                 despread.time, bf,
                 1
             )    
-        """
+        
         return despread
 
     def sum_plot(self, time, signal):
@@ -169,7 +181,10 @@ class Receiver():
             asignal,
             psdtype=-30
             )
+        
         plt.plot(specan.f/1e6, specan.Pxx_dB, label="PSD")
+
+        
         plt.text(
             0.02, 0.95,
             f"Est. BW={specan.bw/1e6:.2f}MHz",
@@ -178,6 +193,7 @@ class Receiver():
             va='top',
             bbox=dict(facecolor='white', edgecolor='black')
         )
+        
         plt.ylabel("Power (dB)")
         plt.xlabel("Frequency (MHz)")
         plt.grid()
@@ -186,7 +202,7 @@ class Receiver():
     def spread_plot(self,tbefore, before_signal, tafter, after_signal, fs, index=0):
         plt.rcParams['font.size'] = 15
         plt.figure()
-        plt.title(f"Spread Signal at Element Path={index+1}")
+        plt.title(f"Spread Signals Combined")
         plt.plot(tafter, after_signal[index], '-g', label="Spread signal")
         #plt.plot(tbefore, before_signal[index], '-b', label=f"Rx signal")
         plt.xlabel("Time (seconds)")
@@ -208,7 +224,7 @@ class Receiver():
         specan = SpecAn().calculate_psd(
             fs,
             after_signal[index],
-            psdtype=-25)
+            psdtype=-25.8)
         
         #FORPLOT
         #np.save(f"sps_{self.conf.lc}_psd_f", specan.f)
@@ -218,7 +234,7 @@ class Receiver():
         plt.plot(specan.f/1e6, specan.Pxx_dB, '-g')
         plt.xlabel("Frequency (MHz)")
         plt.ylabel("Amplitude")
-        plt.title(f"PSD Spread Signal at Element Path={index+1}")
+        plt.title(f"PSD Spread Signals Combined")
         plt.text(
             0.02, 0.95,
             f"Est. BW={specan.bw/1e6:.2f}MHz",
@@ -245,16 +261,18 @@ class Receiver():
         plt.rcParams['font.size'] = 15
         plt.figure()
         plt.title(f"Recovered Signal at Element Path={index+1}")
-        plt.plot(tbefore, before_signal[index], '--b', label=f"Rx signal")
-        plt.plot(tafter, after_signal[index], '-g', label="Recovered signal")
+        plt.plot(tbefore, before_signal[index], '--b', label=f"Rx signal + Interference")
+        plt.plot(tafter, after_signal[index], '-g', linewidth='3', label="Recovered signal")
         plt.legend(loc='upper right')
         plt.grid()
         plt.xlabel("Time (seconds)")
         plt.ylabel("Amplitude")
+
+
         specan = SpecAn().calculate_psd(
             fs,
             after_signal[index],
-            psdtype=-49)
+            psdtype=-25)
 
 
         plt.figure()
@@ -262,6 +280,7 @@ class Receiver():
         plt.xlabel("Frequency (MHz)")
         plt.ylabel("Amplitude")
         plt.title(f"PSD Recovered Signal at Element Path={index+1}")
+        
         plt.text(
             0.02, 0.95,
             f"Est. BW={specan.bw/1e6:.2f}MHz",
@@ -270,6 +289,7 @@ class Receiver():
             va='top',
             bbox=dict(facecolor='white', edgecolor='black')
         )
+        
         plt.ylabel("Power (dB)")
         plt.xlabel("Frequency (MHz)")
         plt.grid()
@@ -287,8 +307,13 @@ class Receiver():
         plt.rcParams['font.size'] = 15
         plt.figure()
         plt.title(f"Combined and Phase aligned Signal")
-        plt.plot(tbefore, before_signal[index], '--b', label=f"Rx signal")
-        plt.plot(tafter, after_signal, '-g', label="Phased aligned signal")
+        plt.plot(tbefore, before_signal[index], '--b',alpha=0.5, label=f"Rx signal + Interference")
+        plt.plot(tafter, after_signal, '-g', linewidth=3, label="Beamformed Signal")
+
+        #INTERFERENCE PLOT ONLY
+        tx_clean = np.load("transmit_clean.npy")
+        plt.plot(tbefore, tx_clean, '-b', linewidth=2, label=f"Rx Signal")
+
         plt.legend(loc='upper right')
         plt.grid()
         plt.xlabel("Time (seconds)")
@@ -311,7 +336,7 @@ if __name__ == "__main__":
     
     Rb = 6.25e6
     Tb = 1/Rb
-    symbols = 300
+    symbols = 2000
     totaltime = symbols*Tb
 
     config = CDMcfg(
@@ -327,7 +352,7 @@ if __name__ == "__main__":
     signal = DiscreteSignal(config)
 
     #initiate and assemble receiver 
-    rx = Receiver(config, [PlotType.bf])
+    rx = Receiver(config, [PlotType.recovered])
     rx.setup(signal)
     rx.assemble() 
 

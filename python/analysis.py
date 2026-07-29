@@ -3,7 +3,7 @@ from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.ticker import LogFormatterMathtext, LogLocator
+from matplotlib.ticker import LogFormatterMathtext, LogLocator, NullFormatter
 from scipy.special import erfc
 import copy 
 from dataclasses import replace
@@ -131,8 +131,12 @@ class BER:
         return ebno_db, ber_curve
 
 def plot_curve(ebno_db, ber_array, ber_titles):
-    plt.figure()
 
+    #save the data f"./results/{self.codefam}/sf/sf_code{self.codeids[j]}.png
+    fileloc = "./results/WH/raw_data/"
+    np.save(f"{fileloc}/ebno.npy", ebno_db)
+
+    plt.figure()
     plt.semilogy(
         ebno_db,
         ber_array[0],
@@ -143,7 +147,10 @@ def plot_curve(ebno_db, ber_array, ber_titles):
         markersize=6,
         label=ber_titles[0]
     )
+    np.save(f"{fileloc}/theory.npy", ber_array[0])
+
     for i in range(1,len(ber_titles)):
+        np.save(f"{fileloc}/{ber_title[i]}",ber_array[i])
         plt.semilogy(
             ebno_db,
             ber_array[i],
@@ -154,9 +161,15 @@ def plot_curve(ebno_db, ber_array, ber_titles):
             label=ber_titles[i]
         )
 
+    # Show only 10^n labels
+    ax = plt.gca()
+    ax.yaxis.set_major_locator(LogLocator(base=10))
+    ax.yaxis.set_major_formatter(LogFormatterMathtext(base=10))
+    ax.yaxis.set_minor_formatter(NullFormatter())
+
     plt.xlabel("Eb/No (dB)")
     plt.ylabel("Bit Error Rate")
-    plt.title(f"BER of Element Path = 1 N=4 for different Lc")
+    plt.title(f"Element Path=1 with Lc=4")
     plt.grid(True, which='both', linestyle='--', alpha=0.6)
     plt.legend()
 
@@ -214,26 +227,34 @@ if __name__ == "__main__":
 
     
     #PLOT OF INCREASING NC with LPF ON LC=[1,32]
-    Nelem = [1,2,3]
+    Nelem = [1,5,6,7]
     ber_title = ['Theoretical'] +[f"N={str(x)}" for x in Nelem]
-    SNR = 5
+    SNR = 6
     ebno_db = np.arange(0, SNR)
     ebno_linear = 10**(ebno_db/10)
     ber_theory = 0.5*erfc(np.sqrt(ebno_linear))
 
     ber_data = [ber_theory]
     #run sim with config for best and config for worst for the same signal 
-    baseconfig = CDMcfg(
-        rb=Rb,
-        sps_chip=2,
-        alpha=0.5,
-        simtime=totaltime,
-        no_elem=1,
-        lc=4,
-        codeids=np.arange(1,4)
-        )
+
     for nelem in Nelem:
-        config_n = replace(baseconfig, no_elem=nelem)
+        baseconfig = CDMcfg(
+            rb=Rb,
+            sps_chip=2,
+            alpha=0.5,
+            simtime=totaltime,
+            no_elem=nelem,
+            lc=8,
+            codeids=np.arange(1,8)
+            )
+        WHcodes = CodeSelector(baseconfig)
+        weights = WHcodes.generate_weights()
+        best, _  = WHcodes.find_best_clique(
+                    weights, 
+                    baseconfig.no_elem
+                    )
+        print(f"N={nelem} with code pairs={best}")
+        config_n = replace(baseconfig, codeids=best)
         signal = DiscreteSignal(config_n)
         ber = BER(config_n, signal)
         _, curve = ber.sim(10**3, SNR)
