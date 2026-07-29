@@ -38,11 +38,11 @@ class DiscreteSignal:
 
         #randomized symbols 
         no_symbols = int(self.conf.simtime*self.conf.rb)
-        self.txsymbols = np.random.choice(values, no_symbols) 
+        #self.txsymbols = np.random.choice(values, no_symbols) 
         #np.save("input", self.txsymbols)
 
         #FOR REPORT_REPEATABLE RESULTS
-        #self.txsymbols = np.load("input.npy")
+        self.txsymbols = np.load("input.npy")
 
         #add rrcfilter
         self.transmit, self.rrcsymbols = self.mf.rrcfilter(self.txsymbols, self.conf.fs)

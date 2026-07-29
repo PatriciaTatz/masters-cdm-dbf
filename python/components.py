@@ -21,7 +21,6 @@ import matplotlib.pyplot as plt
 
 from models import DecorrOutput, Specan, SpreadOutput
 
-
 class CDMx:
     def __init__(self, conf):
         self.mf = Filter(conf)
@@ -33,11 +32,11 @@ class CDMx:
             #n: must be a power of 2 and int 
             codes = []
             for i in self.conf.codeids:
+                
                 WHcode = km.WalshHadamardSequence(
                     length=self.conf.lc,
                     index=i,
                     ordering='sequency')
-
                 codes.append(WHcode.polar_sequence)
         else: 
             raise Exception("Unrecognised code family! Choose from [WH, ]")
@@ -67,11 +66,12 @@ class CDMx:
         exp_codes = []
         for i in range(self.conf.no_elem):
             resampled, fs = self.resample_to_spschip(targetfs, oldfs, signals[i])
-
+            
             code_sequence = np.repeat(codes[i], self.conf.sps_chip)
             tile_repeats = int(np.ceil(len(resampled) / len(code_sequence)))
             expanded_code = np.tile(code_sequence, tile_repeats)[:len(resampled)]
             exp_codes.append(expanded_code)
+    
             """
             plt.figure()
             plt.plot(expanded_code, '--o', label=f"Code: {codes[i]}")
@@ -91,6 +91,20 @@ class CDMx:
         #check = np.dot(exp_codes[0], exp_codes[1])
 
         time = np.arange(len(ss[0])) * (1/fs)
+        """
+        #PLOT FOR CODE TIMESERIES
+        for i in range(len(exp_codes)):
+            print("code=", codes[i])
+            plt.rcParams['font.size'] = 15
+            plt.figure()
+            plt.title(f"Code sequence index={i+1}")
+            plt.plot(time, exp_codes[i], '-g', label="WH Code Sequence")
+            plt.legend(loc='upper right')
+            plt.grid()
+            plt.xlabel("Time (seconds)")
+            plt.ylabel("Amplitude")
+            plt.show()
+        """
         return SpreadOutput(ss, time, exp_codes, fs)
  
 
@@ -154,7 +168,7 @@ class Filter:
 
     def butterworth_lpf(self, signal):
         nyquist = self.fs/2 
-        cutoff = 1.5*self.rb
+        cutoff = self.rb
         b, a = butter(
             N=4, 
             Wn = cutoff/nyquist, 
@@ -166,13 +180,14 @@ class Filter:
 class Beamformer:    
     def align_combine_signals(self,psi,sig):
         #output aligned signals and combined
+
         beamformed = sig[0].copy()
         #align rest of signals 
         for i in range(1,len(sig)):
-            #applying the phase in opposite sign 
-            beamformed += sig[i]*np.exp(+1j*psi[i])
+            #applying the phase in opposite sign  - ONLY KEEPS REAL PART FOR BPSK FOR NOW 
+            beamformed += np.real(sig[i]*np.exp(+1j*psi[i]))
     
-        return beamformed 
+        return beamformed
 
     
 
