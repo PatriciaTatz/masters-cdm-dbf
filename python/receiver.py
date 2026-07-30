@@ -59,13 +59,13 @@ class Receiver():
         """
     def assemble(self):
         
-        
+        """
         #====================
         #       LPF         |
         #===================
         
         self.rxsignals = self.filter.butterworth_lpf(
-            1.5*self.conf.rb,
+            self.conf.rb,
             self.rxsignals, 
         )
         
@@ -116,7 +116,8 @@ class Receiver():
         #     DESPREAD      |
         #====================
         """
-        #FORTEST
+        #FORTESTA
+        #1. comment out origina despread operation  and use the one below 
         summed_signal = self.rxsignals
         despread = self.cdmx.despreader(
             summed_signal,
@@ -158,7 +159,7 @@ class Receiver():
                 despread.time, bf,
                 1
             )    
-        
+        """
         return despread
 
     def sum_plot(self, time, signal):
@@ -219,8 +220,8 @@ class Receiver():
         #plt.stem(tbefore[:len(symbols)],symbols, 'orange')
         plt.legend(loc='upper right')
         plt.grid()
+        
         """
-
         plt.figure()
         plt.title(f"Spread Composite Signal")
         plt.plot(tafter, after_signal, '-', label="Composite signal")

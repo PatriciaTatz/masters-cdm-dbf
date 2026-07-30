@@ -24,25 +24,33 @@ class BER:
         self.signal = signal
 
     def symbol_sampler(self, time, signal, dt):
-        sps = int(round(1 / (self.conf.rb * dt)))
-        symbols_at_rb = signal[::sps]
+        sps = int(1 / (self.conf.rb * dt)) 
+        symbols_at_rb = signal[sps::sps]
+
         """
         #plot for where the sampler is occuring
         plt.figure()
         plt.title(f"Symbol sampler")
         plt.plot(
+            self.signal.time,
+            self.signal.transmit, 'blue', linewidth=3, label="Tx Original")
+        plt.plot(
             time,
             signal, 'blue', label="Signal")
+
         plt.stem(
-            time[::sps],
-            symbols_at_rb, 'red', label="Sig Sampled")        
+            time[sps::sps],
+            symbols_at_rb, 'red', label="Sig Sampled")     
+        
         plt.stem(
-            self.signal.time[:len(self.signal.rrcsymbols)],
+            self.signal.time,
             self.signal.rrcsymbols, 'orange', label="Tx Symbols")
+        
         plt.legend()
         plt.grid()
         plt.xlabel("Time (seconds)")
         plt.ylabel("Amplitude")
+        
         plt.show()
         """
         #BPSKDETECTOR, not SYM TO BITS, wrong name. 
@@ -52,18 +60,14 @@ class BER:
     def sim(self, maxSims, maxSNR):
         ebno_db = np.arange(0, maxSNR)
         ebno_linear = 10**(ebno_db/10)
-        """
-        txbits = self.symbol_sampler(
-            self.signal.time,
-            self.signal.transmit,
-            1/self.conf.fs
-        )
-        """
+        
+        txbits = np.where(self.signal.txsymbols > 0, 1, -1)
 
+        """
         #FORTEST B:
         txsym = self.signal.txsymbols.copy()
         txbits = np.where(txsym >0, 1, -1)
-
+        """
         arrpath = 0
         signal_len = len(self.signal.transmit)
         signal = self.signal.transmit.copy()
@@ -71,19 +75,20 @@ class BER:
 
         #BER simulation 
         ber_curve = []
-        errorlimit = 10000
+        target_error = 100000
+        maxbits = 10**7
         for i, ebno in enumerate(ebno_linear):
             print("snr=",ebno_db[i])
 
             #calculate AWGN noise 
-            noise_std = np.sqrt(1 / (2*ebno))
+            noise_std = np.sqrt(eb/ (2*ebno))
 
             totalerrors = 0
             totalbits = 0
             
 
             for txidx in range(maxSims):
-                """
+                
                 noise = []
                 for i in range(self.conf.no_elem):
                     noise_arr = np.random.randn(signal_len)
@@ -108,18 +113,21 @@ class BER:
                 #1. Use the Rx assemble but comment up until #FORTEST in receiver. 
                 #2. In the components module, follow #FORTEST to only use Matched Filter
                 """
-                
                 #TEST B: For w/o CDM + Matched Filter (AWGN only)
                 #1. Remove matched filter in the sigGen so use txsymbols = rrcsymbols
                 #1. Comment out rx.setup rx.assembly and symbolsampler.
                 #2. Run code below:
                 rxsym = txsym + noise_std*np.random.randn(len(txsym)) 
                 rxbits = np.where(rxsym >0, 1, -1)
+                """
 
                 #get bit error rate per transmission, so this is no false match
                 # es / total bits 
                 totalerrors += np.sum(txbits!=rxbits)
                 totalbits += len(txbits)
+
+                if totalerrors >=target_error: break
+                if totalbits >= maxbits: break 
 
             #average all the ber sum for each sim, so this is bersum divided by max sims 
             ber_curve.append(totalerrors / totalbits)
@@ -170,7 +178,7 @@ if __name__ == "__main__":
     #configure
     Rb = 6.25e6
     Tb = 1/Rb
-    symbols = 10**7
+    symbols = 1000
     totaltime = symbols*Tb
 
     
@@ -219,16 +227,16 @@ if __name__ == "__main__":
 
     
     #PLOT OF INCREASING NC with LPF ON LC=[1,32]
-    Nelem = [1]
+    Nelem = [2]
     ber_title = ['Theoretical'] +[f"N={str(x)}" for x in Nelem]
-    SNR = 11
+    SNR =  11
     ebno_db = np.arange(0, SNR)
     ebno_linear = 10**(ebno_db/10)
     ber_theory = 0.5*erfc(np.sqrt(ebno_linear))
 
     ber_data = [ber_theory]
     #run sim with config for best and config for worst for the same signal 
-    lc = 16
+    lc = 4
     for nelem in Nelem:
         baseconfig = CDMcfg(
             rb=Rb,
@@ -249,7 +257,7 @@ if __name__ == "__main__":
         config_n = replace(baseconfig, codeids=best)
         signal = DiscreteSignal(config_n)
         ber = BER(config_n, signal)
-        _, curve = ber.sim(1, SNR)
+        _, curve = ber.sim(10**7, SNR)
         ber_data.append(curve)
     
     plot_curve(ebno_db, ber_data, ber_title)
