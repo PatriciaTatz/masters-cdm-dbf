@@ -86,7 +86,7 @@ class Receiver():
             self.codes,
         )
 
-        """
+        
         if PlotType.spread in self.plot:
             self.spread_plot(
                 self.time, self.rxsignals,  
@@ -94,7 +94,7 @@ class Receiver():
                 spread.fs,
                 1
             )
-        """
+        
         #====================
         #     COMBINER      |
         #====================
@@ -102,8 +102,6 @@ class Receiver():
         if PlotType.sum in self.plot: 
             self.sum_plot(spread.time, summed_signal)
         
-        #FORTEST
-        #summed_signal = spread.signals
 
         
         if PlotType.spread in self.plot:
@@ -117,12 +115,23 @@ class Receiver():
         #====================
         #     DESPREAD      |
         #====================
+        """
+        #FORTEST
+        summed_signal = self.rxsignals
+        despread = self.cdmx.despreader(
+            summed_signal,
+            [1,1],
+            self.conf.fs
+            )
+        ##ENDOFTEST
+
+        """
         despread = self.cdmx.despreader(
             summed_signal,
             spread.codes,
             spread.fs
             )
-
+        
         if PlotType.recovered in self.plot:
             self.despread_plot(
                 self.time, self.rxsignals, 
@@ -352,7 +361,7 @@ if __name__ == "__main__":
     signal = DiscreteSignal(config)
 
     #initiate and assemble receiver 
-    rx = Receiver(config, [PlotType.recovered])
+    rx = Receiver(config, PlotType.all())
     rx.setup(signal)
     rx.assemble() 
 

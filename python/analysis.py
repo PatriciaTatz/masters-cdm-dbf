@@ -45,59 +45,54 @@ class BER:
         plt.ylabel("Amplitude")
         plt.show()
         """
-        bits = np.where(symbols_at_rb > 0, 1, -1)
+        #BPSKDETECTOR, not SYM TO BITS, wrong name. 
+        bits = np.where(symbols_at_rb > 0, 1, -1) 
         return bits
 
     def sim(self, maxSims, maxSNR):
-        #FORTEST
-        #ebno_db = np.array([10])
-
         ebno_db = np.arange(0, maxSNR)
         ebno_linear = 10**(ebno_db/10)
-    
+        """
         txbits = self.symbol_sampler(
             self.signal.time,
             self.signal.transmit,
             1/self.conf.fs
-        )  
+        )
+        """
+
+        #FORTEST B:
+        txsym = self.signal.txsymbols.copy()
+        txbits = np.where(txsym >0, 1, -1)
+
         arrpath = 0
         signal_len = len(self.signal.transmit)
         signal = self.signal.transmit.copy()
-
-        #signalpower = np.mean(no.abs(txsignal)**2)
+        eb = np.sum(signal**2) / len(txbits)
 
         #BER simulation 
         ber_curve = []
+        errorlimit = 10000
         for i, ebno in enumerate(ebno_linear):
             print("snr=",ebno_db[i])
 
             #calculate AWGN noise 
-            eb = 1#from the samples per symbol
-            noise_var = eb / (2*ebno)
-            noise_std = np.sqrt(noise_var)
+            noise_std = np.sqrt(1 / (2*ebno))
 
             totalerrors = 0
             totalbits = 0
             
 
             for txidx in range(maxSims):
-                #Add noise to the transmit signal and it needs to be done for each independent transmission tx                
-                #add noise to each element path 
-
-                #noise_arr = np.random.randn(signal_len)
-                #noise = [noise_std*noise_arr]
-                #noise.append(np.zeros(len(noise_arr)))
+                """
                 noise = []
-                
                 for i in range(self.conf.no_elem):
                     noise_arr = np.random.randn(signal_len)
                     noise.append(noise_std*noise_arr)
 
                 self.signal.add_element_noise(signal, noise)
-
+                
                 #setup rx, note this simulates for all path 
                 self.rx.setup(self.signal)
-
 
                 #run cdm for all paths 
                 decorr_signal = self.rx.assemble() 
@@ -108,21 +103,21 @@ class BER:
                     decorr_signal.signals[arrpath], 
                     1/decorr_signal.fs
                 )  
-
-
+                
+                #TEST A: For w/o CDM
+                #1. Use the Rx assemble but comment up until #FORTEST in receiver. 
+                #2. In the components module, follow #FORTEST to only use Matched Filter
                 """
-                #TEST: For w/o Rx 
-                #sample at symbol rate for arrpath only 
-                rxbits = self.symbol_sampler(
-                    self.signal.time,
-                    noisysignal, 
-                    1/self.conf.fs
-                )  
-                #for without filter 
-                #rxsymbols = txsymbols + noise
-                """
+                
+                #TEST B: For w/o CDM + Matched Filter (AWGN only)
+                #1. Remove matched filter in the sigGen so use txsymbols = rrcsymbols
+                #1. Comment out rx.setup rx.assembly and symbolsampler.
+                #2. Run code below:
+                rxsym = txsym + noise_std*np.random.randn(len(txsym)) 
+                rxbits = np.where(rxsym >0, 1, -1)
 
-                #get bit error rate per transmission, so this is no false matches / total bits 
+                #get bit error rate per transmission, so this is no false match
+                # es / total bits 
                 totalerrors += np.sum(txbits!=rxbits)
                 totalbits += len(txbits)
 
@@ -131,11 +126,8 @@ class BER:
         return ebno_db, ber_curve
 
 def plot_curve(ebno_db, ber_array, ber_titles):
-
-    #save the data f"./results/{self.codefam}/sf/sf_code{self.codeids[j]}.png
     fileloc = "./results/WH/raw_data/"
-    np.save(f"{fileloc}/ebno.npy", ebno_db)
-
+    #np.save(f"{fileloc}/ebno.npy", ebno_db)
     plt.figure()
     plt.semilogy(
         ebno_db,
@@ -147,7 +139,7 @@ def plot_curve(ebno_db, ber_array, ber_titles):
         markersize=6,
         label=ber_titles[0]
     )
-    np.save(f"{fileloc}/theory.npy", ber_array[0])
+    #np.save(f"{fileloc}/theory.npy", ber_array[0])
 
     for i in range(1,len(ber_titles)):
         np.save(f"{fileloc}/{ber_title[i]}",ber_array[i])
@@ -178,7 +170,7 @@ if __name__ == "__main__":
     #configure
     Rb = 6.25e6
     Tb = 1/Rb
-    symbols = 100
+    symbols = 10**7
     totaltime = symbols*Tb
 
     
@@ -227,16 +219,16 @@ if __name__ == "__main__":
 
     
     #PLOT OF INCREASING NC with LPF ON LC=[1,32]
-    Nelem = [1,5,6,7]
+    Nelem = [1]
     ber_title = ['Theoretical'] +[f"N={str(x)}" for x in Nelem]
-    SNR = 6
+    SNR = 11
     ebno_db = np.arange(0, SNR)
     ebno_linear = 10**(ebno_db/10)
     ber_theory = 0.5*erfc(np.sqrt(ebno_linear))
 
     ber_data = [ber_theory]
     #run sim with config for best and config for worst for the same signal 
-
+    lc = 16
     for nelem in Nelem:
         baseconfig = CDMcfg(
             rb=Rb,
@@ -244,8 +236,8 @@ if __name__ == "__main__":
             alpha=0.5,
             simtime=totaltime,
             no_elem=nelem,
-            lc=8,
-            codeids=np.arange(1,8)
+            lc=lc,
+            codeids=np.arange(1,lc)
             )
         WHcodes = CodeSelector(baseconfig)
         weights = WHcodes.generate_weights()
@@ -257,7 +249,7 @@ if __name__ == "__main__":
         config_n = replace(baseconfig, codeids=best)
         signal = DiscreteSignal(config_n)
         ber = BER(config_n, signal)
-        _, curve = ber.sim(10**3, SNR)
+        _, curve = ber.sim(1, SNR)
         ber_data.append(curve)
     
     plot_curve(ebno_db, ber_data, ber_title)

@@ -43,7 +43,7 @@ pos = difference.at(passtime)
 _, _, sat_range, _, _, sat_range_rate = pos.frame_latlon_and_rates(svalbard)
 
 #Doppler shift
-freq_tx = 3e9 #Sband, 3GHz 
+freq_tx = 40e9 #Sband, 3GHz 
 c = 299792.458 #speed of light kms
 xtime = passtime.utc_datetime()
 normalised_doppler = -sat_range_rate.km_per_s / c
