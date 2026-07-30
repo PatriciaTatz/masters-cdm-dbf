@@ -113,11 +113,14 @@ class CDMx:
         dss = [] #despread
         decorr = [] #decorrelated with rrc filter
         for i in range(self.conf.no_elem):
+            """
             despread_signal = sumsignal*codes[i]
             dss.append(despread_signal)
-            
+            """
             #FORTEST:
-            #despread_signal = sumsignal[i]
+            #1. Comment out despread_signal and dss.append above
+            #2. Set despread_signal as just sumsignal which in the Rx is only rxsignals
+            despread_signal = sumsignal[i]
             signal, symbols = self.mf.rrcfilter(
                 despread_signal,
                 fs,
@@ -137,15 +140,17 @@ class Filter:
         self.rb = conf.rb
         self.span = conf.span 
         self.fs = conf.fs
+        self.sps_symbol = conf.sps_symbol 
 
     def rrcfilter(self, signal, fs, mode="txmode"):
-        sps_symbol = int(round(fs / self.rb)) #also in config 
+        sps_symbol  = self.sps_symbol #also equal to int(round(fs / self.rb))
         ts = 1 / self.rb 
         ntaps = self.span*sps_symbol + 1  #must be odd, total length of the filter 
 
         if mode == "txmode":
-            symbols = np.zeros(len(signal)*sps_symbol)
-            symbols[::sps_symbol] = signal
+            prepad = sps_symbol
+            symbols = np.zeros(prepad + len(signal)*sps_symbol)
+            symbols[prepad::sps_symbol] = signal
             samples = symbols
         else:
             samples = signal
@@ -153,18 +158,19 @@ class Filter:
         #apply filter
         dt_filter, h_rrc = filter.rrcosfilter(ntaps, self.alpha, ts, fs)
         h_rrc /= np.sqrt(np.sum(h_rrc**2))
-
         filtered = np.convolve(samples, h_rrc, mode='full')
         h_delay = (ntaps-1)//2
-        filtered_nodelay = filtered[h_delay:-h_delay]
+        
+        filtered_delay = filtered[h_delay:-h_delay]
 
         if mode == "rxmode":
-            symbols = filtered_nodelay[::sps_symbol]
+            symbols = filtered_delay[::sps_symbol]
+            filtered_delay = filtered[h_delay+1:-h_delay+1]
             #combined gain is not affected by this since its from adding multiple signal paths
             #not related to chip gain so keep it 
-            filtered_nodelay /= np.max(np.abs(filtered_nodelay))
+            #filtered_nodelay /= np.max(np.abs(filtered_nodelay))
 
-        return filtered_nodelay, symbols  
+        return filtered_delay, symbols  
 
     def butterworth_lpf(self, cutoff, signal):
         nyquist = self.fs/2 
