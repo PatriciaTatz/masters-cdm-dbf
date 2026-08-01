@@ -86,7 +86,6 @@ class BER:
             totalerrors = 0
             totalbits = 0
             
-
             for txidx in range(maxSims):
                 
                 noise = []
@@ -108,11 +107,11 @@ class BER:
                     decorr_signal.signals[arrpath], 
                     1/decorr_signal.fs
                 )  
-                
+                """
                 #TEST A: For w/o CDM
                 #1. Use the Rx assemble but comment up until #FORTEST in receiver. 
                 #2. In the components module, follow #FORTEST to only use Matched Filter
-                """
+                
                 #TEST B: For w/o CDM + Matched Filter (AWGN only)
                 #1. Remove matched filter in the sigGen so use txsymbols = rrcsymbols
                 #1. Comment out rx.setup rx.assembly and symbolsampler.
@@ -224,10 +223,10 @@ if __name__ == "__main__":
     plot_curve(ebno_db, ber_data, ber_title)
     plt.show()
     """
-
     
     #PLOT OF INCREASING NC with LPF ON LC=[1,32]
     Nelem = [2]
+    lc = 8
     ber_title = ['Theoretical'] +[f"N={str(x)}" for x in Nelem]
     SNR =  11
     ebno_db = np.arange(0, SNR)
@@ -236,7 +235,7 @@ if __name__ == "__main__":
 
     ber_data = [ber_theory]
     #run sim with config for best and config for worst for the same signal 
-    lc = 4
+
     for nelem in Nelem:
         baseconfig = CDMcfg(
             rb=Rb,
@@ -249,11 +248,11 @@ if __name__ == "__main__":
             )
         WHcodes = CodeSelector(baseconfig)
         weights = WHcodes.generate_weights()
-        best, _  = WHcodes.find_best_clique(
+        best, worst = WHcodes.find_best_clique(
                     weights, 
                     baseconfig.no_elem
                     )
-        print(f"N={nelem} with code pairs={best}")
+        print(f"Lc={lc} with code pairs={best}")
         config_n = replace(baseconfig, codeids=best)
         signal = DiscreteSignal(config_n)
         ber = BER(config_n, signal)
@@ -330,7 +329,7 @@ if __name__ == "__main__":
     ber_shared = np.load("ber_sharedAWGN_4_3_not_normalised.npy")
     ber_indie = np.load("ber_indieAWGN_4_3_not_normalised.npy")
     ber_theory = np.load("ber_theory.npy")
-    ber_data = [ber_shared, ber_indie, ber_theory]
+    ber_data = [ber_shared, ber_indie, ber_theory]f
     ber_titles = ['Shared AWGN', 'Independent AWGN', 'Theoretical BER']
     ber_mrks = ['-o', '-o', '--g']
     plot_curve(ebno_range, ber_data, ber_titles, ber_mrks)

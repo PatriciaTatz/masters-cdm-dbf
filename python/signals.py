@@ -37,9 +37,9 @@ class DiscreteSignal:
         bits = np.random.choice([-1, 1], int(np.ceil(N/sps)))
         symbols = np.repeat(bits, sps)[:N]
         interference =  symbols * np.exp(1j*2*np.pi*7.5e6*self.time)
-
+        
         txsignal += np.real(interference)
-        """        
+        """      
         self.create_elementsignals(txsignal)
 
     def create_symbols(self):
@@ -51,16 +51,15 @@ class DiscreteSignal:
 
         #randomized symbols 
         no_symbols = int(self.conf.simtime*self.conf.rb)
-        self.txsymbols = np.random.choice(values, no_symbols) 
-        #np.save("input", self.txsymbols)
+        #self.txsymbols = np.random.choice(values, no_symbols) 
 
         #FOR REPORT_REPEATABLE RESULTS
-        #self.txsymbols = np.load("input.npy")
+        self.txsymbols = np.load("input.npy")
 
         #add rrcfilter
         self.transmit, self.rrcsymbols = self.mf.rrcfilter(self.txsymbols, self.conf.fs)
 
-        #np.save("transmit_clean", self.transmit)
+        np.save("transmit_clean", self.transmit)
         return self.transmit
 
     def create_timeseries(self, signal):

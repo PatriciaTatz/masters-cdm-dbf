@@ -38,6 +38,7 @@ class CDMx:
                     index=i,
                     ordering='sequency')
                 codes.append(WHcode.polar_sequence)
+        elif self.conf.codefam == "Gold": 
         else: 
             raise Exception("Unrecognised code family! Choose from [WH, ]")
 
@@ -83,22 +84,23 @@ class CDMx:
             plt.grid()
             plt.show()
             """
-            #FORTEST
+
             spread_signal = resampled*expanded_code 
             ss.append(spread_signal)
-            #ss.append(resampled)
+            
 
-        #check = np.dot(exp_codes[0], exp_codes[1])
+        #ORTHOGONALITY check = np.dot(exp_codes[0], exp_codes[1])
 
         time = np.arange(len(ss[0])) * (1/fs)
         """
-        #PLOT FOR CODE TIMESERIES
+        #PLOT FOR CODE TIMESERIES - POSTER
         for i in range(len(exp_codes)):
+            plt.rcParams['font.size'] = 15
             print("code=", codes[i])
             plt.rcParams['font.size'] = 15
             plt.figure()
             plt.title(f"Code sequence index={i+1}")
-            plt.plot(time, exp_codes[i], '-g', label="WH Code Sequence")
+            plt.plot(time, exp_codes[i], '-g', label="WH Code Sequence", linewidth=3,color='magenta')
             plt.legend(loc='upper right')
             plt.grid()
             plt.xlabel("Time (seconds)")
@@ -113,7 +115,7 @@ class CDMx:
         dss = [] #despread
         decorr = [] #decorrelated with rrc filter
         for i in range(self.conf.no_elem):
-            """
+            
             despread_signal = sumsignal*codes[i]
             dss.append(despread_signal)
             """
@@ -121,6 +123,7 @@ class CDMx:
             #1. Comment out despread_signal and dss.append above
             #2. Set despread_signal as just sumsignal which in the Rx is only rxsignals
             despread_signal = sumsignal[i]
+            """
             signal, symbols = self.mf.rrcfilter(
                 despread_signal,
                 fs,
@@ -143,7 +146,8 @@ class Filter:
         self.sps_symbol = conf.sps_symbol 
 
     def rrcfilter(self, signal, fs, mode="txmode"):
-        sps_symbol  = self.sps_symbol #also equal to int(round(fs / self.rb))
+        sps_symbol =  int(round(fs / self.rb))
+        #sps_symbol  = self.sps_symbol #also equal to int(round(fs / self.rb))
         ts = 1 / self.rb 
         ntaps = self.span*sps_symbol + 1  #must be odd, total length of the filter 
 
@@ -165,10 +169,10 @@ class Filter:
 
         if mode == "rxmode":
             symbols = filtered_delay[::sps_symbol]
-            filtered_delay = filtered[h_delay+1:-h_delay+1]
+            filtered_nodelay = filtered[h_delay+1:-h_delay+1]
             #combined gain is not affected by this since its from adding multiple signal paths
             #not related to chip gain so keep it 
-            #filtered_nodelay /= np.max(np.abs(filtered_nodelay))
+            filtered_nodelay /= np.max(np.abs(filtered_nodelay))
 
         return filtered_delay, symbols  
 
