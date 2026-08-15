@@ -39,6 +39,21 @@ class CDMx:
                     ordering='sequency')
                 codes.append(WHcode.polar_sequence)
         elif self.conf.codefam == "Gold": 
+            #for length N=31
+            #use preferred polynomial from Matlab
+            degree = 5 #2^5-1=31 
+
+            seq_a = max_len_seq(degree, taps=[5,2]) 
+            seq_b = max_len_seq(degree, taps=[5,4,3,2])
+
+            codes = []
+            for shift in range(len(seq_a)):
+                code = np.bitwise_xor(
+                    seq_a,
+                    np.roll(seq_b, shift)
+                )
+                codes.append(code)
+
         else: 
             raise Exception("Unrecognised code family! Choose from [WH, ]")
 
