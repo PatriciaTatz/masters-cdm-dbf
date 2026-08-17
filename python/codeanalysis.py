@@ -497,7 +497,7 @@ class CodeSelector:
 if __name__ == "__main__":
     #initiate code config
     lc = 2**5 - 1
-    ids = np.arange(0,31)
+    ids = np.arange(0,lc)
 
     WHcfg = CDMcfg(
         simtime = 1, 
@@ -513,7 +513,7 @@ if __name__ == "__main__":
     best, worst = WHcodes.find_best_clique(weights, WHcfg.no_elem)
     print("best =",best)
     print("worst = ", worst)
-    WHcodes.plot("CSD")
+    #WHcodes.plot("CSD")
     #WHcodes.plot("ACF")
     #WHcodes.plot("CCF")
     #WHcodes.plot("SF")

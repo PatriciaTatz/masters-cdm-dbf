@@ -14,6 +14,7 @@ ber_titles = [
     'N=7',
     ]
 
+
 ber_files = [
     'N1L8.npy',
     'N2L8.npy',
@@ -26,13 +27,14 @@ ber_files = [
 """
 
 ber_titles = [
-    'N=2, L=32 Optimised',
-    'N=2, L=32 Non-Ideal'
+    'N=2, L=32 Optimised WH',
+    'N=2, L=32 Optimised Gold'
 ]
 
+
 ber_files = [
-    'N2L32.npy',
-    'N2L32_Worst.npy'
+    './results/WH/raw_data/plot/N2L32.npy',
+    './results/Gold/raw_data/plot/N2L32.npy'
 ]
 
 plt.rcParams['font.size'] = 20
@@ -44,9 +46,27 @@ colors = cm.jet(np.linspace(0, 1, len(ber_titles)))
 plt.figure()
 avgloss = [] 
 for i in range(len(ber_titles)):
-    ber_data = np.load(f"{fileloc}/{ber_files[i]}")
-    n_elem_degradade = np.mean([ber_data - ber_theory] )
-    avgloss.append(n_elem_degradade)
+    print(ber_titles[i])
+    ber_data = np.load(f"{ber_files[i]}")
+    target_BER = 1e-5
+
+    snr_model = np.interp(
+        np.log10(target_BER),
+        np.log10(ber_data[::-1]),
+        ebno_db[::-1]
+    )
+    snr_theory = np.interp(
+        np.log10(target_BER),
+        np.log10(ber_theory[::-1]),
+        ebno_db[::-1]
+    )
+
+    implementation_loss = snr_model - snr_theory
+
+    print(f"SNR (Theory): {snr_theory} dB")
+    print(f"SNR (Model) : {snr_model} dB")
+    print(f"Loss : {implementation_loss} dB")       
+
     plt.semilogy(
         ebno_db[:len(ber_data)],
         ber_data,
@@ -58,9 +78,6 @@ for i in range(len(ber_titles)):
         label=ber_titles[i]
     )
 
-
-print(avgloss)
-print(avgloss[1]/avgloss[0])
 
 
 plt.title('Rx Signal on Element Path=1')

@@ -32,7 +32,6 @@ class CDMx:
             #n: must be a power of 2 and int 
             codes = []
             for i in self.conf.codeids:
-                
                 WHcode = km.WalshHadamardSequence(
                     length=self.conf.lc,
                     index=i,
@@ -43,17 +42,17 @@ class CDMx:
             #use preferred polynomial from Matlab
             degree = 5 #2^5-1=31 
 
-            seq_a = max_len_seq(degree, taps=[5,2]) 
-            seq_b = max_len_seq(degree, taps=[5,4,3,2])
+            seq_a, _ = max_len_seq(degree, taps=[2]) 
+            seq_b, _ = max_len_seq(degree, taps=[4,3,2])
 
-            codes = []
+            gold_codes = []
             for shift in range(len(seq_a)):
                 code = np.bitwise_xor(
                     seq_a,
                     np.roll(seq_b, shift)
                 )
-                codes.append(code)
-
+                gold_codes.append(code)
+            codes = [2*gold_codes[idx]-1 for idx in self.conf.codeids]
         else: 
             raise Exception("Unrecognised code family! Choose from [WH, ]")
 
@@ -184,10 +183,6 @@ class Filter:
 
         if mode == "rxmode":
             symbols = filtered_delay[::sps_symbol]
-            filtered_nodelay = filtered[h_delay+1:-h_delay+1]
-            #combined gain is not affected by this since its from adding multiple signal paths
-            #not related to chip gain so keep it 
-            filtered_nodelay /= np.max(np.abs(filtered_nodelay))
 
         return filtered_delay, symbols  
 

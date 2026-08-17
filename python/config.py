@@ -13,7 +13,7 @@ class CDMcfg():
     sps_chip: int = 2 
     alpha: float = 0.5
     modType: str = "BPSK"
-    codefam: str = "WH"
+    codefam: str = "Gold"
     no_elem: int = 1 
     degree: int = 1
     span: int = 10

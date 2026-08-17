@@ -86,7 +86,7 @@ class Receiver():
             self.codes,
         )
 
-        """
+        
         if PlotType.spread in self.plot:
             self.spread_plot(
                 self.time, self.rxsignals,  
@@ -94,7 +94,7 @@ class Receiver():
                 spread.fs,
                 0
             )
-        """
+        
         #====================
         #     COMBINER      |
         #====================
@@ -103,7 +103,7 @@ class Receiver():
             self.sum_plot(spread.time, summed_signal)
         
 
-        
+        """
         if PlotType.spread in self.plot:
             self.spread_plot(
                 self.time, self.rxsignals,  
@@ -111,7 +111,7 @@ class Receiver():
                 spread.fs,
                 0
             )
-        
+        """
         #====================
         #     DESPREAD      |
         #====================
@@ -138,15 +138,14 @@ class Receiver():
                 self.time, self.rxsignals, 
                 despread.time, despread.signals,
                 despread.fs,
-                1
+                0
             )
-        
-
+    
         
         #====================
         #     BEAMFORMED     |
         #====================
-        
+        """
         bf = self.bf.align_combine_signals(
             self.psi_delays,
             despread.signals
@@ -159,7 +158,7 @@ class Receiver():
                 despread.time, bf,
                 0
             )    
-        
+        """
         return despread
 
     def sum_plot(self, time, signal):
@@ -212,9 +211,9 @@ class Receiver():
     def spread_plot(self,tbefore, before_signal, tafter, after_signal, fs, index=0):
         plt.rcParams['font.size'] = 25
         plt.figure()
-        plt.title(f"Spread Signals Combined")
+        plt.title(f"Spread Signals at Element Path={index+1}")
         plt.plot(tafter, after_signal[index], '-g', label="Spread signal")
-        #plt.plot(tbefore, before_signal[index], '-b', label=f"Rx signal")
+        plt.plot(tbefore, before_signal[index], '-b', label=f"Rx signal")
         plt.xlabel("Time (seconds)\n")
         plt.ylabel("Amplitude")
         #plt.stem(tbefore[:len(symbols)],symbols, 'orange')
@@ -271,7 +270,7 @@ class Receiver():
         plt.figure()
         plt.title(f"Recovered Signal at Element Path={index+1}")
         plt.plot(tbefore, before_signal[index], '-b', label=f"Rx signal")
-        plt.plot(tafter, after_signal[index], '-g', linewidth='3', label="Normalised Recovered signal")
+        plt.plot(tafter, after_signal[index], '-g', linewidth='3', label="Recovered signal")
         plt.legend(loc='upper right')
         plt.grid()
         plt.xlabel("Time (seconds)")
@@ -350,7 +349,7 @@ if __name__ == "__main__":
 
     config = CDMcfg(
         rb = Rb,
-        lc = 32,
+        lc = 2**5-1,
         sps_chip= 2,
         alpha = 0.5,
         simtime = totaltime,
@@ -360,7 +359,7 @@ if __name__ == "__main__":
     signal = DiscreteSignal(config)
 
     #initiate and assemble receiver 
-    rx = Receiver(config, [PlotType.recovered])
+    rx = Receiver(config, PlotType.all())
     rx.setup(signal)
     rx.assemble() 
 

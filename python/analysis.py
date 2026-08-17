@@ -26,7 +26,7 @@ class BER:
     def symbol_sampler(self, time, signal, dt):
         sps = int(1 / (self.conf.rb * dt)) 
         symbols_at_rb = signal[sps::sps]
-
+        
         """
         #plot for where the sampler is occuring
         plt.figure()
@@ -36,7 +36,7 @@ class BER:
             self.signal.transmit, 'blue', linewidth=3, label="Tx Original")
         plt.plot(
             time,
-            signal, 'blue', label="Signal")
+            signal, 'red', label="Signal with Noise")
 
         plt.stem(
             time[sps::sps],
@@ -92,7 +92,6 @@ class BER:
                 for i in range(self.conf.no_elem):
                     noise_arr = np.random.randn(signal_len)
                     noise.append(noise_std*noise_arr)
-
                 self.signal.add_element_noise(signal, noise)
                 
                 #setup rx, note this simulates for all path 
@@ -149,7 +148,7 @@ def plot_curve(ebno_db, ber_array, ber_titles):
     #np.save(f"{fileloc}/theory.npy", ber_array[0])
 
     for i in range(1,len(ber_titles)):
-        np.save(f"{fileloc}/{ber_title[i]}",ber_array[i])
+        #np.save(f"{fileloc}/{ber_title[i]}",ber_array[i])
         plt.semilogy(
             ebno_db,
             ber_array[i],
@@ -179,56 +178,12 @@ if __name__ == "__main__":
     Tb = 1/Rb
     symbols = 1000
     totaltime = symbols*Tb
-
-    
-    #create signal
-    """
-    #PLOT OF INCREASING LC with LPF ON 
-    Lc = [8,16,32]
-    ber_title = ['Theoretical'] +[f"Lc={str(x)}" for x in Lc]
-    SNR = 5
-    ebno_db = np.arange(0, SNR)
-    ebno_linear = 10**(ebno_db/10)
-    ber_theory = 0.5*erfc(np.sqrt(ebno_linear))
-
-    ber_data = [ber_theory]
-    #run sim with config for best and config for worst for the same signal 
-    for lc in Lc:
-
-        baseconfig = CDMcfg(
-            rb=Rb,
-            sps_chip=2,
-            alpha=0.5,
-            simtime=totaltime,
-            no_elem=4,
-            lc=lc,
-            codeids=np.arange(1,lc)
-            )
-
-        WHcodes = CodeSelector(baseconfig)
-        weights = WHcodes.generate_weights()
-        best, _  = WHcodes.find_best_clique(
-                    weights, 
-                    baseconfig.no_elem
-                    )
-
-        config_lc = replace(baseconfig, lc=lc, codeids=best)
-        signal = DiscreteSignal(config_lc)
-        ber = BER(config_lc, signal)
-        
-        _, curve = ber.sim(10**3, SNR)
-        
-        ber_data.append(curve)
-    
-    plot_curve(ebno_db, ber_data, ber_title)
-    plt.show()
-    """
     
     #PLOT OF INCREASING NC with LPF ON LC=[1,32]
     Nelem = [2]
-    lc = 8
-    ber_title = ['Theoretical'] +[f"N={str(x)}" for x in Nelem]
-    SNR =  11
+    lc = 2**5-1
+    ber_title = ['Theoretical'] +[f"Gold - N={str(x)}" for x in Nelem]
+    SNR =  4
     ebno_db = np.arange(0, SNR)
     ebno_linear = 10**(ebno_db/10)
     ber_theory = 0.5*erfc(np.sqrt(ebno_linear))
@@ -244,7 +199,8 @@ if __name__ == "__main__":
             simtime=totaltime,
             no_elem=nelem,
             lc=lc,
-            codeids=np.arange(1,lc)
+            codeids=np.arange(0,lc),
+            codefam="Gold"
             )
         WHcodes = CodeSelector(baseconfig)
         weights = WHcodes.generate_weights()
@@ -256,82 +212,9 @@ if __name__ == "__main__":
         config_n = replace(baseconfig, codeids=best)
         signal = DiscreteSignal(config_n)
         ber = BER(config_n, signal)
-        _, curve = ber.sim(10**7, SNR)
+        _, curve = ber.sim(10, SNR)
         ber_data.append(curve)
     
     plot_curve(ebno_db, ber_data, ber_title)
     plt.show()
     
-    """
-    #PLOT OF TOP TEN WORST CODES 
-    signal = DiscreteSignal(baseconfig)
-    WHcodes = CodeSelector(baseconfig)
-    
-    weights = WHcodes.generate_weights()
-    best, worst  = WHcodes.find_best_clique(
-        weights, 
-        baseconfig.no_elem
-        )
-    #top_ten = [(0,3), (0,2), (2,3), (0,1), (1,3), (1,2)]
-    top_ten = [(0,3), (1,2)]
-    ber_title = ['Theoretical'] +[str(x) for x in top_ten]
-    SNR = 2
-
-    ebno_db = np.arange(SNR)
-    ebno_linear = 10**(ebno_db/10)
-    ber_theory = 0.5*erfc(np.sqrt(ebno_linear))
-
-    ber_data = [ber_theory]
-    
-    #run sim with config for best and config for worst for the same signal 
-    for clique in top_ten:
-        config_coded = replace(baseconfig, codeids=list(clique))
-        ber = BER(config_coded, signal)
-        _, curve = ber.sim(1, SNR)
-        ber_data.append(curve)
-    
-    plot_curve(ebno_db, ber_data, ber_title)
-    plt.show()
-
-    
-    #PLOT OF BEST vs WORST CLIQUE 
-    signal = DiscreteSignal(baseconfig)
-    config_best_codes = replace(baseconfig, codeids=best)
-    config_worst_codes = replace(baseconfig, codeids=worst)
-
-    print(config_best_codes)
-    print(config_worst_codes)
-
-    ber_best = BER(config_best_codes, signal)
-    ber_worst = BER(config_worst_codes, signal)
-    ebno_db, best_curve = ber_best.sim(noSims, SNR)
-    _, worst_curve = ber_worst.sim(noSims,SNR)
-   
-    SNR = 2
-    noSims = 10**3
-    ebno_db = np.arange(0, SNR)
-    ebno_linear = 10**(ebno_db/10)
-    ber_theory = 0.5*erfc(np.sqrt(ebno_linear))
-
-    ber_data = [best_curve, worst_curve, ber_theory]
-    ber_titles = ['Best Clique',  'Worst Clique', 'Theoretical BER']
-    ber_mrks = ['-o', '-o', '--g']
-    ber_best.plot_curve(ebno_db, ber_data, ber_titles, ber_mrks)
-    plt.show()
-
-    np.save("ebno", ebno_db)
-    np.save("ber_sharedAWGN_4_3_not_normalised", ber_best_curve)
-    np.save("ber_theory", ber_theory)
-
-
-    #PLOTTER
-    ebno_range = np.load("ebno.npy")
-    ber_shared = np.load("ber_sharedAWGN_4_3_not_normalised.npy")
-    ber_indie = np.load("ber_indieAWGN_4_3_not_normalised.npy")
-    ber_theory = np.load("ber_theory.npy")
-    ber_data = [ber_shared, ber_indie, ber_theory]f
-    ber_titles = ['Shared AWGN', 'Independent AWGN', 'Theoretical BER']
-    ber_mrks = ['-o', '-o', '--g']
-    plot_curve(ebno_range, ber_data, ber_titles, ber_mrks)
-    plt.show()
-    """
