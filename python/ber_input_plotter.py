@@ -2,7 +2,6 @@ import numpy as np
 import matplotlib.pyplot as plt 
 from matplotlib.ticker import LogFormatterMathtext, LogLocator, NullFormatter
 import matplotlib.cm as cm
-
 """
 ber_titles = [
     'N=1',
@@ -24,7 +23,7 @@ ber_files = [
     'N6L8.npy',
     'N7L8.npy',
 ]
-"""
+
 
 ber_titles = [
     'N=2, L=32 Optimised WH',
@@ -36,6 +35,28 @@ ber_files = [
     './results/WH/raw_data/plot/N2L32.npy',
     './results/Gold/raw_data/plot/N2L32.npy'
 ]
+"""
+
+
+ber_titles = [
+    'N=1',
+    'N=2',
+    'N=3',
+    'N=4',
+    'N=5',
+    'N=6',
+    ]
+
+ber_files = [
+    'N1L7.npy',
+    'N2L7.npy',
+    'N3L7.npy',    
+    'N4L7.npy',
+    'N5L7.npy',
+    'N6L7.npy'
+]
+
+
 
 plt.rcParams['font.size'] = 20
 fileloc = "./results/WH/raw_data/plot"
@@ -44,12 +65,13 @@ ber_theory = np.load(f"{fileloc}/theory.npy")
 colors = cm.jet(np.linspace(0, 1, len(ber_titles)))
 
 plt.figure()
-avgloss = [] 
+#avgloss = [] 
+filedata = "./results/Gold/raw_data/plot/"
 for i in range(len(ber_titles)):
     print(ber_titles[i])
-    ber_data = np.load(f"{ber_files[i]}")
+    ber_data = np.load(f"{filedata + ber_files[i]}")
     target_BER = 1e-5
-
+    """
     snr_model = np.interp(
         np.log10(target_BER),
         np.log10(ber_data[::-1]),
@@ -60,13 +82,13 @@ for i in range(len(ber_titles)):
         np.log10(ber_theory[::-1]),
         ebno_db[::-1]
     )
-
+    
     implementation_loss = snr_model - snr_theory
 
-    print(f"SNR (Theory): {snr_theory} dB")
-    print(f"SNR (Model) : {snr_model} dB")
-    print(f"Loss : {implementation_loss} dB")       
-
+    #print(f"SNR (Theory): {snr_theory} dB")
+    #print(f"SNR (Model) : {snr_model} dB")
+    #print(f"Loss : {implementation_loss} dB")       
+    """
     plt.semilogy(
         ebno_db[:len(ber_data)],
         ber_data,

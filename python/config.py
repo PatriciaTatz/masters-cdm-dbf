@@ -10,7 +10,7 @@ class CDMcfg():
     simtime: float 
     rb: float = 6.25e6
     lc: int = 32
-    sps_chip: int = 2 
+    sps_chip: int = 2
     alpha: float = 0.5
     modType: str = "BPSK"
     codefam: str = "Gold"
@@ -24,6 +24,6 @@ class CDMcfg():
         self.ts = 1/self.rb 
         self.fs = self.sps_symbol / self.ts 
         self.b = self.rb * (1 + self.alpha)
-        self.rc = self.rb * self.lc
+        self.rc = self.b/2 #self.rb * self.lc
         if len(self.codeids) == 0:
             self.codeids = np.arange(1,self.lc)

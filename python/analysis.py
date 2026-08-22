@@ -132,7 +132,7 @@ class BER:
         return ebno_db, ber_curve
 
 def plot_curve(ebno_db, ber_array, ber_titles):
-    fileloc = "./results/WH/raw_data/"
+    fileloc = "./results/Gold/raw_data/"
     #np.save(f"{fileloc}/ebno.npy", ebno_db)
     plt.figure()
     plt.semilogy(
@@ -148,7 +148,7 @@ def plot_curve(ebno_db, ber_array, ber_titles):
     #np.save(f"{fileloc}/theory.npy", ber_array[0])
 
     for i in range(1,len(ber_titles)):
-        #np.save(f"{fileloc}/{ber_title[i]}",ber_array[i])
+        np.save(f"{fileloc}/{ber_title[i]}",ber_array[i])
         plt.semilogy(
             ebno_db,
             ber_array[i],
@@ -181,9 +181,9 @@ if __name__ == "__main__":
     
     #PLOT OF INCREASING NC with LPF ON LC=[1,32]
     Nelem = [2]
-    lc = 2**5-1
-    ber_title = ['Theoretical'] +[f"Gold - N={str(x)}" for x in Nelem]
-    SNR =  4
+    lc = 8
+    ber_title = ['Theoretical'] +[f"N={str(x)} Lc=31" for x in Nelem]
+    SNR = 5
     ebno_db = np.arange(0, SNR)
     ebno_linear = 10**(ebno_db/10)
     ber_theory = 0.5*erfc(np.sqrt(ebno_linear))
@@ -200,9 +200,10 @@ if __name__ == "__main__":
             no_elem=nelem,
             lc=lc,
             codeids=np.arange(0,lc),
-            codefam="Gold"
+            codefam="WH"
             )
         WHcodes = CodeSelector(baseconfig)
+
         weights = WHcodes.generate_weights()
         best, worst = WHcodes.find_best_clique(
                     weights, 
@@ -212,7 +213,7 @@ if __name__ == "__main__":
         config_n = replace(baseconfig, codeids=best)
         signal = DiscreteSignal(config_n)
         ber = BER(config_n, signal)
-        _, curve = ber.sim(10, SNR)
+        _, curve = ber.sim(10**3, SNR)
         ber_data.append(curve)
     
     plot_curve(ebno_db, ber_data, ber_title)

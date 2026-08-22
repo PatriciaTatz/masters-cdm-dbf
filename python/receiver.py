@@ -92,7 +92,7 @@ class Receiver():
                 self.time, self.rxsignals,  
                 spread.time, spread.signals, 
                 spread.fs,
-                0
+                1
             )
         
         #====================
@@ -138,7 +138,7 @@ class Receiver():
                 self.time, self.rxsignals, 
                 despread.time, despread.signals,
                 despread.fs,
-                0
+                1
             )
     
         
@@ -212,8 +212,8 @@ class Receiver():
         plt.rcParams['font.size'] = 25
         plt.figure()
         plt.title(f"Spread Signals at Element Path={index+1}")
-        plt.plot(tafter, after_signal[index], '-g', label="Spread signal")
-        plt.plot(tbefore, before_signal[index], '-b', label=f"Rx signal")
+        plt.plot(tafter, after_signal[index], '-og', label="Spread signal")
+        plt.plot(tbefore, before_signal[index], '-ob', label=f"Rx signal")
         plt.xlabel("Time (seconds)\n")
         plt.ylabel("Amplitude")
         #plt.stem(tbefore[:len(symbols)],symbols, 'orange')
@@ -269,8 +269,8 @@ class Receiver():
         plt.rcParams['font.size'] = 20
         plt.figure()
         plt.title(f"Recovered Signal at Element Path={index+1}")
-        plt.plot(tbefore, before_signal[index], '-b', label=f"Rx signal")
-        plt.plot(tafter, after_signal[index], '-g', linewidth='3', label="Recovered signal")
+        plt.plot(tbefore, before_signal[index], '-ob', label=f"Rx signal")
+        plt.plot(tafter, after_signal[index], '-og', linewidth='3', label="Recovered signal")
         plt.legend(loc='upper right')
         plt.grid()
         plt.xlabel("Time (seconds)")
@@ -344,22 +344,23 @@ if __name__ == "__main__":
     
     Rb = 6.25e6
     Tb = 1/Rb
-    symbols = 2000
+    symbols = 30
     totaltime = symbols*Tb
 
     config = CDMcfg(
         rb = Rb,
-        lc = 2**5-1,
+        lc = 4,
         sps_chip= 2,
         alpha = 0.5,
         simtime = totaltime,
         no_elem = 2,
+        codefam="WH"
         )
     #create signal 
     signal = DiscreteSignal(config)
 
     #initiate and assemble receiver 
-    rx = Receiver(config, PlotType.all())
+    rx = Receiver(config, [PlotType.spread])
     rx.setup(signal)
     rx.assemble() 
 

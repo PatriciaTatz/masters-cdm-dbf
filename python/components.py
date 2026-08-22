@@ -40,10 +40,13 @@ class CDMx:
         elif self.conf.codefam == "Gold": 
             #for length N=31
             #use preferred polynomial from Matlab
-            degree = 5 #2^5-1=31 
+            #degree = 5 #2^5-1=31 
+            #seq_a, _ = max_len_seq(degree, taps=[2]) 
+            #seq_b, _ = max_len_seq(degree, taps=[4,3,2])
 
-            seq_a, _ = max_len_seq(degree, taps=[2]) 
-            seq_b, _ = max_len_seq(degree, taps=[4,3,2])
+            degree = 3 #2^3 - 1 = 7 
+            seq_a, _ = max_len_seq(degree, taps=[1])
+            seq_b, _ = max_len_seq(degree, taps=[2])
 
             gold_codes = []
             for shift in range(len(seq_a)):
@@ -54,7 +57,7 @@ class CDMx:
                 gold_codes.append(code)
             codes = [2*gold_codes[idx]-1 for idx in self.conf.codeids]
         else: 
-            raise Exception("Unrecognised code family! Choose from [WH, ]")
+            raise Exception("Unrecognised code family! Choose from [WH,Gold]")
 
         return codes 
 
@@ -75,16 +78,28 @@ class CDMx:
         return rs, newfs
 
     def spreader(self, signals, codes):
-        targetfs = self.conf.sps_chip * self.conf.rc
+        """
+        target sampling rate = the new sampling rate of the signal and the spreading code
+        Both the signal and spreading code 
+        """
+
+        targetfs = self.conf.sps_chip * self.conf.rc #atleast double the fc 
         oldfs = self.conf.fs
         ss = []
         exp_codes = []
         for i in range(self.conf.no_elem):
             resampled, fs = self.resample_to_spschip(targetfs, oldfs, signals[i])
-            
+
             code_sequence = np.repeat(codes[i], self.conf.sps_chip)
             tile_repeats = int(np.ceil(len(resampled) / len(code_sequence)))
             expanded_code = np.tile(code_sequence, tile_repeats)[:len(resampled)]
+
+            """
+            plt.plot(np.arange(len(signals[i]))/oldfs, signals[i],'-o')
+            plt.plot(np.arange(len(resampled))/fs, resampled,'-o')
+            plt.show()
+            """
+            #Record of all expanded codes for plotting
             exp_codes.append(expanded_code)
     
             """

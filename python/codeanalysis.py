@@ -496,14 +496,14 @@ class CodeSelector:
 
 if __name__ == "__main__":
     #initiate code config
-    lc = 2**5 - 1
+    lc = 2**3 - 1
     ids = np.arange(0,lc)
 
     WHcfg = CDMcfg(
         simtime = 1, 
         lc = lc,
         codefam="Gold",
-        no_elem= 8,
+        no_elem= 7,
         codeids=ids)
 
 
@@ -516,5 +516,5 @@ if __name__ == "__main__":
     #WHcodes.plot("CSD")
     #WHcodes.plot("ACF")
     #WHcodes.plot("CCF")
-    #WHcodes.plot("SF")
-    #WHcodes.plot("network", "best")
+    WHcodes.plot("SF")
+    WHcodes.plot("network", "best")
