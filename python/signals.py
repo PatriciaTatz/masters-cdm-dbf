@@ -91,7 +91,6 @@ class DiscreteSignal:
         for i in range(self.conf.no_elem):
             self.elements[i] = signal + noise[i]
 
-
     def show_signal_plot(self):
         plt.figure()
         for i in range(len(self.elements)):

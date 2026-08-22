@@ -183,7 +183,7 @@ if __name__ == "__main__":
     Nelem = [2]
     lc = 8
     ber_title = ['Theoretical'] +[f"N={str(x)} Lc=31" for x in Nelem]
-    SNR = 5
+    SNR = 3
     ebno_db = np.arange(0, SNR)
     ebno_linear = 10**(ebno_db/10)
     ber_theory = 0.5*erfc(np.sqrt(ebno_linear))

@@ -24,6 +24,6 @@ class CDMcfg():
         self.ts = 1/self.rb 
         self.fs = self.sps_symbol / self.ts 
         self.b = self.rb * (1 + self.alpha)
-        self.rc = self.b/2 #self.rb * self.lc
+        self.rc = self.rb * self.lc
         if len(self.codeids) == 0:
             self.codeids = np.arange(1,self.lc)

@@ -344,7 +344,7 @@ if __name__ == "__main__":
     
     Rb = 6.25e6
     Tb = 1/Rb
-    symbols = 30
+    symbols = 2000
     totaltime = symbols*Tb
 
     config = CDMcfg(
@@ -360,31 +360,8 @@ if __name__ == "__main__":
     signal = DiscreteSignal(config)
 
     #initiate and assemble receiver 
-    rx = Receiver(config, [PlotType.spread])
+    rx = Receiver(config, [PlotType.recovered])
     rx.setup(signal)
     rx.assemble() 
 
-
-    """ 
-    plt.rcParams['font.size'] = 20 
-    f1 = np.load(f"sps_4_psd_f.npy")
-    Pxx1 = np.load(f"sps_4_psd_Pxx_dB.npy")
-    f2 = np.load(f"sps_16_psd_f.npy")
-    Pxx2 = np.load(f"sps_16_psd_Pxx_dB.npy")
-        
-    plt.figure()
-    plt.plot(f1/1e6,  Pxx1, '-' ,label="Lc=4")
-    plt.plot(f2/1e6,  Pxx2, '-' ,label="Lc=16")
-
-    plt.xlabel("Frequency (MHz)")
-    plt.ylabel("Amplitude")
-    plt.title("PSD of Spread Composite Signal")
-
-    plt.ylabel("Power (dB)")
-    plt.xlabel("Frequency (MHz)")
-    plt.legend()
-   
-    plt.grid()
-    plt.show()
-    """
     

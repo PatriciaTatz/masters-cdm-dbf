@@ -169,27 +169,24 @@ class CDMx:
 class Filter:
     def __init__(self, conf):
         self.alpha = conf.alpha
-        self.rb = conf.rb
         self.span = conf.span 
         self.fs = conf.fs
+        self.ts = conf.ts
         self.sps_symbol = conf.sps_symbol 
 
     def rrcfilter(self, signal, fs, mode="txmode"):
-        sps_symbol =  int(round(fs / self.rb))
-        #sps_symbol  = self.sps_symbol #also equal to int(round(fs / self.rb))
-        ts = 1 / self.rb 
-        ntaps = self.span*sps_symbol + 1  #must be odd, total length of the filter 
+        ntaps = self.span*self.sps_symbol + 1 #must be odd, total length of the filter 
 
         if mode == "txmode":
-            prepad = sps_symbol
-            symbols = np.zeros(prepad + len(signal)*sps_symbol)
-            symbols[prepad::sps_symbol] = signal
+            prepad = self.sps_symbol
+            symbols = np.zeros(prepad + len(signal)*self.sps_symbol)
+            symbols[prepad::self.sps_symbol] = signal
             samples = symbols
         else:
             samples = signal
 
         #apply filter
-        dt_filter, h_rrc = filter.rrcosfilter(ntaps, self.alpha, ts, fs)
+        dt_filter, h_rrc = filter.rrcosfilter(ntaps, self.alpha, self.ts, fs)
         h_rrc /= np.sqrt(np.sum(h_rrc**2))
         filtered = np.convolve(samples, h_rrc, mode='full')
         h_delay = (ntaps-1)//2
@@ -197,7 +194,7 @@ class Filter:
         filtered_delay = filtered[h_delay:-h_delay]
 
         if mode == "rxmode":
-            symbols = filtered_delay[::sps_symbol]
+            symbols = filtered_delay[::self.sps_symbol]
 
         return filtered_delay, symbols  
 
