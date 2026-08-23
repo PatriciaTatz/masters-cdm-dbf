@@ -48,7 +48,7 @@ class DiscreteSignal:
 
         #modType, Ns, Ts: required
         if self.conf.modType == "BPSK":
-            constellation = [1, -1]
+            constellation = np.array([1, -1])
             
         elif self.conf.modType == "QPSK":
             #normalised QPSK symbols 
