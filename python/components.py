@@ -222,12 +222,11 @@ class Beamformer:
 class Mixer:
     def __init__(self,conf):
         self.filter = Filter(conf)
-        self.flo = conf.flo
-        self.fs = conf.fs
+        self.f_lo = conf.flo
+        self.dt = 1/conf.fs  #this should not have been resampled and changed at this point 
 
     def superhet_mixer(self, signal, fcutoff, conv_type):
-        dt = 1/self.fs #this should not have been resampled and changed at this point 
-        lo_time = np.arange(len(signal))*dt 
+        lo_time = np.arange(len(signal))*self.dt 
         lo_signal = np.cos(2*np.pi*self.f_lo*t)
 
         #mix signal by multiplication 
@@ -239,10 +238,31 @@ class Mixer:
             signal=mixer_output,
             type=conv_type
         )
+
         return filtered_mixer_output 
 
+    def quadrature_mixer(self,signal,fcutoff):
+        lo_time = np.arange(len(signal))*self.dt 
 
+        #local oscillators for I and Q component 
+        lo_i = np.cos(2*np.pi*f_lo*lo_time)
+        lo_q = -np.sin*(2*np.pi*f_lo*lo_time)
 
+        #mix signal by multiplication 
+        mixed_i = signal * lo_i
+        mixed_q = signal * lo_q 
+
+        #apply lpf for both 
+        filtered_mixed_i = self.filter.butterworth_lpf(
+            cutoff=fcutoff,
+            signal=mixed_i
+        )
+        filtered_mixed_q = self.filter.butterworth_lpf(
+            cutoff=fcutoff,
+            signal=mixed_q
+        )
+
+        return filtered_mixed_i, filtered_mixed_q
 
 class SpecAn: 
     def calculate_psd(self ,fs, signal,psdtype="normal"):
