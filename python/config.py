@@ -8,6 +8,7 @@ import numpy as np
 class CDMcfg():
     simtime: float 
     CALIBRATE: bool=False
+    f_lo: float = 1e6
     rb: float = 6.25e6
     lc: int = 32
     sps_chip: int = 2 
