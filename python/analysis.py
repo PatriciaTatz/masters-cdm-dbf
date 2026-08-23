@@ -61,7 +61,7 @@ class BER:
         ebno_linear = 10**(ebno_db/10)
         
         txbits = np.where(self.signal.txsymbols > 0, 1, -1)
-        
+
         arrpath = 0
         signal_len = len(self.signal.transmit)
         signal = self.signal.transmit.copy()
@@ -165,17 +165,17 @@ if __name__ == "__main__":
     symbols = 1000
     totaltime = symbols*Tb
     
-    #PLOT OF INCREASING NC with LPF ON LC=[1,32]
     Nelem = [2]
-    ber_title = ['Theoretical'] +[f"N={str(x)}" for x in Nelem]
-    SNR =  3
+    lc = 4
+    fam="WH"
+
+    ber_title = ['Theoretical'] +[f"{fam}_N_{str(x)}_Lc_{lc}" for x in Nelem]
+    SNR =  5
     ebno_db = np.arange(0, SNR)
     ebno_linear = 10**(ebno_db/10)
     ber_theory = 0.5*erfc(np.sqrt(ebno_linear))
-
     ber_data = [ber_theory]
-    #run sim with config for best and config for worst for the same signal 
-    lc = 4
+
     for nelem in Nelem:
         baseconfig = CDMcfg(
             rb=Rb,
@@ -185,7 +185,8 @@ if __name__ == "__main__":
             no_elem=nelem,
             lc=lc,
             codeids=np.arange(1,lc),
-            CALIBRATE=True
+            CALIBRATE=True,
+            codefam=fam
             )
         WHcodes = CodeSelector(baseconfig)
         weights = WHcodes.generate_weights()
