@@ -70,7 +70,7 @@ class BER:
         #BER simulation 
         ber_curve = []
         target_error = 100000
-        maxbits = 10**7
+        maxbits = 10**5
         for i, ebno in enumerate(ebno_linear):
             print("snr=",ebno_db[i])
 
@@ -165,7 +165,7 @@ if __name__ == "__main__":
     symbols = 1000
     totaltime = symbols*Tb
     
-    Nelem = [2,4,6,7]
+    Nelem = [1,2,3,4,5,6,7]
     lc = 8
     fam="WH"
 
@@ -176,6 +176,7 @@ if __name__ == "__main__":
     ber_theory = 0.5*erfc(np.sqrt(ebno_linear))
     ber_data = [ber_theory]
 
+    #Note: when doing WH codes, important for codeids to start from 1 to avoid DC offset code idx=0
     for nelem in Nelem:
         baseconfig = CDMcfg(
             rb=Rb,
@@ -198,7 +199,7 @@ if __name__ == "__main__":
         config_n = replace(baseconfig, codeids=best)
         signal = DiscreteSignal(config_n)
         ber = BER(config_n, signal)
-        _, curve = ber.sim(10**7, SNR)
+        _, curve = ber.sim(10**3, SNR)
         ber_data.append(curve)
     
     plot_curve(ebno_db, ber_data, ber_title)
