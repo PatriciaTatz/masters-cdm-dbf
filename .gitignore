@@ -1,5 +1,5 @@
 /python/bin/
-/python/menv/
+/python/venv/
 /python/include/
 /python/__pycache__/
 /python/lib/

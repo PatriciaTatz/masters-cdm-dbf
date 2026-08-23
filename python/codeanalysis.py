@@ -40,6 +40,7 @@ class CodeSelector:
         self.acfs = self.acf() #width of zero-lag ACF 
         
         ccs = self.ccf()
+
         self.ccs_lookup = {
             (ci, cj): (ccf_width, ccf_peak, csd_height)
             for ci, cj, ccf_width, ccf_peak, csd_height in ccs
@@ -60,9 +61,9 @@ class CodeSelector:
             )
             """
             self.edge_weight[f"{ci}-{cj}"] += (
-                0.3*csd_height+
-                0.3*ccf_width+
-                0.3*abs(ccf_peak)
+                1/3*csd_height+
+                1/3*ccf_width+
+                1/3*abs(ccf_peak)
             )
             
         """
@@ -104,7 +105,6 @@ class CodeSelector:
         self.sf_plot = []
 
         for code in self.allcodes:
-
             # Power spectrum
             Xi = np.fft.fft(code)
             power = np.real((Xi*np.conj(Xi))/ np.abs(len(code))**2)
@@ -133,8 +133,8 @@ class CodeSelector:
                 (acf, widths, width_heights, left_ips, right_ips)
                 Used for plotting 
         Values near:
-            1 -> Has longer decay at zero lag 
-            0 -> Minimal decay at zero lag
+            1 -> Has longer decay at zero lag thus BAD (heavy weight)
+            0 -> Minimal decay at zero lag thus GOOD (light weight)
         Returns:
             acf_score : ndarray
         """
@@ -148,7 +148,7 @@ class CodeSelector:
             prominence = peak_prominences(acf, [zero_lag])[0][0]
             if prominence < 1e-6:
                 # No actual peak
-                widths = [self.Lc]    # or a large penalty
+                widths = [self.Lc]    # no peak will result in heavy weight
                 width_heights = 0
                 left_ips = 0 
                 right_ips = 0 
@@ -189,9 +189,9 @@ class CodeSelector:
 
                 zero_lag = len(ccf)//2
                 prominence = peak_prominences(ccf, [zero_lag])[0][0]
-                if prominence < 1e-6:
+                if ccf[zero_lag] == 0:
                     # No actual peak
-                    widths = [self.Lc]    # or a large penalty
+                    widths = [0]   # no peak result in lightest weight
                     heights = [0]
                     left_ips = [0] 
                     right_ips = [0] 
@@ -223,7 +223,6 @@ class CodeSelector:
                 )
                 """
                 codes_mixed = self.allcodes[i]*self.allcodes[j]
-
                 Sxy = np.fft.fft(codes_mixed)
                 fbins = np.fft.fftfreq(self.Lc, d=1)
 
@@ -252,7 +251,7 @@ class CodeSelector:
                         int(self.codeids[i]),
                         int(self.codeids[j]),
                         float(widths[0]),      # CCF width
-                        float(ccf[zero_lag]),   # zero-lag CCF peak
+                        float(ccf[zero_lag]),   # zero-lag CCF peak as plotted
                         float(np.abs(Sxy[1])) # CSD amplitude at 1/Lc
                     )
                 )
@@ -282,7 +281,6 @@ class CodeSelector:
                 weights.edge[f"{i}-{j}"]
                 for i, j in itertools.combinations(clique, 2)
             ])
-
             total = float(edge_mean + node_mean)
             cliques.append(clique)
             totals.append(total)
@@ -295,19 +293,21 @@ class CodeSelector:
             """
 
         result = dict(zip(cliques,totals))
-        best = min(result, key=result.get)
-        worst = max(result, key=result.get)
+        self.best = min(result, key=result.get)
+        self.worst = max(result, key=result.get)
         """
         n = 10
         for key, value in sorted(result.items(), key=lambda x: x[1], reverse=False)[:n]:
             print(f"{key}: {value}")
         """
-        return best, worst 
+        return self.best, self.worst 
           
 
     def plot(self, output, cliquetype="best"):
         if output == "SF":
+            
             for j in range(len(self.allcodes)):
+                plt.rcParams['font.size'] = 15
                 plt.figure()
                 plt.plot(self.sf_plot[j])
                 plt.title(f"Normalised PS Flatnesss of c={self.codeids[j]}")
@@ -326,6 +326,7 @@ class CodeSelector:
                 plt.close()
         if output == "ACF":
             for j in range(len(self.allcodes)):
+                plt.rcParams['font.size'] = 15
                 acf = self.acfplot[j][0]
                 height = self.acfplot[j][2]
                 lips = np.interp(self.acfplot[j][3], np.arange(len(acf)), self.lags) 
@@ -343,7 +344,7 @@ class CodeSelector:
 
                 plt.text(
                     0.02, 0.95,
-                    f"Code={self.allcodes[j]}\n Score={self.acfs[j]:.2f}",
+                    f"Score={self.acfs[j]:.2f}",
                     transform=plt.gca().transAxes,
                     ha='left',
                     va='top',
@@ -367,6 +368,7 @@ class CodeSelector:
                     np.arange(len(ccf)),
                     self.lags
                 )
+                plt.rcParams['font.size'] = 15
 
                 plt.figure()
                 plt.plot(self.lags, ccf)
@@ -386,6 +388,8 @@ class CodeSelector:
                     color="C2",
                     linewidth=2
                 )
+                plt.ylabel("CCF")
+                plt.xlabel("Lag")
 
                 plt.grid(True)
                 plt.title(f"CCF: code[{ci}] x code[{cj}]")
@@ -395,7 +399,7 @@ class CodeSelector:
                     0.02, 0.95,
                     (
                         f"CCF width = {ccf_width:.3f}\n"
-                        f"CCF peak = {ccf_peak:.3f}\n"
+                        f"CCF peak = {ccf_peak:.3f}"
                     ),
                     transform=plt.gca().transAxes,
                     ha='left',
@@ -411,6 +415,8 @@ class CodeSelector:
 
         elif output == "CSD":
             for ci, cj, fbins, csd in self.csd_data:
+                plt.rcParams['font.size'] = 15
+
                 plt.figure()
                 plt.stem(fbins, np.abs(csd))
                 plt.title(f"CSD: code[{ci}] x code[{cj}]")
@@ -449,21 +455,22 @@ class CodeSelector:
 
         if output == "network":
             if cliquetype == "best":
-                clique = self.best_nodes
+                clique = self.best
             elif cliquetype == "worst":
-                clique = self.worst_nodes
+                clique = self.worst
 
             G = nx.Graph()
+            
             G.add_nodes_from(clique)
             G.add_edges_from(itertools.combinations(clique, 2))
-            pos = nx.circular_layout(G)
+            pos = nx.spring_layout(G)
 
             values = [self.node_weight[n] for n in G.nodes()]
 
             nx.draw_networkx_nodes(
                 G,
                 pos,
-                node_size=[200 + v/50  for v in values],
+                node_size=[1000 + v*100  for v in values],
                 node_color=values,
                 cmap=plt.cm.coolwarm,
             )
@@ -472,24 +479,26 @@ class CodeSelector:
                 G,
                 pos,
                 width=[
-                    1 + 5*self.edge_weight.get(f"{i}-{j}", self.edge_weight.get(f"{j}-{i}", 1))
+                    0.3+2*self.edge_weight.get(f"{i}-{j}", self.edge_weight.get(f"{j}-{i}", 1))
                     for i, j in G.edges()
-                ]
-            )
+                ]            )
 
             nx.draw_networkx_labels(G, pos)
+            plt.rcParams['font.size'] = 20
+
+            plt.title("All Possible Code Pairs")
             plt.show()
 
 
 if __name__ == "__main__":
     #initiate code config
-    lc = 4
-    ids = np.arange(0,lc)
+    lc = 8
+    ids = np.arange(1,lc)
     WHcfg = CDMcfg(
         simtime = 1, 
         lc = lc,
         codefam="WH",
-        no_elem= 2,
+        no_elem= 6,
         codeids=ids)
 
 
@@ -498,8 +507,8 @@ if __name__ == "__main__":
     best, worst = WHcodes.find_best_clique(weights, WHcfg.no_elem)
     print("best =",best)
     print("worst = ", worst)
-    WHcodes.plot("CSD")
-    WHcodes.plot("ACF")
-    WHcodes.plot("CCF")
-    WHcodes.plot("SF")
-    #WHcodes.plot("network", "worst")
+    #WHcodes.plot("CSD")
+    #WHcodes.plot("ACF")
+    #WHcodes.plot("CCF")
+    #WHcodes.plot("SF")
+    #WHcodes.plot("network", "best")
