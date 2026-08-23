@@ -43,18 +43,30 @@ class DiscreteSignal:
         self.create_elementsignals(txsignal)
 
     def create_symbols(self):
+        #This does not worry about bit generation and modulation 
+        no_symbols = int(self.conf.simtime*self.conf.rb)
+
         #modType, Ns, Ts: required
         if self.conf.modType == "BPSK":
-            values = [1, -1]
+            constellation = [1, -1]
+            
         elif self.conf.modType == "QPSK":
-            values = [pi/4, 3*pi/4, 5*pi/4, 7*pi/4]
-
-        #randomized symbols 
-        no_symbols = int(self.conf.simtime*self.conf.rb)
-        self.txsymbols = np.random.choice(values, no_symbols) 
+            #normalised QPSK symbols 
+            constellation = np.array([
+                1 + 1j,
+                1 - 1j,
+                -1 + 1j,
+                -1 -1j
+            ])/ np.sqrt(2)
+        else:
+            raise ValueError("Unsupported modulation scheme. Choose [BPSK, QPSK]")
+        #Random symbol generator    
+        self.txsymbols = np.random.choice(constellation, no_symbols) 
+    
+        #OVERWRITE WARNING!! FOR REPEATABLE RESULTS SAVE DATA
         #np.save("input", self.txsymbols)
 
-        #FOR REPORT_REPEATABLE RESULTS
+        #FOR REPEATABLE RESULTS LOAD DATA
         #self.txsymbols = np.load("input.npy")
 
         #add rrcfilter
@@ -142,7 +154,6 @@ if __name__ == "__main__":
     #==================================
     #RUNSIMULATOR
     #==================================
-
     Rb = 6.25e6
     Tb = 1/Rb
     symbols = 2000
