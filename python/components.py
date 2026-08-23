@@ -32,7 +32,6 @@ class CDMx:
             #n: must be a power of 2 and int 
             codes = []
             for i in self.conf.codeids:
-                
                 WHcode = km.WalshHadamardSequence(
                     length=self.conf.lc,
                     index=i,
@@ -58,7 +57,7 @@ class CDMx:
                 gold_codes.append(code)
             codes = [2*gold_codes[idx]-1 for idx in self.conf.codeids]
         else: 
-            raise Exception("Unrecognised code family! Choose from [WH, ]")
+            raise Exception("Unrecognised code family! Choose from [WH, Gold]")
 
         return codes 
 
@@ -196,13 +195,13 @@ class Filter:
 
         return filtered_delay, symbols  
 
-    def butterworth_lpf(self, cutoff, signal):
+    def butterworth_lpf(self, cutoff, signal, filter_type="low"):
         nyquist = self.fs/2 
         #cutoff = 1.5*self.rb
         b, a = butter(
             N=4, 
             Wn = cutoff/nyquist, 
-            btype="low"
+            type=filter_type
         )
         return filtfilt(b,a,signal)
 
@@ -218,6 +217,29 @@ class Beamformer:
             beamformed += np.real(sig[i]*np.exp(+1j*psi[i]))
     
         return beamformed
+
+
+class Mixer:
+    def __init__(self,conf):
+        self.filter = Filter(conf)
+        self.flo = conf.flo
+
+    def superhet_mixer(self, signal, fs, fcutoff, conv_type):
+        dt = 1/fs
+        lo_time = np.arange(len(signal))*dt 
+        lo_signal = np.cos(2*np.pi*self.f_lo*t)
+
+        #mix signal by multiplication 
+        mixer_output = signal * lo_signal 
+        
+        #apply LPF
+        filtered_mixer_output = self.filter.butterworth_lpf(
+            cutoff=fcuttoff,
+            signal=mixer_output,
+            type=conv_type
+        )
+
+        return filtered_mixer_output 
 
 
 class SpecAn: 
