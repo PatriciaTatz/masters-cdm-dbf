@@ -165,7 +165,7 @@ if __name__ == "__main__":
     symbols = 1000
     totaltime = symbols*Tb
     
-    Nelem = [6]
+    Nelem = [2,3,4,5,6,7]
     lc = 8
     fam="WH"
 
@@ -209,10 +209,10 @@ if __name__ == "__main__":
         ber_data.append(curve_best)
 
 
-        print(f"N={nelem} with worst code pairs={worst}")
-        _, curve_worst= ber_worst.sim(10**3, SNR)
-        ber_title.append(f"{fam}_N_{str(nelem)}_Lc_{lc}_worst")
-        ber_data.append(curve_worst)
+        #print(f"N={nelem} with worst code pairs={worst}")
+        #_, curve_worst= ber_worst.sim(10**3, SNR)
+        #ber_title.append(f"{fam}_N_{str(nelem)}_Lc_{lc}_worst")
+        #ber_data.append(curve_worst)
     
     plot_curve(ebno_db, ber_data, ber_title)
     plt.show()
