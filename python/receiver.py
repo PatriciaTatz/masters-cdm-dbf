@@ -365,28 +365,3 @@ if __name__ == "__main__":
     rx = Receiver(config, PlotType.all())
     rx.setup(signal)
     rx.assemble() 
-
-
-    """ 
-    plt.rcParams['font.size'] = 20 
-    f1 = np.load(f"sps_4_psd_f.npy")
-    Pxx1 = np.load(f"sps_4_psd_Pxx_dB.npy")
-    f2 = np.load(f"sps_16_psd_f.npy")
-    Pxx2 = np.load(f"sps_16_psd_Pxx_dB.npy")
-        
-    plt.figure()
-    plt.plot(f1/1e6,  Pxx1, '-' ,label="Lc=4")
-    plt.plot(f2/1e6,  Pxx2, '-' ,label="Lc=16")
-
-    plt.xlabel("Frequency (MHz)")
-    plt.ylabel("Amplitude")
-    plt.title("PSD of Spread Composite Signal")
-
-    plt.ylabel("Power (dB)")
-    plt.xlabel("Frequency (MHz)")
-    plt.legend()
-   
-    plt.grid()
-    plt.show()
-    """
-    
