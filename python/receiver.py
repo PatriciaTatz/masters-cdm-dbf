@@ -84,14 +84,13 @@ class Receiver():
                 self.rxsignals,
                 self.codes,
             )
-
             
             if PlotType.spread in self.plot:
                 self.spread_plot(
                     self.time, self.rxsignals,  
                     spread.time, spread.signals, 
                     spread.fs,
-                    1
+                    0
                 )
     
             #====================
