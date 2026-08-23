@@ -365,12 +365,11 @@ if __name__ == "__main__":
         alpha = 0.5,
         simtime = totaltime,
         no_elem = 2,
-        codeids=np.array((1,2))
         )
     #create signal 
     signal = DiscreteSignal(config)
 
     #initiate and assemble receiver 
-    rx = Receiver(config, [PlotType.recovered])
+    rx = Receiver(config, {PlotType.recovered}) 
     rx.setup(signal)
     rx.assemble() 
