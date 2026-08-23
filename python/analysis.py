@@ -16,7 +16,6 @@ from signals import DiscreteSignal
 
 
 SignalT = np.ndarray[tuple[int], np.dtype[np.float64]]
-
 class BER:
     def __init__(self, config, signal):
         self.conf = config 
@@ -62,12 +61,7 @@ class BER:
         ebno_linear = 10**(ebno_db/10)
         
         txbits = np.where(self.signal.txsymbols > 0, 1, -1)
-
-        """
-        #FORTEST B:
-        txsym = self.signal.txsymbols.copy()
-        txbits = np.where(txsym >0, 1, -1)
-        """
+        
         arrpath = 0
         signal_len = len(self.signal.transmit)
         signal = self.signal.transmit.copy()
@@ -109,17 +103,7 @@ class BER:
                     1/decorr_signal.fs
                 )  
                 
-                #TEST A: For w/o CDM
-                #1. Use the Rx assemble but comment up until #FORTEST in receiver. 
-                #2. In the components module, follow #FORTEST to only use Matched Filter
-                """
-                #TEST B: For w/o CDM + Matched Filter (AWGN only)
-                #1. Remove matched filter in the sigGen so use txsymbols = rrcsymbols
-                #1. Comment out rx.setup rx.assembly and symbolsampler.
-                #2. Run code below:
-                rxsym = txsym + noise_std*np.random.randn(len(txsym)) 
-                rxbits = np.where(rxsym >0, 1, -1)
-                """
+                #TEST MF ONLY: SET CALIBRATE=TRUE in Config 
 
                 #get bit error rate per transmission, so this is no false match
                 # es / total bits 
@@ -200,7 +184,8 @@ if __name__ == "__main__":
             simtime=totaltime,
             no_elem=nelem,
             lc=lc,
-            codeids=np.arange(1,lc)
+            codeids=np.arange(1,lc),
+            CALIBRATE=True
             )
         WHcodes = CodeSelector(baseconfig)
         weights = WHcodes.generate_weights()

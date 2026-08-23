@@ -7,7 +7,7 @@ import numpy as np
 @dataclass
 class CDMcfg():
     simtime: float 
-    CALIBRATE: bool=True
+    CALIBRATE: bool=False
     rb: float = 6.25e6
     lc: int = 32
     sps_chip: int = 2 
