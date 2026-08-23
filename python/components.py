@@ -223,9 +223,10 @@ class Mixer:
     def __init__(self,conf):
         self.filter = Filter(conf)
         self.flo = conf.flo
+        self.fs = conf.fs
 
-    def superhet_mixer(self, signal, fs, fcutoff, conv_type):
-        dt = 1/fs
+    def superhet_mixer(self, signal, fcutoff, conv_type):
+        dt = 1/self.fs #this should not have been resampled and changed at this point 
         lo_time = np.arange(len(signal))*dt 
         lo_signal = np.cos(2*np.pi*self.f_lo*t)
 
@@ -238,8 +239,9 @@ class Mixer:
             signal=mixer_output,
             type=conv_type
         )
-
         return filtered_mixer_output 
+
+
 
 
 class SpecAn: 
