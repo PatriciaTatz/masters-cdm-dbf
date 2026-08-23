@@ -148,7 +148,7 @@ class Filter:
         self.sps_symbol = conf.sps_symbol 
 
     def rrcfilter(self, signal, fs, mode="txmode"):
-        sps_symbol  = self.sps_symbol #also equal to int(round(fs / self.rb))
+        sps_symbol  = int(round(fs / self.rb)) #changes from config due to resampling
         ts = 1 / self.rb 
         ntaps = self.span*sps_symbol + 1  #must be odd, total length of the filter 
 
