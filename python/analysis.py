@@ -165,12 +165,12 @@ if __name__ == "__main__":
     symbols = 1000
     totaltime = symbols*Tb
     
-    Nelem = [2]
-    lc = 4
+    Nelem = [2,4,6,7]
+    lc = 8
     fam="WH"
 
     ber_title = ['Theoretical'] +[f"{fam}_N_{str(x)}_Lc_{lc}" for x in Nelem]
-    SNR =  5
+    SNR =  3
     ebno_db = np.arange(0, SNR)
     ebno_linear = 10**(ebno_db/10)
     ber_theory = 0.5*erfc(np.sqrt(ebno_linear))
@@ -185,7 +185,7 @@ if __name__ == "__main__":
             no_elem=nelem,
             lc=lc,
             codeids=np.arange(1,lc),
-            CALIBRATE=True,
+            CALIBRATE=False,
             codefam=fam
             )
         WHcodes = CodeSelector(baseconfig)

@@ -59,6 +59,7 @@ class Receiver():
         """
     def assemble(self):
         if not self.conf.CALIBRATE: 
+
             #====================
             #       LPF         |
             #===================
@@ -124,6 +125,7 @@ class Receiver():
                     recovered.fs,
                     0
                 )
+            
         else: 
             #WHEN CALIBRATING: ONLY PASSING THROUGH MATCHED FILTER
             recovered = self.cdmx.recover(
