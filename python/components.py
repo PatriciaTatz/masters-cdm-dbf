@@ -71,8 +71,8 @@ class CDMx:
             tile_repeats = int(np.ceil(len(resampled) / len(code_sequence)))
             expanded_code = np.tile(code_sequence, tile_repeats)[:len(resampled)]
             exp_codes.append(expanded_code)
-    
             """
+            #PLOT FOR RESAMPLED SIGNALxCODES
             plt.figure()
             plt.plot(expanded_code, '--o', label=f"Code: {codes[i]}")
             plt.plot(resampled, '-o', label="Resampled Rx Signal")
@@ -92,7 +92,7 @@ class CDMx:
 
         time = np.arange(len(ss[0])) * (1/fs)
         """
-        #PLOT FOR CODE TIMESERIES
+        #PLOT FOR CODE SERIES ONLY
         for i in range(len(exp_codes)):
             print("code=", codes[i])
             plt.rcParams['font.size'] = 15
@@ -106,7 +106,6 @@ class CDMx:
             plt.show()
         """
         return SpreadOutput(ss, time, exp_codes, fs)
- 
 
     def recover(self, sumsignal, codes, fs):
         if not self.conf.CALIBRATE:
@@ -203,7 +202,6 @@ class Beamformer:
     
         return beamformed
 
-    
 
 class SpecAn: 
     def calculate_psd(self ,fs, signal,psdtype="normal"):
