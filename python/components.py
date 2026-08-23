@@ -139,8 +139,6 @@ class CDMx:
         return decorr
 
 
-
-
 class Filter:
     def __init__(self, conf):
         self.alpha = conf.alpha
