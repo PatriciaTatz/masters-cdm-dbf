@@ -108,29 +108,37 @@ class CDMx:
         return SpreadOutput(ss, time, exp_codes, fs)
  
 
-    def despreader(self, sumsignal, codes, fs):
+    def recover(self, sumsignal, codes, fs):
+        if not self.conf.CALIBRATE:
+            dss = self.despread(sumsignal, codes)
+        else:
+            dss = sumsignal 
+
+        decorrelated = self.decorrelate(dss, fs)
+
+        #removes delay and fs unchanged 
+        time = np.arange(len(decorrelated[0]))*(1/fs)
+        return DecorrOutput(decorrelated, time, fs)
+
+    def despread(self, sumsignal, codes):
         #Despread signal by multiplying with code block
         dss = [] #despread
-        decorr = [] #decorrelated with rrc filter
         for i in range(self.conf.no_elem):
-            """
             despread_signal = sumsignal*codes[i]
             dss.append(despread_signal)
-            """
-            #FORTEST:
-            #1. Comment out despread_signal and dss.append above
-            #2. Set despread_signal as just sumsignal which in the Rx is only rxsignals
-            despread_signal = sumsignal[i]
-            signal, symbols = self.mf.rrcfilter(
-                despread_signal,
+        return dss
+
+    def decorrelate(self, despread_signal, fs):
+        decorr = [] 
+        for i in range(self.conf.no_elem):
+            decorrelated_signal, symbols = self.mf.rrcfilter(
+                despread_signal[i],
                 fs,
                 mode="rxmode"
                 )
-            decorr.append(signal)
+            decorr.append(decorrelated_signal)
+        return decorr
 
-        #removes delay and expected to be unchanged time from spreading
-        time = np.arange(len(decorr[0]))*(1/fs)
-        return DecorrOutput(decorr, time, fs)
 
 
 

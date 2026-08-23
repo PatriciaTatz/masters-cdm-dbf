@@ -1,13 +1,13 @@
 "used to configure simulation"
 
 from dataclasses import dataclass, field
-
 import numpy as np
 
 
 @dataclass
 class CDMcfg():
     simtime: float 
+    CALIBRATE: bool=True
     rb: float = 6.25e6
     lc: int = 32
     sps_chip: int = 2 

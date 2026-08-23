@@ -58,91 +58,88 @@ class Receiver():
             )
         """
     def assemble(self):
-        
-        """
-        #====================
-        #       LPF         |
-        #===================
-        
-        self.rxsignals = self.filter.butterworth_lpf(
-            self.conf.rb,
-            self.rxsignals, 
-        )
-        
-        if PlotType.signal in self.plot:
-            self.signal_plot(
-                "Rx Signal at Element 1",
-                signal.time,
-                self.rxsignals[0],
-                signal.rrcsymbols,
+        if not self.conf.CALIBRATE: 
+            #====================
+            #       LPF         |
+            #===================
+            self.rxsignals = self.filter.butterworth_lpf(
+                self.conf.rb,
+                self.rxsignals, 
+            )
+            
+            if PlotType.signal in self.plot:
+                self.signal_plot(
+                    "Rx Signal at Element 1",
+                    signal.time,
+                    self.rxsignals[0],
+                    signal.rrcsymbols,
+                    self.conf.fs
+                )
+            
+            #====================
+            #     SPREADER      |
+            #====================
+            spread = self.cdmx.spreader(
+                self.rxsignals,
+                self.codes,
+            )
+
+            
+            if PlotType.spread in self.plot:
+                self.spread_plot(
+                    self.time, self.rxsignals,  
+                    spread.time, spread.signals, 
+                    spread.fs,
+                    1
+                )
+    
+            #====================
+            #     COMBINER      |
+            #====================
+            summed_signal = [sum(values) for values in zip(*spread.signals)]
+            if PlotType.sum in self.plot: 
+                self.sum_plot(spread.time, summed_signal)
+            
+            if PlotType.spread in self.plot:
+                self.spread_plot(
+                    self.time, self.rxsignals,  
+                    spread.time, [np.array(summed_signal)], 
+                    spread.fs,
+                    0
+                )
+
+            #====================
+            #     DESPREAD      |
+            #====================
+            recovered = self.cdmx.recover(
+                summed_signal,
+                spread.codes,
+                spread.fs
+                )
+            
+            if PlotType.recovered in self.plot:
+                self.recover_plot(
+                    self.time, self.rxsignals, 
+                    recovered.time, recovered.signals,
+                    recovered.fs,
+                    0
+                )
+        else: 
+            #WHEN CALIBRATING: ONLY PASSING THROUGH MATCHED FILTER
+            recovered = self.cdmx.recover(
+                self.rxsignals,
+                np.zeros(self.conf.no_elem),
                 self.conf.fs
-            )
-        
-        #====================
-        #     SPREADER      |
-        #====================
-        spread = self.cdmx.spreader(
-            self.rxsignals,
-            self.codes,
-        )
-
-        
-        if PlotType.spread in self.plot:
-            self.spread_plot(
-                self.time, self.rxsignals,  
-                spread.time, spread.signals, 
-                spread.fs,
-                1
-            )
-        
-        #====================
-        #     COMBINER      |
-        #====================
-        summed_signal = [sum(values) for values in zip(*spread.signals)]
-        if PlotType.sum in self.plot: 
-            self.sum_plot(spread.time, summed_signal)
-        
-
-        
-        if PlotType.spread in self.plot:
-            self.spread_plot(
-                self.time, self.rxsignals,  
-                spread.time, [np.array(summed_signal)], 
-                spread.fs,
-                0
-            )
-        
-        #====================
-        #     DESPREAD      |
-        #====================
-        """
-        #FORTESTA
-        #1. comment out origina despread operation  and use the one below 
-        summed_signal = self.rxsignals
-        despread = self.cdmx.despreader(
-            summed_signal,
-            [1,1],
-            self.conf.fs
-            )
-        ##ENDOFTEST
+                )
+            if PlotType.recovered in self.plot:
+                self.recover_plot(
+                    self.time, self.rxsignals, 
+                    recovered.time, recovered.signals,
+                    recovered.fs,
+                    0
+                )
 
         """
-        despread = self.cdmx.despreader(
-            summed_signal,
-            spread.codes,
-            spread.fs
-            )
-        
-        if PlotType.recovered in self.plot:
-            self.despread_plot(
-                self.time, self.rxsignals, 
-                despread.time, despread.signals,
-                despread.fs,
-                0
-            )
-
-
-        
         #====================
         #     BEAMFORMED     |
         #====================
@@ -152,7 +149,6 @@ class Receiver():
             despread.signals
         )
 
-
         if PlotType.bf in self.plot:
             self.bf_plot(
                 self.time, self.rxsignals, 
@@ -160,7 +156,7 @@ class Receiver():
                 1
             )    
         """
-        return despread
+        return recovered
 
     def sum_plot(self, time, signal):
         plt.rcParams['font.size'] = 15
@@ -172,7 +168,13 @@ class Receiver():
         plt.grid()
         plt.show()
 
-    def signal_plot(self, title, time, asignal, symbols, Fsample):
+    def signal_plot(self, 
+        title,
+        time,
+        asignal,
+        symbols,
+        Fsample
+        ):
         plt.rcParams['font.size'] = 15
         plt.figure()
         plt.plot(time, asignal, '-o', label="RRC Filtered Signal")
@@ -209,7 +211,15 @@ class Receiver():
         plt.grid()
         plt.show()
 
-    def spread_plot(self,tbefore, before_signal, tafter, after_signal, fs, index=0):
+    def spread_plot(self, 
+        tbefore,
+        before_signal,
+        tafter,
+        after_signal,
+        fs,
+        index=0
+        ):
+
         plt.rcParams['font.size'] = 15
         plt.figure()
         plt.title(f"Spread Signals Combined")
@@ -260,18 +270,18 @@ class Receiver():
         plt.grid()
         plt.show()
 
-    def despread_plot(self,
+    def recover_plot(self,
         tbefore,
         before_signal,
         tafter,
         after_signal,
         fs,
         index=0
-    ):
+        ):
         plt.rcParams['font.size'] = 15
         plt.figure()
         plt.title(f"Recovered Signal at Element Path={index+1}")
-        plt.plot(tbefore, before_signal[index], '--b', label=f"Rx signal + Interference")
+        plt.plot(tbefore, before_signal[index], '--b', label=f"Rx signal")
         plt.plot(tafter, after_signal[index], '-g', linewidth='3', label="Recovered signal")
         plt.legend(loc='upper right')
         plt.grid()
@@ -305,7 +315,6 @@ class Receiver():
         plt.grid()
         plt.show()
 
-
     def bf_plot(self,
         tbefore,
         before_signal,
@@ -313,7 +322,7 @@ class Receiver():
         after_signal,
         fs,
         index=0
-    ):
+        ):
         plt.rcParams['font.size'] = 15
         plt.figure()
         plt.title(f"Combined and Phase aligned Signal")
@@ -356,12 +365,12 @@ if __name__ == "__main__":
         alpha = 0.5,
         simtime = totaltime,
         no_elem = 2,
-        codeids=[1,2]
+        codeids=np.array((1,2))
         )
     #create signal 
     signal = DiscreteSignal(config)
 
     #initiate and assemble receiver 
-    rx = Receiver(config, PlotType.all())
+    rx = Receiver(config, [PlotType.recovered])
     rx.setup(signal)
     rx.assemble() 
