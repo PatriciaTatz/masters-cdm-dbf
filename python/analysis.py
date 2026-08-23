@@ -165,11 +165,11 @@ if __name__ == "__main__":
     symbols = 1000
     totaltime = symbols*Tb
     
-    Nelem = [1,2,3,4,5,6,7]
+    Nelem = [6]
     lc = 8
     fam="WH"
 
-    ber_title = ['Theoretical'] +[f"{fam}_N_{str(x)}_Lc_{lc}" for x in Nelem]
+    ber_title = ['Theoretical'] 
     SNR =  3
     ebno_db = np.arange(0, SNR)
     ebno_linear = 10**(ebno_db/10)
@@ -191,16 +191,28 @@ if __name__ == "__main__":
             )
         WHcodes = CodeSelector(baseconfig)
         weights = WHcodes.generate_weights()
-        best, _  = WHcodes.find_best_clique(
+        best, worst  = WHcodes.find_best_clique(
                     weights, 
                     baseconfig.no_elem
                     )
-        print(f"N={nelem} with code pairs={best}")
-        config_n = replace(baseconfig, codeids=best)
-        signal = DiscreteSignal(config_n)
-        ber = BER(config_n, signal)
-        _, curve = ber.sim(10**3, SNR)
-        ber_data.append(curve)
+        
+        config_best = replace(baseconfig, codeids=best)
+        config_worst = replace(baseconfig, codeids=worst)
+        signal = DiscreteSignal(baseconfig)
+
+        ber_best = BER(config_best, signal)
+        ber_worst = BER(config_worst,signal)
+
+        print(f"N={nelem} with best code pairs={best}")
+        _, curve_best = ber_best.sim(10**3, SNR)
+        ber_title.append(f"{fam}_N_{str(nelem)}_Lc_{lc}_best")
+        ber_data.append(curve_best)
+
+
+        print(f"N={nelem} with worst code pairs={worst}")
+        _, curve_worst= ber_worst.sim(10**3, SNR)
+        ber_title.append(f"{fam}_N_{str(nelem)}_Lc_{lc}_worst")
+        ber_data.append(curve_worst)
     
     plot_curve(ebno_db, ber_data, ber_title)
     plt.show()
