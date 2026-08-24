@@ -26,3 +26,11 @@ class CodeWeights:
     node: list[np.ndarray]
     edge: list[np.ndarray]
 
+
+@dataclass
+class ConvOutput: 
+    fs: float
+    time: list[np.ndarray]
+    elements: list[np.ndarray]
+
+
