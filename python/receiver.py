@@ -43,47 +43,55 @@ class Receiver():
         self.rx_fs = signal.fs
         self.rx_time = signal.time 
         self.psi_delays = signal.psi
-
+        """
         if PlotType.signal in self.plot:
             self.signal_plot(
                 "Rx Signal at Element 1",
-                signal.time,
-                signal.elements[0],
-                signal.rrcsymbols,
-                self.conf.fs,
+                self.rx_time,
+                self.rxsignals[0],
+                self.rx_fs,
             )
-
+        """
     def assemble(self):
         if not self.conf.CALIBRATE: 
             #==============================
             #        D/C  PER ELEMENT     |
             #==============================            
-            IFsignal = self.mixer.superhet(
+            baseband = self.mixer.superhet(
                 self.rxsignals,
                 self.rx_fs
             )
 
+            """
+            
+            if PlotType.signal in self.plot:
+                self.signal_plot(
+                    "After D/C at Element=1",
+                    baseband.time,
+                    baseband.elements[0],
+                    baseband.fs
+                )
+            """
             #============================
             #       LPF  PER ELEMENT    |
             #===========================
             filtered_signals = self.filter.butterworth(
                 cutoff = self.conf.rb/2,
-                fs = IFsignal.fs,
-                signal = IFsignal.elements
+                fs = baseband.fs,
+                signal =  baseband.elements
             )
             
             if PlotType.signal in self.plot:
                 self.signal_plot(
-                    "Rx Signal at Element 1",
-                    signal.time,
+                    "After LPF at Element=1",
+                    baseband.time,
                     filtered_signals[0],
-                    signal.rrcsymbols,
-                    self.conf.fs
+                    baseband.fs
                 )
             
-            #====================
-            #     SPREADER      |
-            #====================
+            #============================
+            #   SPREADER  PER ELEMENT    |
+            #===========================
             spread = self.cdmx.spreader(
                 filtered_signals,
                 self.codes,
@@ -112,9 +120,9 @@ class Receiver():
                     0
                 )
 
-            #====================
-            #     DESPREAD      |
-            #====================
+            #============================
+            #    DESPREAD  PER ELEMENT    |
+            #===========================
             recovered = self.cdmx.recover(
                 summed_signal,
                 spread.codes,
@@ -177,14 +185,13 @@ class Receiver():
         title,
         time,
         asignal,
-        symbols,
         Fsample
         ):
         plt.rcParams['font.size'] = 15
         plt.figure()
         plt.plot(time, asignal, '-o', label="RRC Filtered Signal")
         plt.title(f"{title}")
-        plt.stem(time[:len(symbols)],symbols, 'orange', label="Upsampled Symbols")
+        plt.stem(signal.symbol_time, signal.rrcsymbols, 'orange', label="Upsampled Symbols")
     
         plt.legend(loc='upper right')
         plt.grid()
@@ -365,7 +372,7 @@ if __name__ == "__main__":
 
     config = CDMcfg(
         rb = Rb,
-        lc = 32,
+        lc = 4,
         sps_chip= 2,
         alpha = 0.5,
         simtime = totaltime,
@@ -377,6 +384,6 @@ if __name__ == "__main__":
     signal = DiscreteSignal(config)
 
     #initiate and assemble receiver 
-    rx = Receiver(config, PlotType.all()) 
+    rx = Receiver(config, {PlotType.signal}) 
     rx.setup(signal)
     rx.assemble() 
