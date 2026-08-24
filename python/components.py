@@ -21,9 +21,30 @@ import matplotlib.pyplot as plt
 
 from models import DecorrOutput, Specan, SpreadOutput
 
+
+class DiscreteSP:
+    #for discrete mixing you need to have equivalent sampling frequency 
+
+    def resample_signal(self,targetfs, oldfs, signal):
+        if oldfs < targetfs:
+            ups = int(round(targetfs/oldfs))
+            ds = 1 
+        elif oldfs > targetfs:
+            ups = 1 
+            ds = int(round(oldfs/targetfs))
+        else:
+            ups = 1
+            ds = 1
+        
+        newfs = oldfs * ups / ds #for imperfect match
+        rs = resample_poly(signal, ups, ds)
+
+        return rs, newfs
+
 class CDMx:
     def __init__(self, conf):
         self.mf = Filter(conf)
+        self.dsp = DiscreteSP()
         self.conf = conf 
 
     def generate_codes(self):
@@ -61,21 +82,6 @@ class CDMx:
 
         return codes 
 
-    def resample_to_spschip(self,targetfs, oldfs, signal):
-        if oldfs < targetfs:
-            ups = int(round(targetfs/oldfs))
-            ds = 1 
-        elif oldfs > targetfs:
-            ups = 1 
-            ds = int(round(oldfs/targetfs))
-        else:
-            ups = 1
-            ds = 1
-        
-        newfs = oldfs * ups / ds #for imperfect match
-        rs = resample_poly(signal, ups, ds)
-
-        return rs, newfs
 
     def spreader(self, signals, codes):
         targetfs = self.conf.sps_chip * self.conf.rc
@@ -83,7 +89,7 @@ class CDMx:
         ss = []
         exp_codes = []
         for i in range(self.conf.no_elem):
-            resampled, fs = self.resample_to_spschip(targetfs, oldfs, signals[i])
+            resampled, fs = self.dsp.resample_signal(targetfs, oldfs, signals[i])
             
             code_sequence = np.repeat(codes[i], self.conf.sps_chip)
             tile_repeats = int(np.ceil(len(resampled) / len(code_sequence)))
@@ -205,8 +211,9 @@ class Filter:
             fs = self.flo*3
         else:
             fs = self.fs*3
-            
-        nyquist = fs
+
+        nyquist = fs/2
+        print(cutoff/nyquist)
         #cutoff = 1.5*self.rb
         b, a = butter(
             N=4, 
@@ -234,14 +241,20 @@ class Mixer:
         self.f_lo = conf.flo
         self.dt = 1/conf.fs  #this should not have been resampled and changed at this point 
 
+    def match_sampling_rate(self,conf):
+
     def superhet(self, signal):
-        lo_time = np.arange(len(signal))*self.dt 
+        #match sampling rates for discrete time mixing 
+
+        fs_signal = 
+
+
         lo_signal = np.cos(2*np.pi*self.f_lo*lo_time)
 
         #mix signal by multiplication 
         mixer_output = signal * lo_signal 
 
-        return mixer_output 
+        return lo_time, mixer_output 
 
     def quadrature(self,signal):
         lo_time = np.arange(len(signal))*self.dt 
