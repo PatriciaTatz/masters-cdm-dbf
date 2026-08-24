@@ -7,6 +7,7 @@ import numpy as np
 @dataclass
 class CDMcfg():
     simtime: float 
+    BEAMFORM: bool=False
     CALIBRATE: bool=False
     f_lo: float = 1e6
     rb: float = 6.25e6

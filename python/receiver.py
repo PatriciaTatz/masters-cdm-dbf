@@ -140,24 +140,24 @@ class Receiver():
                     0
                 )
 
-        """
+        if self.conf.BEAMFORM:
         #====================
         #     BEAMFORMED     |
         #====================
-        
-        bf = self.bf.align_combine_signals(
-            self.psi_delays,
-            despread.signals
-        )
+            bf = self.bf.align_combine_signals(
+                self.psi_delays,
+                despread.signals
+            )
 
-        if PlotType.bf in self.plot:
-            self.bf_plot(
-                self.time, self.rxsignals, 
-                despread.time, bf,
-                1
-            )    
-        """
-        return recovered
+            if PlotType.bf in self.plot:
+                self.bf_plot(
+                    self.time, self.rxsignals, 
+                    despread.time, bf,
+                    0
+                )  
+            return bf  
+        else:
+            return recovered
 
     def sum_plot(self, time, signal):
         plt.rcParams['font.size'] = 15
@@ -361,11 +361,12 @@ if __name__ == "__main__":
 
     config = CDMcfg(
         rb = Rb,
-        lc = 32,
+        lc = 31,
         sps_chip= 2,
         alpha = 0.5,
         simtime = totaltime,
         no_elem = 2,
+        codefam="WH"
         )
     #create signal 
     signal = DiscreteSignal(config)
