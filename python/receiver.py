@@ -2,10 +2,11 @@ from enum import Enum, auto
 
 import matplotlib.pyplot as plt
 import numpy as np
+import copy
 from scipy.signal import resample_poly, upfirdn
 
 import utils as u
-from components import CDMx, SpecAn, Beamformer, Filter
+from components import CDMx, SpecAn, Beamformer, Filter, Mixer
 from config import CDMcfg
 from signals import DiscreteSignal
 
@@ -32,10 +33,15 @@ class Receiver():
         self.time = np.arange(len(signal.elements[0]))/self.conf.fs
         self.cdmx = CDMx(self.conf)
         self.bf = Beamformer()
+        self.mixer = Mixer(self.conf)
         self.filter = Filter(self.conf)
 
         self.codes = self.cdmx.generate_codes()
-        self.rxsignals = signal.elements.copy()
+
+        #recieve the signal and get its attributes relevant to operations 
+        self.rxsignals = copy.deepcopy(signal.elements) 
+        self.rx_fs = signal.fs
+        self.rx_time = signal.time 
         self.psi_delays = signal.psi
 
         if PlotType.signal in self.plot:
@@ -49,20 +55,28 @@ class Receiver():
 
     def assemble(self):
         if not self.conf.CALIBRATE: 
+            #==============================
+            #        D/C  PER ELEMENT     |
+            #==============================            
+            IFsignal = self.mixer.superhet(
+                self.rxsignals,
+                self.rx_fs
+            )
 
-            #====================
-            #       LPF         |
-            #===================
-            self.rxsignals = self.filter.butterworth(
-                self.conf.rb,
-                self.rxsignals, 
+            #============================
+            #       LPF  PER ELEMENT    |
+            #===========================
+            filtered_signals = self.filter.butterworth(
+                cutoff = self.conf.rb/2,
+                fs = IFsignal.fs,
+                signal = IFsignal.elements
             )
             
             if PlotType.signal in self.plot:
                 self.signal_plot(
                     "Rx Signal at Element 1",
                     signal.time,
-                    self.rxsignals[0],
+                    filtered_signals[0],
                     signal.rrcsymbols,
                     self.conf.fs
                 )
@@ -71,13 +85,13 @@ class Receiver():
             #     SPREADER      |
             #====================
             spread = self.cdmx.spreader(
-                self.rxsignals,
+                filtered_signals,
                 self.codes,
             )
             
             if PlotType.spread in self.plot:
                 self.spread_plot(
-                    self.time, self.rxsignals,  
+                    self.time, filtered_signal,  
                     spread.time, spread.signals, 
                     spread.fs,
                     0
@@ -92,7 +106,7 @@ class Receiver():
             
             if PlotType.spread in self.plot:
                 self.spread_plot(
-                    self.time, self.rxsignals,  
+                    self.time, filtered_signals,  
                     spread.time, [np.array(summed_signal)], 
                     spread.fs,
                     0
@@ -109,7 +123,7 @@ class Receiver():
             
             if PlotType.recovered in self.plot:
                 self.recover_plot(
-                    self.time, self.rxsignals, 
+                    self.time, filtered_signals, 
                     recovered.time, recovered.signals,
                     recovered.fs,
                     0
@@ -118,13 +132,13 @@ class Receiver():
         else: 
             #WHEN CALIBRATING: ONLY PASSING THROUGH MATCHED FILTER
             recovered = self.cdmx.recover(
-                self.rxsignals,
+                filtered_signals,
                 np.zeros(self.conf.no_elem),
                 self.conf.fs
                 )
             if PlotType.recovered in self.plot:
                 self.recover_plot(
-                    self.time, self.rxsignals, 
+                    self.time, filtered_signals, 
                     recovered.time, recovered.signals,
                     recovered.fs,
                     0
@@ -141,7 +155,7 @@ class Receiver():
 
             if PlotType.bf in self.plot:
                 self.bf_plot(
-                    self.time, self.rxsignals, 
+                    self.time, filtered_signals, 
                     despread.time, bf,
                     0
                 )  
@@ -356,12 +370,13 @@ if __name__ == "__main__":
         alpha = 0.5,
         simtime = totaltime,
         no_elem = 2,
-        codefam="WH"
+        codefam="WH",
+        modType="BPSK"
         )
     #create signal 
     signal = DiscreteSignal(config)
 
     #initiate and assemble receiver 
-    rx = Receiver(config, {PlotType.recovered}) 
+    rx = Receiver(config, PlotType.all()) 
     rx.setup(signal)
     rx.assemble() 
