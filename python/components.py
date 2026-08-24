@@ -241,23 +241,26 @@ class Mixer:
         fs_mixer = 3*self.conf.flo
         #match sampling rates for discrete time mixing 
         
-        if signal_fs != fs_mixer:
-            print("I should not be here")
-            signal_resampled, fs_resampled = self.dsp.resample_signal(
-                fs_mixer,
-                signal_fs,
-                signal)
-            if fs_resampled != fs_mixer:
-                raise ValueError("Resampling did not work!")
-        else:
-            fs_resampled = signal_fs
-            signal_resampled = signal
-        
-        lo_time = np.arange(len(signal_resampled))*(1/fs_mixer)
-        lo_signal = np.cos(2*np.pi*self.conf.flo*lo_time)
+        mixer_output = [] 
+        for i in range(self.conf.no_elem): 
+            if signal_fs != fs_mixer:
+                print("I should not be here")
+                signal_resampled, fs_resampled = self.dsp.resample_signal(
+                    fs_mixer,
+                    signal_fs,
+                    signal[i])
+                if fs_resampled != fs_mixer:
+                    raise ValueError("Resampling did not work!")
+            else:
+                fs_resampled = signal_fs
+                signal_resampled = signal[i]
+            
+            lo_time = np.arange(len(signal_resampled))*(1/fs_mixer)
+            lo_signal = np.cos(2*np.pi*self.conf.flo*lo_time)
 
-        #mix signal by multiplication 
-        mixer_output = signal_resampled * lo_signal 
+            #mix signal by multiplication 
+            mixed_signal = signal_resampled * lo_signal 
+            mixer_output.append(mixed_signal)
 
         return fs_mixer, lo_time, mixer_output 
 
