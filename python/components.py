@@ -255,13 +255,13 @@ class Mixer:
 
         return fs_mixer, lo_time, mixer_output 
 
-    def quadrature(self,signal):
+    def quadrature(self,signal, signal_fs):
         #mixer sampling frequency is 3x the carrier frequency 
         fs_mixer = 3*self.conf.flo
         #match sampling rates for discrete time mixing 
         signal_resampled, fs_resampled = self.dsp.resample_signal(
             fs_mixer,
-            self.conf.fs,
+            signal_fs,
             signal)
 
         if fs_resampled != fs_mixer:
