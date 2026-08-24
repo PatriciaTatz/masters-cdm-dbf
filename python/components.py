@@ -238,21 +238,25 @@ class Beamformer:
 
 class Mixer:
     def __init__(self,conf):
-        self.f_lo = conf.flo
-        self.dt = 1/conf.fs  #this should not have been resampled and changed at this point 
-
-    def match_sampling_rate(self,conf):
+        self.conf = conf 
+        self.dsp = DiscreteSP()
 
     def superhet(self, signal):
         #match sampling rates for discrete time mixing 
+        fs_mixer = 3*self.conf.flo
+        signal_resampled, fs_resampled = self.dsp.resample_signal(
+            fs_mixer,
+            self.conf.fs,
+            signal)
 
-        fs_signal = 
-
-
-        lo_signal = np.cos(2*np.pi*self.f_lo*lo_time)
+        if fs_resampled != fs_mixer:
+            raise ValueError("Incorrect sampling rates at Mixer and Signal!")
+        
+        lo_time = np.arange(len(signal_resampled))*(1/fs_mixer)
+        lo_signal = np.cos(2*np.pi*self.conf.flo*lo_time)
 
         #mix signal by multiplication 
-        mixer_output = signal * lo_signal 
+        mixer_output = signal_resampled * lo_signal 
 
         return lo_time, mixer_output 
 
