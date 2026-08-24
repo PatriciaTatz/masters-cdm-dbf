@@ -10,7 +10,8 @@ class CDMcfg():
     BEAMFORM: bool=False
     CALIBRATE: bool=False
     INTERFERENCE: bool=False
-    f_lo: float = 1e6
+    CARRIER: bool=True
+    flo: float = 1e6
     rb: float = 6.25e6
     lc: int = 32
     sps_chip: int = 2 
@@ -25,7 +26,7 @@ class CDMcfg():
         #calculate and assign derived parameter
         self.sps_symbol = 10 #becomes sps_chip*(1+alpha)*Lc
         self.ts = 1/self.rb 
-        self.fs = self.sps_symbol / self.ts 
+        self.fs = self.sps_symbol / self.ts  #sps_symbol * rb due to upsampling 
         self.b = self.rb * (1 + self.alpha)
         self.rc = self.rb * self.lc
         if len(self.codeids) == 0:
