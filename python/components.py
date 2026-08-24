@@ -236,16 +236,22 @@ class Mixer:
         self.conf = conf 
         self.dsp = DiscreteSP()
 
-    def superhet(self, signal):
+    def superhet(self, signal, signal_fs):
+        #assumes signal is array of element signals!
+        fs_mixer = 3*self.conf.flo
         #match sampling rates for discrete time mixing 
         
-        signal_resampled, fs_resampled = self.dsp.resample_signal(
-            fs_mixer,
-            self.conf.fs,
-            signal)
-
-        if fs_resampled != fs_mixer:
-            raise ValueError("Incorrect sampling rates at Mixer and Signal because resampler only takes integers")
+        if signal_fs != fs_mixer:
+            print("I should not be here")
+            signal_resampled, fs_resampled = self.dsp.resample_signal(
+                fs_mixer,
+                signal_fs,
+                signal)
+            if fs_resampled != fs_mixer:
+                raise ValueError("Resampling did not work!")
+        else:
+            fs_resampled = signal_fs
+            signal_resampled = signal
         
         lo_time = np.arange(len(signal_resampled))*(1/fs_mixer)
         lo_signal = np.cos(2*np.pi*self.conf.flo*lo_time)
@@ -259,13 +265,16 @@ class Mixer:
         #mixer sampling frequency is 3x the carrier frequency 
         fs_mixer = 3*self.conf.flo
         #match sampling rates for discrete time mixing 
-        signal_resampled, fs_resampled = self.dsp.resample_signal(
-            fs_mixer,
-            signal_fs,
-            signal)
-
-        if fs_resampled != fs_mixer:
-            raise ValueError("Incorrect sampling rates at Mixer and Signal because resampler only takes integers")
+        if signal_fs != fs_mixer:
+            signal_resampled, fs_resampled = self.dsp.resample_signal(
+                fs_mixer,
+                signal_fs,
+                signal)
+            if fs_resampled != fs_mixer:
+                raise ValueError("Resampling did not work!")
+        else:
+            fs_resampled = signal_fs
+            signal_resampled = signal
         
         #local oscillators for I and Q component
         lo_time = np.arange(len(signal_resampled))*(1/fs_mixer)
