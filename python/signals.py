@@ -28,18 +28,18 @@ class DiscreteSignal:
         txsignal = self.create_symbols() #create symbols, rrc filtered
         self.create_timeseries(txsignal) #create time series based on input symbol rate
 
-        """
-        #ADD INTERFERENCE - removed by despreading process & MF 
-        N = len(txsignal)
-        BW_int = 1e6
-        Rs = BW_int
-        sps = int(self.conf.fs / Rs)
-        bits = np.random.choice([-1, 1], int(np.ceil(N/sps)))
-        symbols = np.repeat(bits, sps)[:N]
-        interference =  symbols * np.exp(1j*2*np.pi*7.5e6*self.time)
+        if self.conf.INTERFERENCE: 
+            #ADD INTERFERENCE - removed by despreading process & MF 
+            N = len(txsignal)
+            BW_int = 1e6
+            Rs = BW_int
+            sps = int(self.conf.fs / Rs)
+            bits = np.random.choice([-1, 1], int(np.ceil(N/sps)))
+            symbols = np.repeat(bits, sps)[:N]
+            interference =  symbols * np.exp(1j*2*np.pi*7.5e6*self.time)
 
-        txsignal += np.real(interference)
-        """        
+            txsignal += np.real(interference)
+               
         self.create_elementsignals(txsignal)
 
     def create_symbols(self):
@@ -107,14 +107,28 @@ class DiscreteSignal:
 
     def show_signal_plot(self):
         plt.figure()
-        for i in range(len(self.elements)):
-            plt.plot(self.time, self.elements[i], '-', label=f"Element {i} Signal")
+        elements_to_plot = range(len(self.elements))
+        for i in elements_to_plot:
+            if self.conf.modType=="BPSK":
+                plt.plot(self.time, self.elements[i], '-', label=f"Element {i} Signal")
+            elif self.conf.modType=="QPSK":
+                plt.subplot(2, 1, 1)
+                plt.plot(self.time, np.real(self.elements[i]), '-b')
+                plt.title("Real Part (In-Phase / I)")
+                plt.grid()
 
-        #plt.plot(self.time, self.transmit, '-o', label="RRC-Shaped Tx Signal")
-        plt.title(f"Tx Signal on Element=1")
-        #plt.stem(self.time[:len(self.rrcsymbols)],self.rrcsymbols, 'orange', label="Symbols")
+                plt.subplot(2, 1, 2)
+                plt.plot(self.time, np.imag(self.elements[i]), '-g')
+                plt.title("Imaginary Part (Quadrature / Q)")
+                plt.xlabel("Sample Index")
+                plt.tight_layout()
+                plt.grid()
+
+            else:
+                raise ValueError("Unknown modulation scheme. Cannot plot!")
+            
+        plt.title(f"Tx Signals on all elements")
         plt.legend()
-        plt.grid()
         plt.xlabel("Time (seconds)")
         plt.ylabel("Amplitude")
 
@@ -139,6 +153,17 @@ class DiscreteSignal:
         plt.ylabel("Power (dB)")
         plt.xlabel("Frequency (MHz)")
         plt.grid()
+
+        plt.figure()
+        plt.title(f"Constellation Diagram of Tx Signal on Element=1")
+        plt.scatter(
+            np.real(self.txsymbols),
+            np.imag(self.txsymbols),
+            color="blue",
+            alpha=0.5,
+            s=10,
+        )
+        plt.grid()
         plt.show()  
 
 
@@ -154,9 +179,9 @@ if __name__ == "__main__":
     #==================================
     #RUNSIMULATOR
     #==================================
-    Rb = 6.25e6
+    Rb = 1e3
     Tb = 1/Rb
-    symbols = 2000
+    symbols = 100
     totaltime = symbols*Tb
 
     config = CDMcfg(
@@ -165,11 +190,11 @@ if __name__ == "__main__":
         sps_chip= 1,
         alpha = 0.5,
         simtime = totaltime,
-        no_elem = 2
+        no_elem = 1,
+        modType="BPSK"
     )
     
     signal = DiscreteSignal(config)
-
 
     #==================================
     #PLOTRESULTS
