@@ -224,27 +224,19 @@ class Beamformer:
 
 class Mixer:
     def __init__(self,conf):
-        self.filter = Filter(conf)
         self.f_lo = conf.flo
         self.dt = 1/conf.fs  #this should not have been resampled and changed at this point 
 
-    def superhet_mixer(self, signal, fcutoff, conv_type):
+    def superhet(self, signal, fcutoff):
         lo_time = np.arange(len(signal))*self.dt 
         lo_signal = np.cos(2*np.pi*self.f_lo*t)
 
         #mix signal by multiplication 
         mixer_output = signal * lo_signal 
-        
-        #apply LPF
-        filtered_mixer_output = self.filter.butterworth_lpf(
-            cutoff=fcuttoff,
-            signal=mixer_output,
-            type=conv_type
-        )
 
-        return filtered_mixer_output 
+        return mixer_output 
 
-    def quadrature_mixer(self,signal,fcutoff):
+    def quadrature(self,signal):
         lo_time = np.arange(len(signal))*self.dt 
 
         #local oscillators for I and Q component
@@ -254,16 +246,6 @@ class Mixer:
         #mix signal by multiplication 
         mixed_i = signal * lo_i
         mixed_q = signal * lo_q 
-
-        #apply lpf for both 
-        filtered_mixed_i = self.filter.butterworth_lpf(
-            cutoff=fcutoff,
-            signal=mixed_i
-        )
-        filtered_mixed_q = self.filter.butterworth_lpf(
-            cutoff=fcutoff,
-            signal=mixed_q
-        )
 
         return filtered_mixed_i + 1j*filtered_mixed_q
 
