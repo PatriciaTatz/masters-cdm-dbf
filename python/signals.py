@@ -42,8 +42,11 @@ class DiscreteSignal:
 
         if self.conf.CARRIER:
             self.mixer = Mixer(conf)
-            txsignal = self.modulate_to_carrier(txsignal)
+            #modulation will change time array and sampling frequency
+            #and over txsignal which now represents a QPSK modded carrier 
+            self.time, txsignal, self.fs = self.modulate_to_carrier(txsignal)
                
+        #create elements that will be received 
         self.create_elementsignals(txsignal)
 
     def create_symbols(self):
@@ -123,7 +126,7 @@ class DiscreteSignal:
         plt.grid()
         plt.ylabel("Frequency kHz")
 
-        fs_mixer, self.time, carrier_signal = self.mixer.quadrature(
+        fs_mixer, carrier_time, carrier_signal = self.mixer.quadrature(
             signal,
             self.conf.fs
         )
@@ -139,7 +142,7 @@ class DiscreteSignal:
         plt.xlabel("Frequency MHz")
         plt.grid()
 
-        return carrier_signal
+        return carrier_time, carrier_signal, fs_mixer
 
 
     def show_signal_plot(self):
