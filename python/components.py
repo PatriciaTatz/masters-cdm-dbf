@@ -169,15 +169,18 @@ class Filter:
         sps_symbol  = int(round(fs / self.rb)) #changes from config due to resampling
         ts = 1 / self.rb 
         ntaps = self.span*sps_symbol + 1  #must be odd, total length of the filter 
-
+        
+        #upsampling
         if mode == "txmode":
             prepad = sps_symbol
-            symbols = np.zeros(prepad + len(signal)*sps_symbol)
+            symbols = np.zeros(
+                prepad + len(signal)*sps_symbol,
+                dtype=signal.dtype)
             symbols[prepad::sps_symbol] = signal
             samples = symbols
         else:
             samples = signal
-
+        
         #apply filter
         dt_filter, h_rrc = filter.rrcosfilter(ntaps, self.alpha, ts, fs)
         h_rrc /= np.sqrt(np.sum(h_rrc**2))
@@ -193,7 +196,7 @@ class Filter:
             #not related to chip gain so keep it 
             #filtered_nodelay /= np.max(np.abs(filtered_nodelay))
 
-        return filtered_delay, symbols  
+        return filtered_delay, [0]
 
     def butterworth_lpf(self, cutoff, signal, filter_type="low"):
         nyquist = self.fs/2 
@@ -244,7 +247,7 @@ class Mixer:
     def quadrature_mixer(self,signal,fcutoff):
         lo_time = np.arange(len(signal))*self.dt 
 
-        #local oscillators for I and Q component 
+        #local oscillators for I and Q component
         lo_i = np.cos(2*np.pi*f_lo*lo_time)
         lo_q = -np.sin*(2*np.pi*f_lo*lo_time)
 
@@ -262,7 +265,7 @@ class Mixer:
             signal=mixed_q
         )
 
-        return filtered_mixed_i, filtered_mixed_q
+        return filtered_mixed_i + 1j*filtered_mixed_q
 
 class SpecAn: 
     def calculate_psd(self ,fs, signal,psdtype="normal"):
