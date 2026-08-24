@@ -78,7 +78,7 @@ class DiscreteSignal:
 
         #add rrcfilter
         self.transmit, self.rrcsymbols = self.filters.rrcfilter(self.txsymbols, self.conf.fs)
-
+        self.symbol_time = np.arange(len(self.rrcsymbols))/self.conf.fs
         #np.save("transmit_clean", self.transmit)
         return self.transmit
 
@@ -152,14 +152,18 @@ class DiscreteSignal:
         elements_to_plot = range(len(self.elements))
         for i in elements_to_plot:
             if self.conf.modType=="BPSK":
+                plt.stem(self.time, self.rrcsymbols , 'orange')
                 plt.plot(self.time, self.elements[i], '-', label=f"Element {i} Signal")
+
             elif self.conf.modType=="QPSK":
                 plt.subplot(2, 1, 1)
+                plt.stem(self.symbol_time, np.real(self.rrcsymbols), 'orange')
                 plt.plot(self.time, np.real(self.elements[i]), '-b')
                 plt.title("Real Part (In-Phase / I)")
                 plt.grid()
 
                 plt.subplot(2, 1, 2)
+                plt.stem(self.symbol_time, np.imag(self.rrcsymbols), 'orange')
                 plt.plot(self.time, np.imag(self.elements[i]), '-g')
                 plt.title("Imaginary Part (Quadrature / Q)")
                 plt.xlabel("Sample Index")
@@ -223,7 +227,7 @@ if __name__ == "__main__":
     #==================================
     Rb = 1e3
     Tb = 1/Rb
-    symbols = 10
+    symbols = 100
     totaltime = symbols*Tb
 
     config = CDMcfg(

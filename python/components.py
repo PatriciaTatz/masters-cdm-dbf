@@ -200,11 +200,8 @@ class Filter:
         if mode == "rxmode":
             symbols = filtered_delay[::sps_symbol]
             filtered_delay = filtered[h_delay+1:-h_delay+1]
-            #combined gain is not affected by this since its from adding multiple signal paths
-            #not related to chip gain so keep it 
-            #filtered_nodelay /= np.max(np.abs(filtered_nodelay))
 
-        return filtered_delay, [0]
+        return filtered_delay, symbols
 
     def butterworth(self, cutoff, fs, signal, filter_type="low"):
         #fs is sampling frequency! 
@@ -215,6 +212,7 @@ class Filter:
             Wn = cutoff/nyquist, 
             btype=filter_type
         )
+        #filter can be applied to an array type which signal is 
         return filtfilt(b,a,signal)
 
 
