@@ -206,14 +206,9 @@ class Filter:
 
         return filtered_delay, [0]
 
-    def butterworth(self, cutoff, signal, filter_type="low"):
-        if self.fs_carrier:
-            fs = self.flo*3
-        else:
-            fs = self.fs*3
-
+    def butterworth(self, cutoff, fs, signal, filter_type="low"):
+        #fs is sampling frequency! 
         nyquist = fs/2
-        print(cutoff/nyquist)
         #cutoff = 1.5*self.rb
         b, a = butter(
             N=4, 
@@ -243,14 +238,14 @@ class Mixer:
 
     def superhet(self, signal):
         #match sampling rates for discrete time mixing 
-        fs_mixer = 3*self.conf.flo
+        
         signal_resampled, fs_resampled = self.dsp.resample_signal(
             fs_mixer,
             self.conf.fs,
             signal)
 
         if fs_resampled != fs_mixer:
-            raise ValueError("Incorrect sampling rates at Mixer and Signal!")
+            raise ValueError("Incorrect sampling rates at Mixer and Signal because resampler only takes integers")
         
         lo_time = np.arange(len(signal_resampled))*(1/fs_mixer)
         lo_signal = np.cos(2*np.pi*self.conf.flo*lo_time)
@@ -258,20 +253,28 @@ class Mixer:
         #mix signal by multiplication 
         mixer_output = signal_resampled * lo_signal 
 
-        return lo_time, mixer_output 
+        return fs_mixer, lo_time, mixer_output 
 
     def quadrature(self,signal):
-        lo_time = np.arange(len(signal))*self.dt 
+        #mixer sampling frequency is 3x the carrier frequency 
+        fs_mixer = 3*self.conf.flo
+        #match sampling rates for discrete time mixing 
+        signal_resampled, fs_resampled = self.dsp.resample_signal(
+            fs_mixer,
+            self.conf.fs,
+            signal)
 
+        if fs_resampled != fs_mixer:
+            raise ValueError("Incorrect sampling rates at Mixer and Signal because resampler only takes integers")
+        
         #local oscillators for I and Q component
-        lo_i = np.cos(2*np.pi*f_lo*lo_time)
-        lo_q = -np.sin*(2*np.pi*f_lo*lo_time)
+        lo_time = np.arange(len(signal_resampled))*(1/fs_mixer)
+        lo_signal = np.exp(1j*2*np.pi*self.conf.flo*lo_time) 
 
         #mix signal by multiplication 
-        mixed_i = signal * lo_i
-        mixed_q = signal * lo_q 
+        mixer_output = signal_resampled * lo_signal
 
-        return filtered_mixed_i + 1j*filtered_mixed_q
+        return fs_mixer, lo_time, mixer_output 
 
 class SpecAn: 
     def calculate_psd(self ,fs, signal,psdtype="normal"):
