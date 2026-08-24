@@ -163,7 +163,9 @@ class Filter:
         self.rb = conf.rb
         self.span = conf.span 
         self.fs = conf.fs
+        self.flo = conf.flo
         self.sps_symbol = conf.sps_symbol 
+        self.fs_carrier = conf.CARRIER
 
     def rrcfilter(self, signal, fs, mode="txmode"):
         sps_symbol  = int(round(fs / self.rb)) #changes from config due to resampling
@@ -198,13 +200,18 @@ class Filter:
 
         return filtered_delay, [0]
 
-    def butterworth_lpf(self, cutoff, signal, filter_type="low"):
-        nyquist = self.fs/2 
+    def butterworth(self, cutoff, signal, filter_type="low"):
+        if self.fs_carrier:
+            fs = self.flo*3
+        else:
+            fs = self.fs*3
+            
+        nyquist = fs
         #cutoff = 1.5*self.rb
         b, a = butter(
             N=4, 
             Wn = cutoff/nyquist, 
-            type=filter_type
+            btype=filter_type
         )
         return filtfilt(b,a,signal)
 
@@ -227,9 +234,9 @@ class Mixer:
         self.f_lo = conf.flo
         self.dt = 1/conf.fs  #this should not have been resampled and changed at this point 
 
-    def superhet(self, signal, fcutoff):
+    def superhet(self, signal):
         lo_time = np.arange(len(signal))*self.dt 
-        lo_signal = np.cos(2*np.pi*self.f_lo*t)
+        lo_signal = np.cos(2*np.pi*self.f_lo*lo_time)
 
         #mix signal by multiplication 
         mixer_output = signal * lo_signal 
