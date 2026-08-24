@@ -39,13 +39,12 @@ class DiscreteSignal:
             interference =  symbols * np.exp(1j*2*np.pi*7.5e6*self.time)
 
             txsignal += np.real(interference)
-               
-        self.create_elementsignals(txsignal)
 
         if self.conf.CARRIER:
             self.mixer = Mixer(conf)
-            self.modulate_to_carrier()
-
+            txsignal = self.modulate_to_carrier(txsignal)
+               
+        self.create_elementsignals(txsignal)
 
     def create_symbols(self):
         #This does not worry about bit generation and modulation 
@@ -110,35 +109,37 @@ class DiscreteSignal:
             self.elements[i] = signal + noise[i]
 
 
-    def modulate_to_carrier(self):
+    def modulate_to_carrier(self, signal):
         #carrier frequency = flo in config 
         #cutoff frequency is equal to pulse shaped bandwidth 
         plt.figure()
         plt.title(f"Before U/C: Power Spectrum Density of Tx Signal on Element=1")
         specan = SpecAn().calculate_psd(
             self.conf.sps_symbol / self.conf.ts, 
-            self.elements[0],
+            signal,
             psdtype="normal"
             )
         plt.plot(specan.f, specan.Pxx_dB, label="PSD")
         plt.grid()
         plt.ylabel("Frequency kHz")
 
-        for i in range(self.conf.no_elem):
-            fs_mixer, self.time, self.elements[i] = self.mixer.quadrature(
-                self.elements[i]
-            )
+        fs_mixer, self.time, carrier_signal = self.mixer.quadrature(
+            signal,
+            self.conf.fs
+        )
 
         plt.figure()
         plt.title(f"After U/C: Power Spectrum Density of Tx Signal on Element=1")
         specan = SpecAn().calculate_psd(
             fs_mixer,
-            self.elements[0],
+            carrier_signal,
             psdtype="normal"
             )
         plt.plot(specan.f, specan.Pxx_dB, label="PSD")
         plt.xlabel("Frequency MHz")
         plt.grid()
+
+        return carrier_signal
 
 
     def show_signal_plot(self):
