@@ -12,7 +12,7 @@ import numpy as np
 from scipy.signal import welch
 from math import sin 
 
-from components import Filter, SpecAn
+from components import Filter, SpecAn, Mixer
 from config import CDMcfg
 
 
@@ -24,7 +24,7 @@ class DiscreteSignal:
         self.conf = conf
 
         #generate signal/s
-        self.mf = Filter(conf)
+        self.filters = Filter(conf)
         txsignal = self.create_symbols() #create symbols, rrc filtered
         self.create_timeseries(txsignal) #create time series based on input symbol rate
 
@@ -41,6 +41,11 @@ class DiscreteSignal:
             txsignal += np.real(interference)
                
         self.create_elementsignals(txsignal)
+
+        if self.conf.CARRIER:
+            self.mixer = Mixer(conf)
+            self.modulate_to_carrier()
+
 
     def create_symbols(self):
         #This does not worry about bit generation and modulation 
@@ -70,7 +75,7 @@ class DiscreteSignal:
         #self.txsymbols = np.load("input.npy")
 
         #add rrcfilter
-        self.transmit, self.rrcsymbols = self.mf.rrcfilter(self.txsymbols, self.conf.fs)
+        self.transmit, self.rrcsymbols = self.filters.rrcfilter(self.txsymbols, self.conf.fs)
 
         #np.save("transmit_clean", self.transmit)
         return self.transmit
@@ -104,6 +109,42 @@ class DiscreteSignal:
         for i in range(self.conf.no_elem):
             self.elements[i] = signal + noise[i]
 
+
+    def modulate_to_carrier(self):
+        #carrier frequency = flo in config 
+        #cutoff frequency is equal to pulse shaped bandwidth 
+        plt.figure()
+        plt.title(f" AAA Power Spectrum Density of Tx Signal on Element=1")
+        specan = SpecAn().calculate_psd(
+            self.conf.sps_symbol / self.conf.ts, 
+            self.elements[0],
+            psdtype="normal"
+            )
+        plt.plot(specan.f/1e3, specan.Pxx_dB, label="PSD")
+        plt.grid()
+        plt.ylabel("Frequency kHz")
+
+        if self.conf.modType=="BPSK":
+            #upconvert
+            for i in range(self.conf.no_elem):
+                fs_mixer, self.time, self.elements[i] = self.mixer.superhet(self.elements[i])
+            
+        elif self.conf.modType=="QPSK":
+            for i in range(self.conf.no_elem):
+                #upconvert, no mirror image 
+                self.elements[i] = self.mixer.quadrature(self.elements[i])
+
+        plt.figure()
+        plt.title(f"BBB Power Spectrum Density of Tx Signal on Element=1")
+        specan = SpecAn().calculate_psd(
+            fs_mixer,
+            self.elements[0],
+            psdtype="normal"
+            )
+        plt.plot(specan.f/1e6, specan.Pxx_dB, label="PSD")
+        plt.xlabel("Frequency MHz")
+        plt.grid()
+        #plt.show()
 
     def show_signal_plot(self):
         plt.figure()
@@ -181,7 +222,7 @@ if __name__ == "__main__":
     #==================================
     Rb = 1e3
     Tb = 1/Rb
-    symbols = 100
+    symbols = 10
     totaltime = symbols*Tb
 
     config = CDMcfg(
