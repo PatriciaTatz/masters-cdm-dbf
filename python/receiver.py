@@ -38,7 +38,6 @@ class Receiver():
         self.rxsignals = signal.elements.copy()
         self.psi_delays = signal.psi
 
-        """
         if PlotType.signal in self.plot:
             self.signal_plot(
                 "Rx Signal at Element 1",
@@ -48,22 +47,13 @@ class Receiver():
                 self.conf.fs,
             )
 
-        if PlotType.signal in self.plot:
-            self.signal_plot(
-                "Rx Signal at Element 2",
-                signal.time,
-                signal.elements[1],
-                signal.rrcsymbols,
-                self.conf.fs
-            )
-        """
     def assemble(self):
         if not self.conf.CALIBRATE: 
 
             #====================
             #       LPF         |
             #===================
-            self.rxsignals = self.filter.butterworth_lpf(
+            self.rxsignals = self.filter.butterworth(
                 self.conf.rb,
                 self.rxsignals, 
             )
@@ -354,14 +344,14 @@ if __name__ == "__main__":
     # PARAMETERS 
     # ==============================
     
-    Rb = 6.25e6
+    Rb = 1e3
     Tb = 1/Rb
-    symbols = 2000
+    symbols = 100
     totaltime = symbols*Tb
 
     config = CDMcfg(
         rb = Rb,
-        lc = 31,
+        lc = 32,
         sps_chip= 2,
         alpha = 0.5,
         simtime = totaltime,
