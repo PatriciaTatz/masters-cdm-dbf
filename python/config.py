@@ -9,6 +9,7 @@ class CDMcfg():
     simtime: float 
     BEAMFORM: bool=False
     CALIBRATE: bool=False
+    INTERFERENCE: bool=False
     f_lo: float = 1e6
     rb: float = 6.25e6
     lc: int = 32
@@ -18,7 +19,7 @@ class CDMcfg():
     codefam: str = "WH"
     no_elem: int = 1 
     degree: int = 1
-    span: int = 10
+    span: int = 8
     codeids: np.ndarray = field(default_factory=lambda: np.array([]))
     def __post_init__(self):
         #calculate and assign derived parameter
