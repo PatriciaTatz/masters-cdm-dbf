@@ -19,7 +19,7 @@ from commpy.sequences import pnsequence  # type:ignore[import-untyped]
 from scipy.signal import max_len_seq, resample_poly, welch, butter, filtfilt
 import matplotlib.pyplot as plt 
 
-from models import DecorrOutput, Specan, SpreadOutput
+from models import DecorrOutput, Specan, SpreadOutput, ConvOutput
 
 
 class DiscreteSP:
@@ -262,7 +262,7 @@ class Mixer:
             mixed_signal = signal_resampled * lo_signal 
             mixer_output.append(mixed_signal)
 
-        return fs_mixer, lo_time, mixer_output 
+        return ConvOutput(fs_mixer, lo_time, mixer_output)
 
     def quadrature(self,signal, signal_fs):
         #mixer sampling frequency is 3x the carrier frequency 
