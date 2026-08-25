@@ -3,34 +3,25 @@ import numpy as np
 
 
 @dataclass
-class DecorrOutput:
-    signals: list[np.ndarray]
+class Signals_Time:
     time: np.ndarray
-    fs: float
+    signals: list[np.ndarray]
+
 
 @dataclass
-class SpreadOutput:
+class ResampledSignals:
     signals: list[np.ndarray]
     time: np.ndarray
-    codes: list[np.ndarray]
+    #codes: list[np.ndarray]
     fs: float
 
 @dataclass
 class Specan:
     f: np.ndarray
     Pxx_dB: np.ndarray
-    bw: float
 
 @dataclass
 class CodeWeights: 
     node: list[np.ndarray]
     edge: list[np.ndarray]
-
-
-@dataclass
-class ConvOutput: 
-    fs: float
-    time: list[np.ndarray]
-    elements: list[np.ndarray]
-
 
