@@ -19,7 +19,7 @@ from commpy.sequences import pnsequence  # type:ignore[import-untyped]
 from scipy.signal import max_len_seq, resample_poly, welch, butter, filtfilt
 import matplotlib.pyplot as plt 
 
-from models import TruncatedSignals, ResampledSignals, Specan
+from models import Signals_Time, ResampledSignals, Specan
 
 
 class DiscreteSP:
@@ -136,7 +136,7 @@ class CDMx:
 
         #removes delay and fs unchanged 
         new_time = np.arange(len(decorrelated[0]))*(1/fs)
-        return TruncatedSignals(new_time, decorrelated)
+        return Signals_Time(new_time, decorrelated)
 
     def despread(self, sumsignal, codes):
         #Despread signal by multiplying with code block
@@ -198,7 +198,6 @@ class Filter:
     def butterworth(self, cutoff, fs, signals, filter_type="low"):
         #fs is sampling frequency! 
         nyquist = fs/2
-        print(cutoff)
         #cutoff = 1.5*self.rb
         b, a = butter(
             N=4, 
@@ -274,17 +273,14 @@ class Mixer:
 
 class SpecAn: 
     def calculate_psd(self ,fs, signal):
-        f, Pxx = welch(
-            signal,
-            fs=fs,
-            window='hann', #gets rid of line across 
-            nperseg=len(signal),
-            scaling='spectrum'
-        )
 
-        Pxx_dB = 10*np.log10(Pxx + 1e-12) 
-        Pxx_dB = Pxx_dB - np.max(Pxx_dB) #normalise
+        N =len(signal)
 
+        Pxx = np.fft.fftshift(np.fft.fft(signal))
+        PSD = np.abs(Pxx)**2 / (fs * N)
+
+        f = np.fft.fftshift(np.fft.fftfreq(N, 1/fs))
+
+        Pxx_dB =  10*np.log10(PSD + 1e-15) 
+        Pxx_dB -= np.max(Pxx_dB) #normalise to caarrier, dB/Hz this is implicit and arbitrary
         return Specan(f, Pxx_dB)
-
-

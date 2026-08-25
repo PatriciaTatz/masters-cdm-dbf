@@ -201,7 +201,7 @@ class Receiver():
         plt.grid()
         plt.xlabel("Time (seconds)")
         plt.ylabel("Amplitude")
-
+    
         plt.figure()
         plt.title(f"PSD of {title}")
         specan = SpecAn().calculate_psd(
@@ -214,19 +214,20 @@ class Receiver():
             specan.f,
             specan.Pxx_dB,
             color="blue",
-            label="PSD")
+            labqel="PSD")
         """
         plt.plot(
             specan.f,
             specan.Pxx_dB,
             '-b' 
         )
-    
+        
         plt.ylabel("Power (dB)")
         plt.xlabel("Frequency (MHz)")
         plt.grid()
+        plt.xlim(0, 1.5*self.conf.fcar)  
         plt.show()
-        plt.xlim(0, fsample / 2)  
+
 
     def spread_plot(self, 
         tbefore,

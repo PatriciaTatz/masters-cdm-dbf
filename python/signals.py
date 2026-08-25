@@ -14,6 +14,7 @@ from math import sin
 
 from components import Filter, SpecAn, Mixer
 from config import CDMcfg
+from models import ResampledSignals
 
 
 class DiscreteSignal:
@@ -42,12 +43,14 @@ class DiscreteSignal:
 
         if self.conf.CARRIER:
             self.mixer = Mixer(conf)
-            #modulation will change time array and sampling frequency
+            #modulation will change time array anfs_mixer, carrier_time, carrier_signald sampling frequency
             #and over txsignal which now represents a QPSK modded carrier 
-            self.time, txsignal, self.fs = self.modulate_to_carrier(txsignal)
+            modulated = self.modulate_to_carrier(txsignal)
+            self.fs = modulated.fs
+            self.time = modulated.time
                
         #create elements that will be received 
-        self.create_elementsignals(txsignal)
+        self.create_elementsignals(modulated.signals)
 
     def create_symbols(self):
         #This does not worry about bit generation and modulation 
@@ -117,34 +120,46 @@ class DiscreteSignal:
         #cutoff frequency is equal to pulse shaped bandwidth 
 
         """
+        #PLOT FOR BEFORE THE MODULATION
         plt.figure()
         plt.title(f"Before U/C: Power Spectrum Density of Tx Signal on Element=1")
         specan = SpecAn().calculate_psd(
             self.conf.sps_symbol / self.conf.ts, 
             signal,
-            psdtype="normal"
             )
-        plt.plot(specan.f, specan.Pxx_dB, label="PSD")
+        plt.plot(specan.f, specan.Pxx_dB, '-b')
         plt.grid()
         plt.ylabel("Frequency kHz")
-        """
-        fs_mixer, carrier_time, carrier_signal = self.mixer.quadrature(
+        
+        #modulate to carrier
+        modsignal = self.mixer.quadrature(
             signal,
             self.conf.fs
         )
         """
+        #bandpass filter to remove harmonics caused by resampling 
+        flow = self.conf.fcar - self.conf.b
+        fhigh = self.conf.fcar + self.conf.b
+        filtered_modsignal = self.filters.butterworth(
+            cutoff = np.array([flow,fhigh]),
+            fs = modsignal.fs,
+            signals = modsignal.signals,
+            filter_type="bandpass"
+        )
+        
+        """
+        #PLOT FOR AFTER THE MODULATION
         plt.figure()
         plt.title(f"After U/C: Power Spectrum Density of Tx Signal on Element=1")
         specan = SpecAn().calculate_psd(
-            fs_mixer,
-            carrier_signal,
-            psdtype="normal"
+            modsignal.fs,
+            modsignal.signals,
             )
         plt.plot(specan.f, specan.Pxx_dB, label="PSD")
         plt.xlabel("Frequency MHz")
         plt.grid()
         """
-        return carrier_time, carrier_signal, fs_mixer
+        return ResampledSignals(filtered_modsignal, modsignal.time,modsignal.fs)
 
 
     def show_signal_plot(self):
@@ -152,8 +167,9 @@ class DiscreteSignal:
         elements_to_plot = range(len(self.elements))
         for i in elements_to_plot:
             if self.conf.modType=="BPSK":
-                plt.stem(self.time, self.rrcsymbols , 'orange')
+                plt.stem(signal.symbol_time, signal.rrcsymbols , 'orange')
                 plt.plot(self.time, self.elements[i], '-', label=f"Element {i} Signal")
+                plt.grid()
 
             elif self.conf.modType=="QPSK":
                 plt.subplot(2, 1, 1)
@@ -183,7 +199,6 @@ class DiscreteSignal:
         specan = SpecAn().calculate_psd(
             self.conf.fs,
             self.elements[0],
-            psdtype="normal"
             )
         plt.plot(specan.f/1e6, specan.Pxx_dB, label="PSD")
         """
@@ -236,8 +251,8 @@ if __name__ == "__main__":
         sps_chip= 1,
         alpha = 0.5,
         simtime = totaltime,
-        no_elem = 1,
-        modType="QPSK"
+        no_elem = 2,
+        modType="BPSK"
     )
     
     signal = DiscreteSignal(config)
