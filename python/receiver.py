@@ -14,7 +14,7 @@ from signals import DiscreteSignal
 class PlotType(Enum):
     signal = auto()
     spread = auto()
-    sum = auto()
+    summed = auto()
     recovered = auto()
     bf = auto()
 
@@ -28,21 +28,19 @@ class Receiver():
         self.conf  = config 
         self.plot = plot
         
-
     def setup(self, signal):
-        self.time = np.arange(len(signal.elements[0]))/self.conf.fs
-        self.cdmx = CDMx(self.conf)
-        self.bf = Beamformer()
-        self.mixer = Mixer(self.conf)
-        self.filter = Filter(self.conf)
+        self.cdmx = CDMx(self.conf)                     #generate code division miultiplexer
+        self.bf = Beamformer()                          #generate beamformer
+        self.mixer = Mixer(self.conf)                   #generate mixers, superheterodyne and quadrature
+        self.filter = Filter(self.conf)                 #generate filter, butterworth bandpass filter 
 
-        self.codes = self.cdmx.generate_codes()
+        self.codes = self.cdmx.generate_codes()         #spr4eading codes
 
-        #recieve the signal and get its attributes relevant to operations 
-        self.rxsignals = copy.deepcopy(signal.elements) 
-        self.rx_fs = signal.fs
-        self.rx_time = signal.time 
-        self.psi_delays = signal.psi
+        #recieve the signal
+        self.rxsignals = copy.deepcopy(signal.elements) #element signals
+        self.rx_fs = signal.fs                          #sampling frequency
+        self.rx_time = signal.time                      #element signal time axis
+        self.element_delays = signal.psi                #element signal spatial delay 
         
         if PlotType.signal in self.plot:
             self.signal_plot(
@@ -51,7 +49,7 @@ class Receiver():
                 self.rxsignals[0],
                 self.rx_fs,
             )
-        
+          
     def assemble(self):
         if not self.conf.CALIBRATE: 
             #==============================
@@ -62,48 +60,48 @@ class Receiver():
                 self.rx_fs
             )
 
+            """Pxx_dB
             if PlotType.signal in self.plot:
                 self.signal_plot(
                     "After D/C at Element=1",
-                    baseband.time,
-                    baseband.elements[0],
-                    baseband.fs
+                    self.rx_time, baseband[0],
+                    self.rx_fs
                 )
-            
+            """ 
             #============================
             #       LPF  PER ELEMENT    |
             #===========================
             flow = self.conf.fbb - self.conf.rb/2
             fhigh = self.conf.fbb + self.conf.rb/2
-            filtered_signals = self.filter.butterworth(
+            filtered_bb = self.filter.butterworth(
                 cutoff = np.array([flow,fhigh]),
-                fs = baseband.fs,
-                signal =  baseband.elements,
+                fs = self.rx_fs,
+                signals =  baseband,
                 filter_type="bandpass"
             )
             
+            """
             if PlotType.signal in self.plot:
                 self.signal_plot(
                     "After LPF at Element=1",
-                    baseband.time,
-                    filtered_signals[0],
-                    baseband.fs
+                    self.rx_time, filtered_bb[0],
+                    self.rx_fs
                 )
-            
+            """
             #============================
-            #   SPREADER  PER ELEMENT    |view-image
-            #===========================
-            spread = self.cdmx.spreader(
-                filtered_signals,
+            #   SPREADER PER ELEMENT     |
+            # CHANGES SAMPLING FREQUENCY |
+            #============================
+            spread_bb = self.cdmx.spreader(
+                filtered_bb,
                 self.codes,
             )
-            
+
             if PlotType.spread in self.plot:
                 self.spread_plot(
-                    self.time, filtered_signal,  
-                    spread.time, spread.signals, 
-                    spread.fs,
-                    0
+                    self.rx_time, filtered_bb,  
+                    spread_bb.time, spread_bb.signals, 
+                    spread_bb.fs
                 )
     
             #====================
@@ -113,7 +111,7 @@ class Receiver():
             if PlotType.sum in self.plot: 
                 self.sum_plot(spread.time, summed_signal)
             
-            if PlotType.spread in self.plot:
+            if PlotType.summed in self.plot:
                 self.spread_plot(
                     self.time, filtered_signals,  
                     spread.time, [np.array(summed_signal)], 
@@ -122,7 +120,8 @@ class Receiver():
                 )
 
             #=====================================
-            #   DIGITAL DESPREAD  PER ELEMENT    |
+            #   DIGITAL DESPREAD  PER ELEMENT     |
+            #   NOT RESAMPLED BUT MF DELAY TRUNC  |
             #=====================================
             recovered = self.cdmx.recover(
                 summed_signal,
@@ -158,17 +157,17 @@ class Receiver():
         #     DIGITAL BEAMFORMING    |
         #=============================
             bf = self.bf.align_combine_signals(
-                self.psi_delays,
-                despread.signals
+                self.element_delays,
+                recovered
             )
 
             if PlotType.bf in self.plot:
                 self.bf_plot(
                     self.time, filtered_signals, 
-                    despread.time, bf,
+                    bf.time, bf.signal,
                     0
                 )  
-            return bf  
+            return bf
         else:
             return recovered
 
@@ -186,7 +185,7 @@ class Receiver():
         title,
         time,
         asignal,
-        Fsample
+        fsample
         ):
         plt.rcParams['font.size'] = 15
         plt.figure()
@@ -206,27 +205,28 @@ class Receiver():
         plt.figure()
         plt.title(f"PSD of {title}")
         specan = SpecAn().calculate_psd(
-            self.conf.fs,
+            fsample,
             asignal,
-            psdtype=-30
             )
         
-        plt.plot(specan.f/1e6, specan.Pxx_dB, label="PSD")
-
-        
-        plt.text(
-            0.02, 0.95,
-            f"Est. BW={specan.bw/1e6:.2f}MHz",
-            transform=plt.gca().transAxes,
-            ha='left',
-            va='top',
-            bbox=dict(facecolor='white', edgecolor='black')
+        """
+        plt.semilogy(
+            specan.f,
+            specan.Pxx_dB,
+            color="blue",
+            label="PSD")
+        """
+        plt.plot(
+            specan.f,
+            specan.Pxx_dB,
+            '-b' 
         )
-        
+    
         plt.ylabel("Power (dB)")
         plt.xlabel("Frequency (MHz)")
         plt.grid()
         plt.show()
+        plt.xlim(0, fsample / 2)  
 
     def spread_plot(self, 
         tbefore,
@@ -383,7 +383,7 @@ if __name__ == "__main__":
         simtime = totaltime,
         no_elem = 2,
         codefam="WH",
-        modType="QPSK"
+        modType="BPSK"
         )
     #create signal 
     signal = DiscreteSignal(config)
@@ -391,4 +391,4 @@ if __name__ == "__main__":
     #initiate and assemble receiver 
     rx = Receiver(config, {PlotType.signal}) 
     rx.setup(signal)
-    rx.assemble() 
+    rx.assemble()
