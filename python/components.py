@@ -282,34 +282,9 @@ class SpecAn:
             scaling='spectrum'
         )
 
-        f = np.fft.fftshift(f)
-        Pxx = np.fft.fftshift(Pxx)
-
         Pxx_dB = 10*np.log10(Pxx + 1e-12) 
         Pxx_dB = Pxx_dB - np.max(Pxx_dB) #normalise
 
-        if psdtype =="normal":
-            df = np.abs(f[1]-f[0])
-            power = Pxx* df
-            power = power / np.sum(power)
-
-            cdf = np.cumsum(power)
-
-            f_low  = f[np.searchsorted(cdf, 0.00005)]
-            f_high = f[np.searchsorted(cdf, 0.99995)]
-
-            bw = f_high - f_low
-        else: 
-            peak = np.max(Pxx_dB)
-
-            mask = Pxx_dB > (peak + psdtype)
-
-            idx = np.where(mask)[0]
-
-            f_low = f[idx[0]]
-            f_high = f[idx[-1]]
-
-            bw = f_high - f_low
-        return Specan(f, Pxx_dB, bw)
+        return Specan(f, Pxx_dB)
 
 
