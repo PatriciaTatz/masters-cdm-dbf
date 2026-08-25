@@ -168,10 +168,7 @@ class Filter:
         self.alpha = conf.alpha
         self.rb = conf.rb
         self.span = conf.span 
-        self.fs = conf.fs
-        self.flo = conf.flo
         self.sps_symbol = conf.sps_symbol 
-        self.fs_carrier = conf.CARRIER
 
     def rrcfilter(self, signal, fs, mode="txmode"):
         sps_symbol  = int(round(fs / self.rb)) #changes from config due to resampling
@@ -236,9 +233,12 @@ class Mixer:
 
     def superhet(self, signal, signal_fs):
         #assumes signal is array of element signals!
-        fs_mixer = 3*self.conf.flo
-        #match sampling rates for discrete time mixing 
+        fs_mixer = 3*self.conf.fcar
+
+        #for superhet, flo != fcar, just above zero-IF
+        flo_mixer = self.conf.fcar - self.conf.fbb
         
+        #match sampling rates for discrete time mixing 
         mixer_output = [] 
         for i in range(self.conf.no_elem): 
             if signal_fs != fs_mixer:
@@ -254,7 +254,7 @@ class Mixer:
                 signal_resampled = signal[i]
             
             lo_time = np.arange(len(signal_resampled))*(1/fs_mixer)
-            lo_signal = np.cos(2*np.pi*self.conf.flo*lo_time)
+            lo_signal = np.cos(2*np.pi*flo_mixer*lo_time)
 
             #mix signal by multiplication 
             mixed_signal = signal_resampled * lo_signal 
@@ -264,7 +264,11 @@ class Mixer:
 
     def quadrature(self,signal, signal_fs):
         #mixer sampling frequency is 3x the carrier frequency 
-        fs_mixer = 3*self.conf.flo
+        fs_mixer = 3*self.conf.fcar 
+
+        #flo  = fcarrier 
+        flo_mixer = self.conf.fcar
+
         #match sampling rates for discrete time mixing 
         if signal_fs != fs_mixer:
             signal_resampled, fs_resampled = self.dsp.resample_signal(
@@ -279,7 +283,7 @@ class Mixer:
         
         #local oscillators for I and Q component
         lo_time = np.arange(len(signal_resampled))*(1/fs_mixer)
-        lo_signal = np.exp(1j*2*np.pi*self.conf.flo*lo_time) 
+        lo_signal = np.exp(1j*2*np.pi*flo_mixer*lo_time) 
 
         #mix signal by multiplication 
         mixer_output = signal_resampled * lo_signal

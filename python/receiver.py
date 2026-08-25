@@ -43,7 +43,7 @@ class Receiver():
         self.rx_fs = signal.fs
         self.rx_time = signal.time 
         self.psi_delays = signal.psi
-        """
+        
         if PlotType.signal in self.plot:
             self.signal_plot(
                 "Rx Signal at Element 1",
@@ -51,7 +51,7 @@ class Receiver():
                 self.rxsignals[0],
                 self.rx_fs,
             )
-        """
+        
     def assemble(self):
         if not self.conf.CALIBRATE: 
             #==============================
@@ -62,8 +62,6 @@ class Receiver():
                 self.rx_fs
             )
 
-            """
-            
             if PlotType.signal in self.plot:
                 self.signal_plot(
                     "After D/C at Element=1",
@@ -71,14 +69,17 @@ class Receiver():
                     baseband.elements[0],
                     baseband.fs
                 )
-            """
+            
             #============================
             #       LPF  PER ELEMENT    |
             #===========================
+            flow = self.conf.fbb - self.conf.rb/2
+            fhigh = self.conf.fbb + self.conf.rb/2
             filtered_signals = self.filter.butterworth(
-                cutoff = self.conf.rb/2,
+                cutoff = np.array([flow,fhigh]),
                 fs = baseband.fs,
-                signal =  baseband.elements
+                signal =  baseband.elements,
+                filter_type="bandpass"
             )
             
             if PlotType.signal in self.plot:
@@ -90,7 +91,7 @@ class Receiver():
                 )
             
             #============================
-            #   SPREADER  PER ELEMENT    |
+            #   SPREADER  PER ELEMENT    |view-image
             #===========================
             spread = self.cdmx.spreader(
                 filtered_signals,
@@ -120,9 +121,9 @@ class Receiver():
                     0
                 )
 
-            #============================
-            #    DESPREAD  PER ELEMENT    |
-            #===========================
+            #=====================================
+            #   DIGITAL DESPREAD  PER ELEMENT    |
+            #=====================================
             recovered = self.cdmx.recover(
                 summed_signal,
                 spread.codes,
@@ -153,9 +154,9 @@ class Receiver():
                 )
 
         if self.conf.BEAMFORM:
-        #====================
-        #     BEAMFORMED     |
-        #====================
+        #=============================
+        #     DIGITAL BEAMFORMING    |
+        #=============================
             bf = self.bf.align_combine_signals(
                 self.psi_delays,
                 despread.signals
@@ -191,7 +192,11 @@ class Receiver():
         plt.figure()
         plt.plot(time, asignal, '-o', label="RRC Filtered Signal")
         plt.title(f"{title}")
-        plt.stem(signal.symbol_time, signal.rrcsymbols, 'orange', label="Upsampled Symbols")
+
+        if self.conf.modType == "BPSK":
+            #Real symbol waveform recovered after downconversion 
+            #otherwise QPSK does not look like anything useful
+            plt.stem(signal.symbol_time, signal.rrcsymbols, 'orange', label="Upsampled Symbols")
     
         plt.legend(loc='upper right')
         plt.grid()
@@ -378,7 +383,7 @@ if __name__ == "__main__":
         simtime = totaltime,
         no_elem = 2,
         codefam="WH",
-        modType="BPSK"
+        modType="QPSK"
         )
     #create signal 
     signal = DiscreteSignal(config)
