@@ -11,7 +11,8 @@ class CDMcfg():
     CALIBRATE: bool=False
     INTERFERENCE: bool=False
     CARRIER: bool=True
-    flo: float = 1e6
+    fcar: float = 1e5
+    fbb: float = 1e4
     rb: float = 6.25e6
     lc: int = 32
     sps_chip: int = 2 
