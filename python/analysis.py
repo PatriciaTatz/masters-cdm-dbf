@@ -23,6 +23,12 @@ class BER:
         self.signal = signal
 
     def symbol_sampler(self, time, signal, dt):
+        """
+        signal: signal to sample
+        dt: the sampling time step of the input signal
+        rb: symbol rate
+        samples per symbol = Tsymbol / dt = (1/Rb)/dt = 1/(Rb*dt) 
+        """
         sps = int(1 / (self.conf.rb * dt)) 
         symbols_at_rb = signal[sps::sps]
 
@@ -69,8 +75,8 @@ class BER:
 
         #BER simulation 
         ber_curve = []
-        target_error = 100000
-        maxbits = 10**5
+        target_error = 10**5
+        maxbits = 10**7
         for i, ebno in enumerate(ebno_linear):
             print("snr=",ebno_db[i])
 
@@ -80,7 +86,6 @@ class BER:
             totalerrors = 0
             totalbits = 0
             
-
             for txidx in range(maxSims):
                 
                 noise = []
@@ -165,12 +170,12 @@ if __name__ == "__main__":
     symbols = 1000
     totaltime = symbols*Tb
     
-    Nelem = [2,3,4,5,6,7]
-    lc = 8
-    fam="WH"
+    Nelem = [2]
+    lc = 31
+    fam="Gold"
 
     ber_title = ['Theoretical'] 
-    SNR =  3
+    SNR =  11
     ebno_db = np.arange(0, SNR)
     ebno_linear = 10**(ebno_db/10)
     ber_theory = 0.5*erfc(np.sqrt(ebno_linear))
@@ -185,7 +190,7 @@ if __name__ == "__main__":
             simtime=totaltime,
             no_elem=nelem,
             lc=lc,
-            codeids=np.arange(1,lc),
+            codeids=np.arange(0,lc),
             CALIBRATE=False,
             codefam=fam
             )
@@ -204,7 +209,7 @@ if __name__ == "__main__":
         ber_worst = BER(config_worst,signal)
 
         print(f"N={nelem} with best code pairs={best}")
-        _, curve_best = ber_best.sim(10**3, SNR)
+        _, curve_best = ber_best.sim(10**7, SNR)
         ber_title.append(f"{fam}_N_{str(nelem)}_Lc_{lc}_best")
         ber_data.append(curve_best)
 
