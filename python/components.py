@@ -19,7 +19,7 @@ from commpy.sequences import pnsequence  # type:ignore[import-untyped]
 from scipy.signal import max_len_seq, resample_poly, welch, butter, filtfilt
 import matplotlib.pyplot as plt 
 
-from models import DecorrOutput, Specan, SpreadOutput, ConvOutput
+from models import TruncatedSignals, ResampledSignals, Specan
 
 
 class DiscreteSP:
@@ -89,7 +89,7 @@ class CDMx:
         ss = []
         exp_codes = []
         for i in range(self.conf.no_elem):
-            resampled, fs = self.dsp.resample_signal(targetfs, oldfs, signals[i])
+            resampled, resampled_fs = self.dsp.resample_signal(targetfs, oldfs, signals[i])
             
             code_sequence = np.repeat(codes[i], self.conf.sps_chip)
             tile_repeats = int(np.ceil(len(resampled) / len(code_sequence)))
@@ -107,14 +107,9 @@ class CDMx:
             plt.grid()
             plt.show()
             """
-            #FORTEST
             spread_signal = resampled*expanded_code 
             ss.append(spread_signal)
-            #ss.append(resampled)
-
-        #check = np.dot(exp_codes[0], exp_codes[1])
-
-        time = np.arange(len(ss[0])) * (1/fs)
+        time = np.arange(len(ss[0])) * (1/resampled_fs)
         """
         #PLOT FOR CODE SERIES ONLY
         for i in range(len(exp_codes)):
@@ -129,7 +124,7 @@ class CDMx:
             plt.ylabel("Amplitude")
             plt.show()
         """
-        return SpreadOutput(ss, time, exp_codes, fs)
+        return ResampledSignals(ss, time, resampled_fs)
 
     def recover(self, sumsignal, codes, fs):
         if not self.conf.CALIBRATE:
@@ -140,8 +135,8 @@ class CDMx:
         decorrelated = self.decorrelate(dss, fs)
 
         #removes delay and fs unchanged 
-        time = np.arange(len(decorrelated[0]))*(1/fs)
-        return DecorrOutput(decorrelated, time, fs)
+        new_time = np.arange(len(decorrelated[0]))*(1/fs)
+        return TruncatedSignals(new_time, decorrelated)
 
     def despread(self, sumsignal, codes):
         #Despread signal by multiplying with code block
@@ -200,9 +195,10 @@ class Filter:
 
         return filtered_delay, symbols
 
-    def butterworth(self, cutoff, fs, signal, filter_type="low"):
+    def butterworth(self, cutoff, fs, signals, filter_type="low"):
         #fs is sampling frequency! 
         nyquist = fs/2
+        print(cutoff)
         #cutoff = 1.5*self.rb
         b, a = butter(
             N=4, 
@@ -210,21 +206,20 @@ class Filter:
             btype=filter_type
         )
         #filter can be applied to an array type which signal is 
-        return filtfilt(b,a,signal)
+        filteredsignals = filtfilt(b,a,signals)
+        return filteredsignals
 
 
 class Beamformer:    
     def align_combine_signals(self,psi,sig):
         #output aligned signals and combined
-
         beamformed = sig[0].copy()
         #align rest of signals 
         for i in range(1,len(sig)):
             #applying the phase in opposite sign  - ONLY KEEPS REAL PART FOR BPSK FOR NOW 
             beamformed += np.real(sig[i]*np.exp(+1j*psi[i]))
     
-        return beamformed
-
+        return Signals(bftime, beamformed)
 
 class Mixer:
     def __init__(self,conf):
@@ -238,29 +233,16 @@ class Mixer:
         #for superhet, flo != fcar, just above zero-IF
         flo_mixer = self.conf.fcar - self.conf.fbb
         
-        #match sampling rates for discrete time mixing 
         mixer_output = [] 
         for i in range(self.conf.no_elem): 
-            if signal_fs != fs_mixer:
-                print("I should not be here")
-                signal_resampled, fs_resampled = self.dsp.resample_signal(
-                    fs_mixer,
-                    signal_fs,
-                    signal[i])
-                if fs_resampled != fs_mixer:
-                    raise ValueError("Resampling did not work!")
-            else:
-                fs_resampled = signal_fs
-                signal_resampled = signal[i]
-            
-            lo_time = np.arange(len(signal_resampled))*(1/fs_mixer)
+            lo_time = np.arange(len(signal[i]))*(1/fs_mixer)
             lo_signal = np.cos(2*np.pi*flo_mixer*lo_time)
 
             #mix signal by multiplication 
-            mixed_signal = signal_resampled * lo_signal 
+            mixed_signal = signal[i] * lo_signal 
             mixer_output.append(mixed_signal)
 
-        return ConvOutput(fs_mixer, lo_time, mixer_output)
+        return mixer_output
 
     def quadrature(self,signal, signal_fs):
         #mixer sampling frequency is 3x the carrier frequency 
@@ -288,18 +270,16 @@ class Mixer:
         #mix signal by multiplication 
         mixer_output = signal_resampled * lo_signal
 
-        return fs_mixer, lo_time, mixer_output 
+        return ResampledSignals(mixer_output, lo_time, fs_mixer)
 
 class SpecAn: 
-    def calculate_psd(self ,fs, signal,psdtype="normal"):
+    def calculate_psd(self ,fs, signal):
         f, Pxx = welch(
             signal,
             fs=fs,
-            window='hann',
-            nperseg=4096,
-            scaling='density',
-            return_onesided=False,
-            noverlap=0
+            window='hann', #gets rid of line across 
+            nperseg=len(signal),
+            scaling='spectrum'
         )
 
         f = np.fft.fftshift(f)
