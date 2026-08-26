@@ -36,7 +36,6 @@ class DiscreteSP:
 
         newfs = oldfs * up / down
 
-
         return rsignal, newfs
 
 class CDMx:
@@ -81,26 +80,20 @@ class CDMx:
         return codes 
 
 
-    def spreader(self, signals, fs_signal,  codes):
-        fs_code = self.conf.sps_chip * self.conf.lc * fs_signal
+    def spreader(self, signals, fs_signal, f_signal, codes):
+        fs_code = self.conf.sps_chip * self.conf.lc * f_signal
         #fs_code = self.conf.sps_chip * self.conf.rc #atleast double the chip frequency
         ss = []
         exp_codes = []
         #create code sequence 
         for i in range(self.conf.no_elem):
             #upsample is required to do discrete multiplication 
-            if fs_code > fs_signal:
+            if fs_code != fs_signal:
                 resampled_signal, fs_resampled = self.dsp.resample_signal(
                     targetfs=fs_code,
                     oldfs=fs_signal,
                     signal=signals[i]
                 )
-
-            #downsample has to be indexing because resample_poly will do a poly-fit which distorts the signal 
-            elif fs_code < fs_signal:
-                ratio = fs_signal/fs_code
-                resampled_signal = signals[i][::int(ratio)]
-                fs_resampled = fs_code #unchanged
 
             code_sequence = np.repeat(codes[i], self.conf.sps_chip)                       #upsampled
             tile_repeats = int(np.ceil(len(resampled_signal) / len(code_sequence)))       #calculate number of repeats required 

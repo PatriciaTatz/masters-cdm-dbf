@@ -95,7 +95,8 @@ class Receiver():
             #time series goes from FROM RX_TIME -> SPREAD_BB.TIME
             self.spread_bb = self.cdmx.spreader(
                 signals=self.filtered_bb,
-                fs_signal= self.rx_fs,
+                fs_signal = self.rx_fs,
+                f_signal = self.conf.fbb,
                 codes=self.codes
             )
 
@@ -109,11 +110,11 @@ class Receiver():
             #====================
             summed_signal = [sum(values) for values in zip(*self.spread_bb.signals)]
             if PlotType.summed in self.plot: 
-                self.sum_plot(spread_bb.time, summed_signal)
+                self.sum_plot(self.spread_bb.time, summed_signal)
             
             if PlotType.summed in self.plot:
                 self.spread_plot(
-                    self.rx_time, filtered_bb,  
+                    self.rx_time, self.filtered_bb,  
                     self.spread_bb.time, [np.array(summed_signal)], 
                     self.spread_bb.fs
                 )
@@ -121,9 +122,13 @@ class Receiver():
             #=====================================
             #        DIGITAL DOWNCONVERTER       |
             #=====================================
+            ddc_signal = self.mixer.quadrature(
+                        summed_signal,
+                        fs_signal=self.spread_bb.fs,
+                        flo=self.conf.fbb
+                    )
 
             
-
             #=====================================
             #   DIGITAL DESPREAD  PER ELEMENT     |
             #   NOT RESAMPLED BUT MF DELAY TRUNC  |
@@ -240,8 +245,9 @@ class Receiver():
         plt.rcParams['font.size'] = 15
         plt.figure(figsize=(15,7))
         plt.title(f"Spread Signals of Element={index}")
-        plt.plot(self.spread_bb.time, self.spread_bb.signals[index], '-og', label="Spread signal")
         plt.plot(self.rx_time, self.filtered_bb[index], '-ob', label=f"Rx signal")
+        plt.plot(self.spread_bb.time, self.spread_bb.signals[index], '-og', label="Spread signal")
+
         plt.xlabel("Time (seconds)")
         plt.ylabel("Amplitude")
         #plt.stem(tbefore[:len(symbols)],symbols, 'orange')
@@ -367,7 +373,7 @@ if __name__ == "__main__":
     Tb = 1/Rb
     symbols = 10
     totaltime = symbols*Tb
-    lc = 4
+    lc = 8
     config = CDMcfg(
         rb = Rb,
         lc = lc,
@@ -383,6 +389,6 @@ if __name__ == "__main__":
     signal = DiscreteSignal(config)
 
     #initiate and assemble receiver 
-    rx = Receiver(config, {PlotType.recovered}) 
+    rx = Receiver(config, PlotType.all()) 
     rx.setup(signal)
     rx.assemble()

@@ -134,7 +134,8 @@ class DiscreteSignal:
         #modulate to carrier
         modsignal = self.mixer.quadrature(
             signal,
-            self.conf.fs
+            fs_signal = self.conf.fs,
+            flo = self.conf.fcar
         )
         #bandpass filter to remove harmonics caused by resampling 
         flow = self.conf.fcar-self.conf.rb
