@@ -133,7 +133,6 @@ class CDMx:
             dss = sumsignal 
 
         decorrelated = self.decorrelate(dss, fs)
-
         #removes delay and fs unchanged 
         new_time = np.arange(len(decorrelated[0]))*(1/fs)
         return Signals_Time(new_time, decorrelated)
@@ -163,12 +162,11 @@ class Filter:
         self.conf = conf
 
     def rrcfilter(self, signal, fs, mode="txmode"):
-        sps_symbol  = int(round(fs / self.conf.rb)) #changes from config due to resampling
-        ts = 1 / self.conf.rb #symbol period
-        ntaps = self.conf.span*sps_symbol + 1  #must be odd, total length of the filter 
-        
         #upsampling
         if mode == "txmode":
+            sps_symbol  = int(round(fs / self.conf.rb)) #changes from config due to resampling
+            ts = 1 / self.conf.rb #symbol period
+
             prepad = sps_symbol
             symbols = np.zeros(
                 prepad + len(signal)*sps_symbol,
@@ -176,8 +174,12 @@ class Filter:
             symbols[prepad::sps_symbol] = signal
             samples = symbols
         else:
+            sps_symbol = int(round(fs/self.conf.fbb)) #now we are filtering to resolve the fbb 
+            ts = 1/self.conf.fbb
+
             samples = signal
         
+        ntaps = self.conf.span*sps_symbol + 1  #must be odd, total length of the filter 
         #apply filter
         dt_filter, h_rrc = filter.rrcosfilter(ntaps, self.conf.alpha, ts, fs)
         #h_rrc /= np.sqrt(np.sum(h_rrc**2))
@@ -188,7 +190,7 @@ class Filter:
 
         if mode == "rxmode":
             symbols = filtered_delay[::sps_symbol]
-            filtered_delay = filtered[h_delay+1:-h_delay+1]
+            filtered_delay = filtered[h_delay+1:-h_delay+1]/np.max(filtered)
 
         return filtered_delay, symbols
 
@@ -287,10 +289,10 @@ class SpecAn:
                 signal, 
                 fs=fs, 
                 window='hann',             # Window function applied to each segment
-                nperseg=len(signal)/8,     #frequency bins averaged over segments
+                nperseg=len(signal),     #frequency bins averaged over segments
                 return_onesided=False,      #double sided to see rrc filtered effect
                 scaling='density',       # Returns V^2/Hz (use 'spectrum' for V^2)
-                noverlap=len(signal)/(8*2)  #overlap of frequency bins 
+                noverlap=0#overlap of frequency bins 
             )
         #this shifts a twosided spectrum from 0 +f -f into -f 0 +f 
         f = np.fft.fftshift(f)
