@@ -29,6 +29,5 @@ class CDMcfg():
         self.ts = 1/self.rb 
         self.fs = self.sps_symbol / self.ts  #sps_symbol * rb due to upsampling 
         self.b = self.rb * (1 + self.alpha)
-        self.rc = self.rb * self.lc
         if len(self.codeids) == 0:
             self.codeids = np.arange(0,self.lc)
