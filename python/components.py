@@ -9,7 +9,7 @@ RF components
 """
 
 from enum import Enum
-from math import ceil, log2
+from math import ceil, log2, gcd
 
 import commpy.filters as filter  # type:ignore[import-untyped]
 import komm as km  # type:ignore[import-untyped]
@@ -34,12 +34,11 @@ class DiscreteSP:
             ds = int(round(oldfs/targetfs))
         else:
             ups = 1
-            ds = 1
-        
+            ds = 1        
         newfs = oldfs * ups / ds #for imperfect match
-        rs = resample_poly(signal, ups, ds)
+        rsignal = resample_poly(signal, ups, ds)
 
-        return rs, newfs
+        return rsignal/np.max(rsignal), newfs
 
 class CDMx:
     def __init__(self, conf):
@@ -84,25 +83,28 @@ class CDMx:
 
 
     def spreader(self, signals, fs_signal, codes):
-        fs_code = self.conf.sps_chip * self.conf.rc #atleast double the chip frequency
+        fs_code = self.conf.sps_chip * self.conf.lc * fs_signal
+        #fs_code = self.conf.sps_chip * self.conf.rc #atleast double the chip frequency
         fs_signal = fs_signal
         ss = []
         exp_codes = []
         for i in range(self.conf.no_elem):
             #resample signal to match sample frequency of chip 
-            resampled, resampled_fs = self.dsp.resample_signal(
+            resampled, fs_resampled = self.dsp.resample_signal(
                 targetfs=fs_code,
                 oldfs=fs_signal,
                 signal=signals[i]
             )
-            
+            if (fs_resampled > 1.1*fs_code) | (fs_resampled<0.1*fs_code):
+                raise ValueError("Signal sampling frequency not equal to code sampling frequency!")
             #extend code sequence to the same length as the resampled signal 
             code_sequence = np.repeat(codes[i], self.conf.sps_chip)
             tile_repeats = int(np.ceil(len(resampled) / len(code_sequence)))
             expanded_code = np.tile(code_sequence, tile_repeats)[:len(resampled)]
             exp_codes.append(expanded_code)
-            """
-            #PLOT FOR RESAMPLED SIGNALxCODES
+            
+
+            #PLOT FOR RESAMPLED SIGNALxCODES BEFORE SPREADING
             plt.figure()
             plt.plot(expanded_code, '--o', label=f"Code: {codes[i]}")
             plt.plot(resampled, '-o', label="Resampled Rx Signal")
@@ -112,13 +114,16 @@ class CDMx:
             plt.xlabel("Sample index")
             plt.grid()
             plt.show()
-            """
+            
+            
+            #spreading operation
             spread_signal = resampled*expanded_code 
             ss.append(spread_signal)
         
-        time = np.arange(len(ss[0])) * (1/resampled_fs)
+        time = np.arange(len(ss[0])) * (1/fs_resampled)
 
         if max(time)>self.conf.simtime*1.2:
+            print(max(time))
             raise ValueError("Something went wrong with upsampling of the time series! Exceeds sim time")
         """
         #PLOT FOR CODE SERIES ONLY
@@ -134,7 +139,7 @@ class CDMx:
             plt.ylabel("Amplitude")
             plt.show()
         """
-        return SpreadSignals(ss, time, exp_codes, resampled_fs)
+        return SpreadSignals(ss, time, exp_codes, fs_resampled)
 
     def recover(self, sumsignal, codes, fs):
         if not self.conf.CALIBRATE:
