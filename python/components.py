@@ -18,6 +18,7 @@ import numpy as np
 from commpy.sequences import pnsequence  # type:ignore[import-untyped]
 from scipy.signal import periodogram, max_len_seq, resample_poly, welch, butter, filtfilt
 import matplotlib.pyplot as plt 
+from fractions import Fraction
 
 from models import Signals_Time, ResampledSignals, Specan, SpreadSignals
 
@@ -26,16 +27,15 @@ class DiscreteSP:
     #for discrete mixing you need to have equivalent sampling frequency 
 
     def resample_signal(self,targetfs, oldfs, signal):
-        if oldfs < targetfs:
-            ups = int(round(targetfs/oldfs))
-            ds = 1 
-        elif oldfs > targetfs:
-            raise ValueError("You should not be downsampling here!")
-        else:
-            ups = 1
-            ds = 1        
-        newfs = oldfs * ups / ds #for imperfect match
-        rsignal = resample_poly(signal, ups, ds)
+        ratio = Fraction(targetfs / oldfs).limit_denominator()
+
+        up = ratio.numerator
+        down = ratio.denominator
+
+        rsignal = resample_poly(signal, up, down)
+
+        newfs = oldfs * up / down
+
 
         return rsignal, newfs
 
@@ -250,15 +250,15 @@ class Mixer:
 
         return mixer_output
 
-    def quadrature(self,signal,fs_signal):
+    def quadrature(self,signal,fs_signal, flo):
         #mixer sampling frequency is 3x the carrier frequency 
-        fs_mixer = 3*self.conf.fcar 
+        fs_mixer = 3*self.conf.fcar
 
         #flo  = fcarrier 
-        flo_mixer = self.conf.fcar
+        flo_mixer = flo
 
         #match sampling rates for discrete time mixing 
-        if fs_signal != fs_mixer:
+        if fs_signal < fs_mixer:
             signal_resampled, fs_resampled = self.dsp.resample_signal(
                 targetfs=fs_mixer,
                 oldfs=fs_signal,
@@ -266,6 +266,7 @@ class Mixer:
             if fs_resampled != fs_mixer:
                 raise ValueError("Resampling did not work!")
         else:
+            
             fs_resampled = fs_signal
             signal_resampled = signal
         
