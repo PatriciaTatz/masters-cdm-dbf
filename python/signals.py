@@ -119,7 +119,7 @@ class DiscreteSignal:
         #carrier frequency = flo in config 
         #cutoff frequency is equal to pulse shaped bandwidth 
 
-        
+        """
         #PLOT FOR BEFORE THE MODULATION
         plt.figure()
         plt.title(f"Before U/C: Power Spectrum Density of Tx Signal on Element=1")
@@ -130,7 +130,7 @@ class DiscreteSignal:
         plt.plot(specan.f, specan.Pxx_dB, '-b')
         plt.grid()
         plt.ylabel("Frequency kHz")
-        
+        """
         #modulate to carrier
         modsignal = self.mixer.quadrature(
             signal,

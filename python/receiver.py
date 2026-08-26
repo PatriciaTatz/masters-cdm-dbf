@@ -53,20 +53,22 @@ class Receiver():
           
     def assemble(self):
         if not self.conf.CALIBRATE: 
-            #==============================
-            #        D/C PER ELEMENT     |
-            #==============================            
+            #===================================
+            #   D/C TO BASEBAND PER ELEMENT     |
+            #   Fsignal change not Fs_signal!!  |
+            #===================================            
             baseband = self.mixer.superhet(
                 self.rxsignals,
                 self.rx_fs
             )
-
+            """
             if PlotType.signal in self.plot:
                 self.signal_plot(
                     "After D/C at Element=1",
                     self.rx_time, baseband[0],
                     self.rx_fs
                 )
+            """
             #===============================
             #       LPF PER ELEMENT        |
             #   TO REMOVE SUPERHET IMAGE   |
@@ -117,6 +119,12 @@ class Receiver():
                 )
 
             #=====================================
+            #        DIGITAL DOWNCONVERTER       |
+            #=====================================
+
+            
+
+            #=====================================
             #   DIGITAL DESPREAD  PER ELEMENT     |
             #   NOT RESAMPLED BUT MF DELAY TRUNC  |
             #=====================================
@@ -128,7 +136,7 @@ class Receiver():
             
             if PlotType.recovered in self.plot:
                 self.recover_plot(
-                    self.rx_time, filtered_bb, 
+                    self.rx_time, self.filtered_bb, 
                     recovered.time, recovered.signals,
                     self.spread_bb.fs,
                     0
@@ -138,14 +146,15 @@ class Receiver():
             #WHEN CALIBRATING: ONLY PASSING THROUGH MATCHED FILTER
             recovered = self.cdmx.recover(
                 filtered_signals,
-                np.zeros(self.conf.no_elem),
-                self.conf.fs
+                self.spread.codes,
+                self.spread_bb.fs
                 )
+
             if PlotType.recovered in self.plot:
                 self.recover_plot(
-                    self.time, filtered_bb, 
+                    self.time, self.filtered_bb, 
                     recovered.time, recovered.signals,
-                    spread_bb.fs,
+                    self.spread_bb.fs,
                     0
                 )
 
@@ -164,7 +173,7 @@ class Receiver():
                     recovered.time, bf,
                     0
                 )  
-            return ResampledSignals(bf, recovered.time, spread_bb.fs)
+            return ResampledSignals(bf, recovered.time, self.spread_bb.fs)
         else:
             return ResampledSignals(recovered.signals, recovered.time, spread_bb.fs)
 
@@ -231,8 +240,8 @@ class Receiver():
         plt.rcParams['font.size'] = 15
         plt.figure(figsize=(15,7))
         plt.title(f"Spread Signals of Element={index}")
-        plt.plot(self.spread_bb.time, self.spread_bb.signals[index], '-g', label="Spread signal")
-        plt.plot(self.rx_time, self.filtered_bb[index], '-b', label=f"Rx signal")
+        plt.plot(self.spread_bb.time, self.spread_bb.signals[index], '-og', label="Spread signal")
+        plt.plot(self.rx_time, self.filtered_bb[index], '-ob', label=f"Rx signal")
         plt.xlabel("Time (seconds)")
         plt.ylabel("Amplitude")
         #plt.stem(tbefore[:len(symbols)],symbols, 'orange')
@@ -356,7 +365,7 @@ if __name__ == "__main__":
     
     Rb = 1e3
     Tb = 1/Rb
-    symbols = 500
+    symbols = 10
     totaltime = symbols*Tb
     lc = 4
     config = CDMcfg(
@@ -374,6 +383,6 @@ if __name__ == "__main__":
     signal = DiscreteSignal(config)
 
     #initiate and assemble receiver 
-    rx = Receiver(config, {PlotType.signal}) 
+    rx = Receiver(config, {PlotType.recovered}) 
     rx.setup(signal)
     rx.assemble()

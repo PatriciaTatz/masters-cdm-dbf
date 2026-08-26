@@ -30,8 +30,7 @@ class DiscreteSP:
             ups = int(round(targetfs/oldfs))
             ds = 1 
         elif oldfs > targetfs:
-            ups = 1 
-            ds = int(round(oldfs/targetfs))
+            raise ValueError("You should not be downsampling here!")
         else:
             ups = 1
             ds = 1        
@@ -82,49 +81,42 @@ class CDMx:
         return codes 
 
 
-    def spreader(self, signals, fs_signal, codes):
+    def spreader(self, signals, fs_signal,  codes):
         fs_code = self.conf.sps_chip * self.conf.lc * fs_signal
         #fs_code = self.conf.sps_chip * self.conf.rc #atleast double the chip frequency
-        fs_signal = fs_signal
         ss = []
         exp_codes = []
+        #create code sequence 
         for i in range(self.conf.no_elem):
-            #resample signal to match sample frequency of chip 
-            resampled, fs_resampled = self.dsp.resample_signal(
-                targetfs=fs_code,
-                oldfs=fs_signal,
-                signal=signals[i]
-            )
-            if (fs_resampled > 1.1*fs_code) | (fs_resampled<0.1*fs_code):
-                raise ValueError("Signal sampling frequency not equal to code sampling frequency!")
-            #extend code sequence to the same length as the resampled signal 
-            code_sequence = np.repeat(codes[i], self.conf.sps_chip)
-            tile_repeats = int(np.ceil(len(resampled) / len(code_sequence)))
-            expanded_code = np.tile(code_sequence, tile_repeats)[:len(resampled)]
-            exp_codes.append(expanded_code)
-            
-            """
-            #PLOT FOR RESAMPLED SIGNALxCODES BEFORE SPREADING
-            plt.figure()
-            plt.plot(expanded_code, '--o', label=f"Code: {codes[i]}")
-            plt.plot(resampled, '-o', label="Resampled Rx Signal")
-            plt.legend(loc='upper right')
-            plt.title("Discrete Signal Mixing: Code x Signal", fontsize=14)
-            plt.ylabel("Amplitude")
-            plt.xlabel("Sample index")
-            plt.grid()
-            plt.show()
-            """
-            
-            #spreading operation
-            spread_signal = resampled*expanded_code 
-            ss.append(resampled)
-        
-        time = np.arange(len(ss[0])) * (1/fs_resampled)
+            #upsample is required to do discrete multiplication 
+            if fs_code > fs_signal:
+                resampled_signal, fs_resampled = self.dsp.resample_signal(
+                    targetfs=fs_code,
+                    oldfs=fs_signal,
+                    signal=signals[i]
+                )
 
-        if max(time)>self.conf.simtime*1.2:
-            print(max(time))
+            #downsample has to be indexing because resample_poly will do a poly-fit which distorts the signal 
+            elif fs_code < fs_signal:
+                ratio = fs_signal/fs_code
+                resampled_signal = signals[i][::int(ratio)]
+                fs_resampled = fs_code #unchanged
+
+            code_sequence = np.repeat(codes[i], self.conf.sps_chip)                       #upsampled
+            tile_repeats = int(np.ceil(len(resampled_signal) / len(code_sequence)))       #calculate number of repeats required 
+            expanded_code = np.tile(code_sequence, tile_repeats)[:len(resampled_signal)]  #expand then trim to signal length  
+            exp_codes.append(expanded_code)              
+
+            #spreading operation
+            spread_signal = resampled_signal*expanded_code #resampled*expanded_code 
+            ss.append(spread_signal)
+        
+        time_before = np.arange(len(signals[i]))/fs_signal
+        time = np.arange(len(ss[0]))/fs_resampled
+
+        if max(time)>max(time_before)*1.2:
             raise ValueError("Something went wrong with upsampling of the time series! Exceeds sim time")
+
         """
         #PLOT FOR CODE SERIES ONLY
         for i in range(len(exp_codes)):
@@ -132,7 +124,7 @@ class CDMx:
             plt.rcParams['font.size'] = 15
             plt.figure()
             plt.title(f"Code sequence index={i+1}")
-            plt.plot(time, exp_codes[i], '-g', label="WH Code Sequence")
+            plt.plot(time, exp_codes[i], '-og', label="WH Code Sequence")
             plt.legend(loc='upper right')
             plt.grid()
             plt.xlabel("Time (seconds)")
@@ -175,15 +167,12 @@ class CDMx:
 
 class Filter:
     def __init__(self, conf):
-        self.alpha = conf.alpha
-        self.rb = conf.rb
-        self.span = conf.span 
-        self.sps_symbol = conf.sps_symbol 
+        self.conf = conf
 
     def rrcfilter(self, signal, fs, mode="txmode"):
-        sps_symbol  = int(round(fs / self.rb)) #changes from config due to resampling
-        ts = 1 / self.rb 
-        ntaps = self.span*sps_symbol + 1  #must be odd, total length of the filter 
+        sps_symbol  = int(round(fs / self.conf.rb)) #changes from config due to resampling
+        ts = 1 / self.conf.rb #symbol period
+        ntaps = self.conf.span*sps_symbol + 1  #must be odd, total length of the filter 
         
         #upsampling
         if mode == "txmode":
@@ -197,8 +186,8 @@ class Filter:
             samples = signal
         
         #apply filter
-        dt_filter, h_rrc = filter.rrcosfilter(ntaps, self.alpha, ts, fs)
-        h_rrc /= np.sqrt(np.sum(h_rrc**2))
+        dt_filter, h_rrc = filter.rrcosfilter(ntaps, self.conf.alpha, ts, fs)
+        #h_rrc /= np.sqrt(np.sum(h_rrc**2))
         filtered = np.convolve(samples, h_rrc, mode='full')
         h_delay = (ntaps-1)//2
         
@@ -304,12 +293,12 @@ class SpecAn:
                 signal, 
                 fs=fs, 
                 window='hann',             # Window function applied to each segment
-                nperseg=len(signal)/8,
-                return_onesided=False,
+                nperseg=len(signal)/8,     #frequency bins averaged over segments
+                return_onesided=False,      #double sided to see rrc filtered effect
                 scaling='density',       # Returns V^2/Hz (use 'spectrum' for V^2)
-                noverlap=len(signal)/(8*2)
+                noverlap=len(signal)/(8*2)  #overlap of frequency bins 
             )
-
+        #this shifts a twosided spectrum from 0 +f -f into -f 0 +f 
         f = np.fft.fftshift(f)
         X = np.fft.fftshift(X)
         return Specan(f,X/np.max(X))
