@@ -72,38 +72,37 @@ class Receiver():
             #============================
             #       LPF  PER ELEMENT    |
             #===========================
-            flow = self.conf.fbb - self.conf.rb/2
-            fhigh = self.conf.fbb + self.conf.rb/2
-            filtered_bb = self.filter.butterworth(
+            flow = self.conf.fbb - self.conf.rb
+            fhigh = self.conf.fbb + self.conf.rb
+            self.filtered_bb = self.filter.butterworth(
                 cutoff = np.array([flow,fhigh]),
                 fs = self.rx_fs,
                 signals =  baseband,
                 filter_type="bandpass"
             )
             
-            """
+            
             if PlotType.signal in self.plot:
                 self.signal_plot(
                     "After LPF at Element=1",
-                    self.rx_time, filtered_bb[0],
+                    self.rx_time, self.filtered_bb[0],
                     self.rx_fs
                 )
-            """
+        
             #============================
             #   SPREADER PER ELEMENT     |
             # CHANGES SAMPLING FREQUENCY |
             #============================
             #time series goes from FROM RX_TIME -> SPREAD_BB.TIME
-            spread_bb = self.cdmx.spreader(
-                filtered_bb,
-                self.codes,
+            self.spread_bb = self.cdmx.spreader(
+                signals=self.filtered_bb,
+                fs_signal= self.rx_fs,
+                codes=self.codes
             )
 
             if PlotType.spread in self.plot:
                 self.spread_plot(
-                    self.rx_time, filtered_bb,  
-                    spread_bb.time, spread_bb.signals, 
-                    spread_bb.fs
+                    index=0
                 )
     
             #====================
@@ -117,8 +116,7 @@ class Receiver():
                 self.spread_plot(
                     self.rx_time, filtered_bb,  
                     spread_bb.time, [np.array(summed_signal)], 
-                    spread_bb.fs,
-                    0
+                    spread_bb.fs
                 )
 
             #=====================================
@@ -204,7 +202,7 @@ class Receiver():
         plt.xlabel("Time (seconds)")
         plt.ylabel("Amplitude")
     
-        plt.figure()
+        plt.figure(figsize=(15,7))
         plt.title(f"PSD of {title}")
         specan = SpecAn().calculate_psd(
             fsample,
@@ -224,57 +222,43 @@ class Receiver():
             '-b' 
         )
         
+        plt.axvline(x=98500, color='red', linestyle='--', linewidth=2, label='Threshold')
         plt.ylabel("Power (dB)")
         plt.xlabel("Frequency (MHz)")
         plt.grid()
-        plt.xlim(0, 1.5*self.conf.fcar)  
+        #plt.xlim(0, 1.5*self.conf.fcar) 
+        plt.ylim(-90,0)
         plt.show()
 
-
     def spread_plot(self, 
-        tbefore,
-        before_signal,
-        tafter,
-        after_signal,
-        fs,
         index=0
         ):
 
         plt.rcParams['font.size'] = 15
-        plt.figure()
-        plt.title(f"Spread Signals Combined")
-        plt.plot(tafter, after_signal[index], '-g', label="Spread signal")
-        #plt.plot(tbefore, before_signal[index], '-b', label=f"Rx signal")
+        plt.figure(figsize=(15,7))
+        plt.title(f"Spread Signals of Element={index}")
+        plt.plot(self.spread_bb.time, self.spread_bb.signals[index], '-g', label="Spread signal")
+        plt.plot(self.rx_time, self.filtered_bb[index], '-b', label=f"Rx signal")
         plt.xlabel("Time (seconds)")
         plt.ylabel("Amplitude")
         #plt.stem(tbefore[:len(symbols)],symbols, 'orange')
         plt.legend(loc='upper right')
         plt.grid()
-        
-        """
-        plt.figure()
-        plt.title(f"Spread Composite Signal")
-        plt.plot(tafter, after_signal, '-', label="Composite signal")
-        plt.xlabel("Time (seconds)")
-        plt.ylabel("Amplitude")
-        #plt.legend()
-        plt.grid()
-        """
 
         specan = SpecAn().calculate_psd(
-            fs,
-            after_signal[index]
+            self.spread_bb.fs,
+            self.spread_bb.signals[index]
             )
         
         #FORPLOT
         #np.save(f"sps_{self.conf.lc}_psd_f", specan.f)
         #np.save(f"sps_{self.conf.lc}_psd_Pxx_dB", specan.Pxx_dB)
 
-        plt.figure()
-        plt.plot(specan.f/1e6, specan.Pxx_dB, '-g')
+        plt.figure(figsize=(15,7))
+        plt.plot(specan.f, specan.Pxx_dB, '-g')
         plt.xlabel("Frequency (MHz)")
         plt.ylabel("Amplitude")
-        plt.title(f"PSD Spread Signals Combined")
+        plt.title(f"PSD of Spread Signals of Element={index}")
         """
         plt.text(
             0.02, 0.95,
@@ -289,6 +273,8 @@ class Receiver():
         plt.ylim(-40, 0)
         plt.yticks(np.arange(-30, 1, 20))
         plt.xlabel("Frequency (MHz)")
+        #plt.xlim(0, 1.5*self.spread_bb.fs) 
+        plt.ylim(-90,0)
         plt.grid()
         plt.show()
 
@@ -301,7 +287,7 @@ class Receiver():
         index=0
         ):
         plt.rcParams['font.size'] = 15
-        plt.figure()
+        plt.figure(figsize=(15,7))
         plt.title(f"Recovered Signal at Element Path={index+1}")
         plt.plot(tbefore, before_signal[index], '--b', label=f"Rx signal")
         plt.plot(tafter, after_signal[index], '-g', linewidth='3', label="Recovered signal")
@@ -317,8 +303,8 @@ class Receiver():
             )
 
 
-        plt.figure()
-        plt.plot(specan.f/1e6, specan.Pxx_dB, label="PSD")
+        plt.figure(figsize=(15,7))
+        plt.plot(specan.f, specan.Pxx_dB, label="PSD")
         plt.xlabel("Frequency (MHz)")
         plt.ylabel("Amplitude")
         plt.title(f"PSD Recovered Signal at Element Path={index+1}")
@@ -347,7 +333,7 @@ class Receiver():
         index=0
         ):
         plt.rcParams['font.size'] = 15
-        plt.figure()
+        plt.figure(figsize=(15,7))
         plt.title(f"Combined and Phase aligned Signal")
         plt.plot(tbefore, before_signal[index], '--b',alpha=0.5, label=f"Rx signal + Interference")
         plt.plot(tafter, after_signal, '-g', linewidth=3, label="Beamformed Signal")
@@ -379,23 +365,24 @@ if __name__ == "__main__":
     
     Rb = 1e3
     Tb = 1/Rb
-    symbols = 100
+    symbols = 10
     totaltime = symbols*Tb
-
+    lc = 4
     config = CDMcfg(
         rb = Rb,
-        lc = 4,
+        lc = lc,
         sps_chip= 2,
         alpha = 0.5,
         simtime = totaltime,
         no_elem = 2,
         codefam="WH",
-        modType="BPSK"
+        modType="BPSK",
+        codeids=(np.arange(1,lc))
         )
     #create signal 
     signal = DiscreteSignal(config)
 
     #initiate and assemble receiver 
-    rx = Receiver(config, PlotType.all()) 
+    rx = Receiver(config, {PlotType.signal}) 
     rx.setup(signal)
     rx.assemble()

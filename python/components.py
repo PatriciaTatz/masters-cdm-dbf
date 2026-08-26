@@ -16,7 +16,7 @@ import komm as km  # type:ignore[import-untyped]
 import matplotlib.pyplot as plt
 import numpy as np
 from commpy.sequences import pnsequence  # type:ignore[import-untyped]
-from scipy.signal import max_len_seq, resample_poly, welch, butter, filtfilt
+from scipy.signal import max_len_seq, resample_poly, welch, butter, filtfilt, sosfiltfilt
 import matplotlib.pyplot as plt 
 
 from models import Signals_Time, ResampledSignals, Specan, SpreadSignals
@@ -38,7 +38,7 @@ class DiscreteSP:
         newfs = oldfs * ups / ds #for imperfect match
         rsignal = resample_poly(signal, ups, ds)
 
-        return rsignal/np.max(rsignal), newfs
+        return rsignal, newfs
 
 class CDMx:
     def __init__(self, conf):
@@ -103,7 +103,7 @@ class CDMx:
             expanded_code = np.tile(code_sequence, tile_repeats)[:len(resampled)]
             exp_codes.append(expanded_code)
             
-
+            """
             #PLOT FOR RESAMPLED SIGNALxCODES BEFORE SPREADING
             plt.figure()
             plt.plot(expanded_code, '--o', label=f"Code: {codes[i]}")
@@ -114,11 +114,11 @@ class CDMx:
             plt.xlabel("Sample index")
             plt.grid()
             plt.show()
-            
+            """
             
             #spreading operation
             spread_signal = resampled*expanded_code 
-            ss.append(spread_signal)
+            ss.append(resampled)
         
         time = np.arange(len(ss[0])) * (1/fs_resampled)
 
@@ -214,13 +214,15 @@ class Filter:
         #fs is sampling frequency! 
         nyquist = fs/2
         #cutoff = 1.5*self.rb
-        b, a = butter(
+        #3dB point at cutoff frequency 
+        print(cutoff)
+        a,b = butter(
             N=4, 
             Wn = cutoff/nyquist, 
             btype=filter_type
         )
         #filter can be applied to an array type which signal is 
-        filteredsignals = filtfilt(b,a,signals)
+        filteredsignals = filtfilt(a,b, signals)
         return filteredsignals
 
 
@@ -296,7 +298,7 @@ class SpecAn:
         Pxx = np.fft.fftshift(np.fft.fft(signal))
         PSD = np.abs(Pxx)**2 / (fs * N)
 
-        f = np.fft.fftshift(np.fft.fftfreq(N, 1/fs))
+        f = np.fft.fftfreq(N, 1/fs)
 
         Pxx_dB =  10*np.log10(PSD + 1e-15) 
         Pxx_dB -= np.max(Pxx_dB) #normalise to caarrier, dB/Hz this is implicit and arbitrary

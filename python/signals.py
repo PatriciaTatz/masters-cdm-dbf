@@ -136,17 +136,18 @@ class DiscreteSignal:
             signal,
             self.conf.fs
         )
-        
         #bandpass filter to remove harmonics caused by resampling 
-        flow = self.conf.fcar - self.conf.b
-        fhigh = self.conf.fcar + self.conf.b
+        flow = self.conf.fcar*0.9
+        fhigh = self.conf.fcar*1.1
         filtered_modsignal = self.filters.butterworth(
             cutoff = np.array([flow,fhigh]),
             fs = modsignal.fs,
             signals = modsignal.signals,
-            filter_type="bandpass"
+            filter_type="bandpass",
         )
-        
+        modsignal.signals = filtered_modsignal
+        print(isinstance(modsignal.signals,complex))
+
         """
         #PLOT FOR AFTER THE MODULATION
         plt.figure()
@@ -159,7 +160,7 @@ class DiscreteSignal:
         plt.xlabel("Frequency MHz")
         plt.grid()
         """
-        return ResampledSignals(filtered_modsignal, modsignal.time,modsignal.fs)
+        return ResampledSignals(modsignal.signals, modsignal.time,modsignal.fs)
 
 
     def show_signal_plot(self):
