@@ -81,14 +81,14 @@ class Receiver():
                 filter_type="bandpass"
             )
             
-            
+            """
             if PlotType.signal in self.plot:
                 self.signal_plot(
                     "After LPF at Element=1",
                     self.rx_time, self.filtered_bb[0],
                     self.rx_fs
                 )
-        
+            """
             #============================
             #   SPREADER PER ELEMENT     |
             # CHANGES SAMPLING FREQUENCY |
@@ -227,7 +227,7 @@ class Receiver():
         plt.xlabel("Frequency (MHz)")
         plt.grid()
         #plt.xlim(0, 1.5*self.conf.fcar) 
-        plt.ylim(-90,0)
+        #plt.ylim(-90,0)
         plt.show()
 
     def spread_plot(self, 
@@ -365,7 +365,7 @@ if __name__ == "__main__":
     
     Rb = 1e3
     Tb = 1/Rb
-    symbols = 10
+    symbols = 1000
     totaltime = symbols*Tb
     lc = 4
     config = CDMcfg(

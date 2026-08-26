@@ -16,7 +16,7 @@ import komm as km  # type:ignore[import-untyped]
 import matplotlib.pyplot as plt
 import numpy as np
 from commpy.sequences import pnsequence  # type:ignore[import-untyped]
-from scipy.signal import max_len_seq, resample_poly, welch, butter, filtfilt, sosfiltfilt
+from scipy.signal import periodogram, max_len_seq, resample_poly, welch, butter, filtfilt, sosfiltfilt
 import matplotlib.pyplot as plt 
 
 from models import Signals_Time, ResampledSignals, Specan, SpreadSignals
@@ -292,14 +292,21 @@ class Mixer:
 
 class SpecAn: 
     def calculate_psd(self ,fs, signal):
+        """
+        #Most basic calculation for spectrum 
+        X = np.fft.fft(signal)
+        N = len(X)
+        f = np.fft.fftfreq(N,1/fs)
+        
+        #Using scipy periodogram
+        f, X = periodogram(signal, fs)
+        """
 
-        N =len(signal)
-
-        Pxx = np.fft.fftshift(np.fft.fft(signal))
-        PSD = np.abs(Pxx)**2 / (fs * N)
-
-        f = np.fft.fftfreq(N, 1/fs)
-
-        Pxx_dB =  10*np.log10(PSD + 1e-15) 
-        Pxx_dB -= np.max(Pxx_dB) #normalise to caarrier, dB/Hz this is implicit and arbitrary
-        return Specan(f, Pxx_dB)
+        f, X = welch(
+                signal, 
+                fs=fs, 
+                window='hann',       # Window function applied to each segment
+                nperseg=len(signal)/8,        # Length of each segment (affects resolution vs smoothness)
+                scaling='spectrum'    # Returns V^2/Hz (use 'spectrum' for V^2)
+            )
+        return Specan(f,X)

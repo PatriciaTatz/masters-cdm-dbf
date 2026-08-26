@@ -119,26 +119,26 @@ class DiscreteSignal:
         #carrier frequency = flo in config 
         #cutoff frequency is equal to pulse shaped bandwidth 
 
-        """
+        
         #PLOT FOR BEFORE THE MODULATION
         plt.figure()
         plt.title(f"Before U/C: Power Spectrum Density of Tx Signal on Element=1")
         specan = SpecAn().calculate_psd(
-            self.conf.sps_symbol / self.conf.ts, 
+            self.conf.fs, 
             signal,
             )
         plt.plot(specan.f, specan.Pxx_dB, '-b')
         plt.grid()
         plt.ylabel("Frequency kHz")
-        """
+
         #modulate to carrier
         modsignal = self.mixer.quadrature(
             signal,
             self.conf.fs
         )
         #bandpass filter to remove harmonics caused by resampling 
-        flow = self.conf.fcar*0.9
-        fhigh = self.conf.fcar*1.1
+        flow = self.conf.fcar-self.conf.rb
+        fhigh = self.conf.fcar+self.conf.rb
         filtered_modsignal = self.filters.butterworth(
             cutoff = np.array([flow,fhigh]),
             fs = modsignal.fs,
@@ -146,9 +146,8 @@ class DiscreteSignal:
             filter_type="bandpass",
         )
         modsignal.signals = filtered_modsignal
-        print(isinstance(modsignal.signals,complex))
 
-        """
+        
         #PLOT FOR AFTER THE MODULATION
         plt.figure()
         plt.title(f"After U/C: Power Spectrum Density of Tx Signal on Element=1")
@@ -158,8 +157,9 @@ class DiscreteSignal:
             )
         plt.plot(specan.f, specan.Pxx_dB, label="PSD")
         plt.xlabel("Frequency MHz")
+        plt.xlim(0,fhigh)
         plt.grid()
-        """
+        
         return ResampledSignals(modsignal.signals, modsignal.time,modsignal.fs)
 
 
@@ -243,7 +243,7 @@ if __name__ == "__main__":
     #==================================
     Rb = 1e3
     Tb = 1/Rb
-    symbols = 100
+    symbols = 1000
     totaltime = symbols*Tb
 
     config = CDMcfg(
