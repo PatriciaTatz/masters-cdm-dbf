@@ -7,7 +7,7 @@ import numpy as np
 @dataclass
 class CDMcfg():
     simtime: float 
-    BEAMFORM: bool=False
+    BEAMFORM: bool=True
     CALIBRATE: bool=False
     INTERFERENCE: bool=False
     CARRIER: bool=True

@@ -115,9 +115,9 @@ class Receiver():
             
             if PlotType.summed in self.plot:
                 self.spread_plot(
-                    self.time, filtered_signals,  
+                    self.rx_time, filtered_bb,  
                     spread_bb.time, [np.array(summed_signal)], 
-                    spread.fs,
+                    spread_bb.fs,
                     0
                 )
 
@@ -133,9 +133,9 @@ class Receiver():
             
             if PlotType.recovered in self.plot:
                 self.recover_plot(
-                    self.time, filtered_signals, 
+                    self.rx_time, filtered_bb, 
                     recovered.time, recovered.signals,
-                    recovered.fs,
+                    spread_bb.fs,
                     0
                 )
             
@@ -148,9 +148,9 @@ class Receiver():
                 )
             if PlotType.recovered in self.plot:
                 self.recover_plot(
-                    self.time, filtered_signals, 
+                    self.time, filtered_bb, 
                     recovered.time, recovered.signals,
-                    recovered.fs,
+                    spread_bb.fs,
                     0
                 )
 
@@ -165,7 +165,7 @@ class Receiver():
 
             if PlotType.bf in self.plot:
                 self.bf_plot(
-                    self.time, filtered_signals, 
+                    self.rx_time, filtered_bb, 
                     recovered.time, bf,
                     0
                 )  
@@ -313,8 +313,8 @@ class Receiver():
 
         specan = SpecAn().calculate_psd(
             fs,
-            after_signal[index],
-            psdtype=-25)
+            after_signal[index]
+            )
 
 
         plt.figure()
@@ -323,6 +323,7 @@ class Receiver():
         plt.ylabel("Amplitude")
         plt.title(f"PSD Recovered Signal at Element Path={index+1}")
         
+        """
         plt.text(
             0.02, 0.95,
             f"Est. BW={specan.bw/1e6:.2f}MHz",
@@ -331,7 +332,7 @@ class Receiver():
             va='top',
             bbox=dict(facecolor='white', edgecolor='black')
         )
-        
+        """
         plt.ylabel("Power (dB)")
         plt.xlabel("Frequency (MHz)")
         plt.grid()
@@ -352,8 +353,9 @@ class Receiver():
         plt.plot(tafter, after_signal, '-g', linewidth=3, label="Beamformed Signal")
 
         #INTERFERENCE PLOT ONLY
-        tx_clean = np.load("transmit_clean.npy")
-        plt.plot(tbefore, tx_clean, '-b', linewidth=2, label=f"Rx Signal")
+        if self.conf.INTERFERENCE:
+            tx_clean = np.load("transmit_clean.npy")
+            plt.plot(tbefore, tx_clean, '-b', linewidth=2, label=f"Rx Signal")
 
         plt.legend(loc='upper right')
         plt.grid()
