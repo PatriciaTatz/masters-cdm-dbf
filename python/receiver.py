@@ -16,6 +16,7 @@ class PlotType(Enum):
     signal = auto()
     spread = auto()
     summed = auto()
+    ddc = auto()
     recovered = auto()
     bf = auto()
 
@@ -111,16 +112,10 @@ class Receiver():
             summed_signal = [sum(values) for values in zip(*self.spread_bb.signals)]
             if PlotType.summed in self.plot: 
                 self.sum_plot(self.spread_bb.time, summed_signal)
-            
-            if PlotType.summed in self.plot:
-                self.spread_plot(
-                    self.rx_time, self.filtered_bb,  
-                    self.spread_bb.time, [np.array(summed_signal)], 
-                    self.spread_bb.fs
-                )
 
             #=====================================
-            #        DIGITAL DOWNCONVERTER       |
+            #        DIGITAL DOWNCONVERTER        |
+            # RESAMPLING HAPPENS HERE             |
             #=====================================
             ddc_signal = self.mixer.quadrature(
                         summed_signal,
@@ -128,15 +123,21 @@ class Receiver():
                         flo=self.conf.fbb
                     )
 
+            if PlotType.ddc in self.plot:
+                self.signal_plot(
+                    "After DDC at Element=1",
+                    ddc_signal.time, np.real(ddc_signal.signals),
+                    self.rx_fs
+                )
             
             #=====================================
             #   DIGITAL DESPREAD  PER ELEMENT     |
             #   NOT RESAMPLED BUT MF DELAY TRUNC  |
             #=====================================
             recovered = self.cdmx.recover(
-                summed_signal,
+                ddc_signal.signals,
                 self.spread_bb.codes,
-                self.spread_bb.fs
+                ddc_signal.fs
                 )
             
             if PlotType.recovered in self.plot:
@@ -255,7 +256,7 @@ class Receiver():
         plt.grid()
 
         specan = SpecAn().calculate_psd(
-            self.spread_bb.fs,
+            self.conf.fbb,
             self.spread_bb.signals[index]
             )
         
@@ -265,7 +266,7 @@ class Receiver():
 
         plt.figure(figsize=(15,7))
         plt.plot(specan.f, specan.Pxx_dB, '-g')
-        plt.xlabel("Frequency (MHz)")
+        plt.xlabel("Frequency")
         plt.ylabel("Amplitude")
         plt.title(f"PSD of Spread Signals of Element={index}")
         """
@@ -279,8 +280,6 @@ class Receiver():
         )
         """
         plt.ylabel("Power (1/Hz)")
-        plt.yticks(np.arange(-30, 1, 20))
-        plt.ylim(-90,0)
         plt.grid()
         plt.show()
 
@@ -311,7 +310,7 @@ class Receiver():
 
         plt.figure(figsize=(15,7))
         plt.plot(specan.f, specan.Pxx_dB, label="PSD")
-        plt.xlabel("Frequency (MHz)")
+        plt.xlabel("Frequency")
         plt.ylabel("Amplitude")
         plt.title(f"PSD Recovered Signal at Element Path={index+1}")
         
@@ -389,6 +388,6 @@ if __name__ == "__main__":
     signal = DiscreteSignal(config)
 
     #initiate and assemble receiver 
-    rx = Receiver(config, PlotType.all()) 
+    rx = Receiver(config, {PlotType.spread, PlotType.ddc}) 
     rx.setup(signal)
     rx.assemble()

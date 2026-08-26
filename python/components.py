@@ -174,8 +174,8 @@ class Filter:
             symbols[prepad::sps_symbol] = signal
             samples = symbols
         else:
-            sps_symbol = int(round(fs/self.conf.fbb)) #now we are filtering to resolve the fbb 
-            ts = 1/self.conf.fbb
+            sps_symbol = int(round(fs/self.conf.rb)) #now we are filtering to resolve the fbb 
+            ts = 1/self.conf.rb
 
             samples = signal
         
@@ -247,24 +247,20 @@ class Mixer:
 
     def quadrature(self,signal,fs_signal, flo):
         #mixer sampling frequency is 3x the carrier frequency 
-        fs_mixer = 3*self.conf.fcar
+        fs_mixer = 3*flo
 
         #flo  = fcarrier 
         flo_mixer = flo
 
         #match sampling rates for discrete time mixing 
-        if fs_signal < fs_mixer:
+        if fs_signal != fs_mixer:
             signal_resampled, fs_resampled = self.dsp.resample_signal(
                 targetfs=fs_mixer,
                 oldfs=fs_signal,
                 signal=signal)
             if fs_resampled != fs_mixer:
                 raise ValueError("Resampling did not work!")
-        else:
-            
-            fs_resampled = fs_signal
-            signal_resampled = signal
-        
+
         #local oscillators for I and Q component
         lo_time = np.arange(len(signal_resampled))*(1/fs_mixer)
         lo_signal = np.exp(1j*2*np.pi*flo_mixer*lo_time) 
