@@ -83,14 +83,20 @@ class CDMx:
         return codes 
 
 
-    def spreader(self, signals, codes):
-        targetfs = self.conf.sps_chip * self.conf.rc
-        oldfs = self.conf.fs
+    def spreader(self, signals, fs_signal, codes):
+        fs_code = self.conf.sps_chip * self.conf.rc #atleast double the chip frequency
+        fs_signal = fs_signal
         ss = []
         exp_codes = []
         for i in range(self.conf.no_elem):
-            resampled, resampled_fs = self.dsp.resample_signal(targetfs, oldfs, signals[i])
+            #resample signal to match sample frequency of chip 
+            resampled, resampled_fs = self.dsp.resample_signal(
+                targetfs=fs_code,
+                oldfs=fs_signal,
+                signal=signals[i]
+            )
             
+            #extend code sequence to the same length as the resampled signal 
             code_sequence = np.repeat(codes[i], self.conf.sps_chip)
             tile_repeats = int(np.ceil(len(resampled) / len(code_sequence)))
             expanded_code = np.tile(code_sequence, tile_repeats)[:len(resampled)]
@@ -109,7 +115,11 @@ class CDMx:
             """
             spread_signal = resampled*expanded_code 
             ss.append(spread_signal)
+        
         time = np.arange(len(ss[0])) * (1/resampled_fs)
+
+        if max(time)>self.conf.simtime*1.2:
+            raise ValueError("Something went wrong with upsampling of the time series! Exceeds sim time")
         """
         #PLOT FOR CODE SERIES ONLY
         for i in range(len(exp_codes)):
@@ -245,7 +255,7 @@ class Mixer:
 
         return mixer_output
 
-    def quadrature(self,signal, signal_fs):
+    def quadrature(self,signal,fs_signal):
         #mixer sampling frequency is 3x the carrier frequency 
         fs_mixer = 3*self.conf.fcar 
 
@@ -253,15 +263,15 @@ class Mixer:
         flo_mixer = self.conf.fcar
 
         #match sampling rates for discrete time mixing 
-        if signal_fs != fs_mixer:
+        if fs_signal != fs_mixer:
             signal_resampled, fs_resampled = self.dsp.resample_signal(
-                fs_mixer,
-                signal_fs,
-                signal)
+                targetfs=fs_mixer,
+                oldfs=fs_signal,
+                signal=signal)
             if fs_resampled != fs_mixer:
                 raise ValueError("Resampling did not work!")
         else:
-            fs_resampled = signal_fs
+            fs_resampled = fs_signal
             signal_resampled = signal
         
         #local oscillators for I and Q component
