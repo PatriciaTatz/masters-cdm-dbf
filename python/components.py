@@ -19,7 +19,7 @@ from commpy.sequences import pnsequence  # type:ignore[import-untyped]
 from scipy.signal import max_len_seq, resample_poly, welch, butter, filtfilt
 import matplotlib.pyplot as plt 
 
-from models import Signals_Time, ResampledSignals, Specan
+from models import Signals_Time, ResampledSignals, Specan, SpreadSignals
 
 
 class DiscreteSP:
@@ -124,7 +124,7 @@ class CDMx:
             plt.ylabel("Amplitude")
             plt.show()
         """
-        return ResampledSignals(ss, time, resampled_fs)
+        return SpreadSignals(ss, time, exp_codes, resampled_fs)
 
     def recover(self, sumsignal, codes, fs):
         if not self.conf.CALIBRATE:
@@ -210,15 +210,17 @@ class Filter:
 
 
 class Beamformer:    
-    def align_combine_signals(self,psi,sig):
+    def align_combine_signals(self,psi,signals):
         #output aligned signals and combined
-        beamformed = sig[0].copy()
+
+        #first element assumed to have zero spatial delay  
+        beamformed = signals[0]
         #align rest of signals 
-        for i in range(1,len(sig)):
+        for i in range(1,len(signals)):
             #applying the phase in opposite sign  - ONLY KEEPS REAL PART FOR BPSK FOR NOW 
-            beamformed += np.real(sig[i]*np.exp(+1j*psi[i]))
+            beamformed += np.real(signals[i]*np.exp(+1j*psi[i]))
     
-        return Signals(bftime, beamformed)
+        return beamformed
 
 class Mixer:
     def __init__(self,conf):

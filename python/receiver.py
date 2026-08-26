@@ -9,6 +9,7 @@ import utils as u
 from components import CDMx, SpecAn, Beamformer, Filter, Mixer
 from config import CDMcfg
 from signals import DiscreteSignal
+from models import ResampledSignals
 
 
 class PlotType(Enum):
@@ -92,6 +93,7 @@ class Receiver():
             #   SPREADER PER ELEMENT     |
             # CHANGES SAMPLING FREQUENCY |
             #============================
+            #time series goes from FROM RX_TIME -> SPREAD_BB.TIME
             spread_bb = self.cdmx.spreader(
                 filtered_bb,
                 self.codes,
@@ -107,14 +109,14 @@ class Receiver():
             #====================
             #     COMBINER      |
             #====================
-            summed_signal = [sum(values) for values in zip(*spread.signals)]
-            if PlotType.sum in self.plot: 
-                self.sum_plot(spread.time, summed_signal)
+            summed_signal = [sum(values) for values in zip(*spread_bb.signals)]
+            if PlotType.summed in self.plot: 
+                self.sum_plot(spread_bb.time, summed_signal)
             
             if PlotType.summed in self.plot:
                 self.spread_plot(
                     self.time, filtered_signals,  
-                    spread.time, [np.array(summed_signal)], 
+                    spread_bb.time, [np.array(summed_signal)], 
                     spread.fs,
                     0
                 )
@@ -125,8 +127,8 @@ class Receiver():
             #=====================================
             recovered = self.cdmx.recover(
                 summed_signal,
-                spread.codes,
-                spread.fs
+                spread_bb.codes,
+                spread_bb.fs
                 )
             
             if PlotType.recovered in self.plot:
@@ -158,18 +160,18 @@ class Receiver():
         #=============================
             bf = self.bf.align_combine_signals(
                 self.element_delays,
-                recovered
+                recovered.signals
             )
 
             if PlotType.bf in self.plot:
                 self.bf_plot(
                     self.time, filtered_signals, 
-                    bf.time, bf.signal,
+                    recovered.time, bf,
                     0
                 )  
-            return bf
+            return ResampledSignals(bf, recovered.time, spread_bb.fs)
         else:
-            return recovered
+            return ResampledSignals(recovered.signals, recovered.time, spread_bb.fs)
 
     def sum_plot(self, time, signal):
         plt.rcParams['font.size'] = 15
@@ -261,8 +263,8 @@ class Receiver():
 
         specan = SpecAn().calculate_psd(
             fs,
-            after_signal[index],
-            psdtype=-25.8)
+            after_signal[index]
+            )
         
         #FORPLOT
         #np.save(f"sps_{self.conf.lc}_psd_f", specan.f)
@@ -273,6 +275,7 @@ class Receiver():
         plt.xlabel("Frequency (MHz)")
         plt.ylabel("Amplitude")
         plt.title(f"PSD Spread Signals Combined")
+        """
         plt.text(
             0.02, 0.95,
             f"Est. BW={specan.bw/1e6:.2f}MHz",
@@ -281,6 +284,7 @@ class Receiver():
             va='top',
             bbox=dict(facecolor='white', edgecolor='black')
         )
+        """
         plt.ylabel("Power (dB)")
         plt.ylim(-40, 0)
         plt.yticks(np.arange(-30, 1, 20))
@@ -390,6 +394,6 @@ if __name__ == "__main__":
     signal = DiscreteSignal(config)
 
     #initiate and assemble receiver 
-    rx = Receiver(config, {PlotType.signal}) 
+    rx = Receiver(config, PlotType.all()) 
     rx.setup(signal)
     rx.assemble()

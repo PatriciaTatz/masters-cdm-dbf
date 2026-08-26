@@ -130,13 +130,13 @@ class DiscreteSignal:
         plt.plot(specan.f, specan.Pxx_dB, '-b')
         plt.grid()
         plt.ylabel("Frequency kHz")
-        
+        """
         #modulate to carrier
         modsignal = self.mixer.quadrature(
             signal,
             self.conf.fs
         )
-        """
+        
         #bandpass filter to remove harmonics caused by resampling 
         flow = self.conf.fcar - self.conf.b
         fhigh = self.conf.fcar + self.conf.b
