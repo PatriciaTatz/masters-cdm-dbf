@@ -54,24 +54,23 @@ class Receiver():
     def assemble(self):
         if not self.conf.CALIBRATE: 
             #==============================
-            #        D/C  PER ELEMENT     |
+            #        D/C PER ELEMENT     |
             #==============================            
             baseband = self.mixer.superhet(
                 self.rxsignals,
                 self.rx_fs
             )
 
-            """Pxx_dB
             if PlotType.signal in self.plot:
                 self.signal_plot(
                     "After D/C at Element=1",
                     self.rx_time, baseband[0],
                     self.rx_fs
                 )
-            """ 
-            #============================
-            #       LPF  PER ELEMENT    |
-            #===========================
+            #===============================
+            #       LPF PER ELEMENT        |
+            #   TO REMOVE SUPERHET IMAGE   |
+            #===============================
             flow = self.conf.fbb - self.conf.rb
             fhigh = self.conf.fbb + self.conf.rb
             self.filtered_bb = self.filter.butterworth(
@@ -81,14 +80,12 @@ class Receiver():
                 filter_type="bandpass"
             )
             
-            """
             if PlotType.signal in self.plot:
                 self.signal_plot(
                     "After LPF at Element=1",
                     self.rx_time, self.filtered_bb[0],
                     self.rx_fs
                 )
-            """
             #============================
             #   SPREADER PER ELEMENT     |
             # CHANGES SAMPLING FREQUENCY |
@@ -108,15 +105,15 @@ class Receiver():
             #====================
             #     COMBINER      |
             #====================
-            summed_signal = [sum(values) for values in zip(*spread_bb.signals)]
+            summed_signal = [sum(values) for values in zip(*self.spread_bb.signals)]
             if PlotType.summed in self.plot: 
                 self.sum_plot(spread_bb.time, summed_signal)
             
             if PlotType.summed in self.plot:
                 self.spread_plot(
                     self.rx_time, filtered_bb,  
-                    spread_bb.time, [np.array(summed_signal)], 
-                    spread_bb.fs
+                    self.spread_bb.time, [np.array(summed_signal)], 
+                    self.spread_bb.fs
                 )
 
             #=====================================
@@ -125,15 +122,15 @@ class Receiver():
             #=====================================
             recovered = self.cdmx.recover(
                 summed_signal,
-                spread_bb.codes,
-                spread_bb.fs
+                self.spread_bb.codes,
+                self.spread_bb.fs
                 )
             
             if PlotType.recovered in self.plot:
                 self.recover_plot(
                     self.rx_time, filtered_bb, 
                     recovered.time, recovered.signals,
-                    spread_bb.fs,
+                    self.spread_bb.fs,
                     0
                 )
             
@@ -222,12 +219,9 @@ class Receiver():
             '-b' 
         )
         
-        plt.axvline(x=98500, color='red', linestyle='--', linewidth=2, label='Threshold')
-        plt.ylabel("Power (dB)")
+        plt.ylabel("Power")
         plt.xlabel("Frequency (MHz)")
         plt.grid()
-        #plt.xlim(0, 1.5*self.conf.fcar) 
-        #plt.ylim(-90,0)
         plt.show()
 
     def spread_plot(self, 
@@ -269,11 +263,8 @@ class Receiver():
             bbox=dict(facecolor='white', edgecolor='black')
         )
         """
-        plt.ylabel("Power (dB)")
-        plt.ylim(-40, 0)
+        plt.ylabel("Power (1/Hz)")
         plt.yticks(np.arange(-30, 1, 20))
-        plt.xlabel("Frequency (MHz)")
-        #plt.xlim(0, 1.5*self.spread_bb.fs) 
         plt.ylim(-90,0)
         plt.grid()
         plt.show()
@@ -319,7 +310,7 @@ class Receiver():
             bbox=dict(facecolor='white', edgecolor='black')
         )
         """
-        plt.ylabel("Power (dB)")
+        plt.ylabel("Power (1/Hz)")
         plt.xlabel("Frequency (MHz)")
         plt.grid()
         plt.show()
@@ -365,7 +356,7 @@ if __name__ == "__main__":
     
     Rb = 1e3
     Tb = 1/Rb
-    symbols = 1000
+    symbols = 500
     totaltime = symbols*Tb
     lc = 4
     config = CDMcfg(

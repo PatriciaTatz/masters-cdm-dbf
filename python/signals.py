@@ -130,7 +130,7 @@ class DiscreteSignal:
         plt.plot(specan.f, specan.Pxx_dB, '-b')
         plt.grid()
         plt.ylabel("Frequency kHz")
-
+        
         #modulate to carrier
         modsignal = self.mixer.quadrature(
             signal,
@@ -147,7 +147,7 @@ class DiscreteSignal:
         )
         modsignal.signals = filtered_modsignal
 
-        
+        """
         #PLOT FOR AFTER THE MODULATION
         plt.figure()
         plt.title(f"After U/C: Power Spectrum Density of Tx Signal on Element=1")
@@ -159,7 +159,7 @@ class DiscreteSignal:
         plt.xlabel("Frequency MHz")
         plt.xlim(0,fhigh)
         plt.grid()
-        
+        """
         return ResampledSignals(modsignal.signals, modsignal.time,modsignal.fs)
 
 

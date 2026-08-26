@@ -16,7 +16,7 @@ import komm as km  # type:ignore[import-untyped]
 import matplotlib.pyplot as plt
 import numpy as np
 from commpy.sequences import pnsequence  # type:ignore[import-untyped]
-from scipy.signal import periodogram, max_len_seq, resample_poly, welch, butter, filtfilt, sosfiltfilt
+from scipy.signal import periodogram, max_len_seq, resample_poly, welch, butter, filtfilt
 import matplotlib.pyplot as plt 
 
 from models import Signals_Time, ResampledSignals, Specan, SpreadSignals
@@ -215,7 +215,6 @@ class Filter:
         nyquist = fs/2
         #cutoff = 1.5*self.rb
         #3dB point at cutoff frequency 
-        print(cutoff)
         a,b = butter(
             N=4, 
             Wn = cutoff/nyquist, 
@@ -301,12 +300,16 @@ class SpecAn:
         #Using scipy periodogram
         f, X = periodogram(signal, fs)
         """
-
         f, X = welch(
                 signal, 
                 fs=fs, 
-                window='hann',       # Window function applied to each segment
-                nperseg=len(signal)/8,        # Length of each segment (affects resolution vs smoothness)
-                scaling='spectrum'    # Returns V^2/Hz (use 'spectrum' for V^2)
+                window='hann',             # Window function applied to each segment
+                nperseg=len(signal)/8,
+                return_onesided=False,
+                scaling='density',       # Returns V^2/Hz (use 'spectrum' for V^2)
+                noverlap=len(signal)/(8*2)
             )
-        return Specan(f,X)
+
+        f = np.fft.fftshift(f)
+        X = np.fft.fftshift(X)
+        return Specan(f,X/np.max(X))
