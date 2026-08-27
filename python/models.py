@@ -17,6 +17,7 @@ class ResampledSignals:
 
 @dataclass
 class SpreadSignals:
+    original: list[np.ndarray]
     signals: list[np.ndarray]
     time: np.ndarray
     codes: list[np.ndarray]

@@ -83,11 +83,13 @@ class CDMx:
     def spreader(self, signals, fs_signal, f_signal, codes):
         f_code = self.conf.lc * f_signal       #Transition xLc times over one period of signal
         fs_code = self.conf.sps_chip * f_code  
-
         ss = []
+        os = []
         exp_codes = []
-        
         #create code sequence 
+
+        print("fs_code=", fs_code)
+        print("fs_signal=", fs_signal)
         for i in range(self.conf.no_elem):
             #upsample is required to do discrete multiplication 
             if fs_code != fs_signal:
@@ -96,14 +98,15 @@ class CDMx:
                     oldfs=fs_signal,
                     signal=signals[i]
                 )
-
+            os.append(resampled_signal)
+            print("resampled=", fs_resampled)
             code_sequence = np.repeat(codes[i], self.conf.sps_chip)                       #upsamples to f[+1 +1] -> [+1 +1 +1 +1] if sps_chip=2
             tile_repeats = int(np.ceil(len(resampled_signal) / len(code_sequence)))       #calculate number of repeats required 
             expanded_code = np.tile(code_sequence, tile_repeats)[:len(resampled_signal)]  #expand then trim to signal length  
             exp_codes.append(expanded_code)             
 
             #spreading operation
-            spread_signal = resampled_signal*expanded_code #resampled*expanded_code 
+            spread_signal = resampled_signal*expanded_code
             ss.append(spread_signal)
     
         time_before = np.arange(len(signals[i]))/fs_signal
@@ -126,7 +129,7 @@ class CDMx:
             plt.ylabel("Amplitude")
             plt.show()
         """
-        return SpreadSignals(ss, time, exp_codes, fs_resampled)
+        return SpreadSignals(os, ss, time, exp_codes, fs_resampled)
 
     def recover(self, sumsignal, codes, fs):
         if not self.conf.CALIBRATE:
@@ -266,7 +269,6 @@ class Mixer:
             #fs_signal is now the spread signal sample frequency 
             #recall fcode is the spread signal frequency 
             fs_mixer = 3*fs_signal 
-            print(fs_mixer)
 
 
         #flo  = fcarrier 
@@ -283,7 +285,15 @@ class Mixer:
 
         #local oscillators for I and Q component
         lo_time = np.arange(len(signal_resampled))*(1/fs_mixer)
-        lo_signal = np.exp(1j*2*np.pi*flo_mixer*lo_time) 
+
+        if fs_signal < flo:
+            #quadrature upconversion
+            lo_signal = np.exp(+1j*2*np.pi*flo_mixer*lo_time) 
+        else:
+            #quadrature downconversion
+            lo_signal = np.exp(-1j*2*np.pi*flo_mixer*lo_time) 
+
+
 
         #mix signal by multiplication 
         mixer_output = signal_resampled * lo_signal
