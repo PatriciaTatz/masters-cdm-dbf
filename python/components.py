@@ -145,7 +145,7 @@ class CDMx:
             decorrelated = self.decorrelate(
                 np.real(dss.signals),
                 fs_signal=dss.fs)
-            dss.signals = decorrelated
+            #dss.signals = decorrelated
         elif self.conf.modType=="QPSK":
             decorrelated_I = self.decorrelate(
                 np.real(dss.signals),
@@ -171,6 +171,9 @@ class CDMx:
         exp_codes = []
 
         #create code sequence 
+        print("fs_code=",fs_code)
+        print("fs_signal=",fs_signal)
+
         for i in range(self.conf.no_elem):
             #upsample is required to do discrete multiplication 
             if fs_code != fs_signal:
@@ -190,7 +193,7 @@ class CDMx:
             #spreading operation
             despread_signal  = resampled_signal*expanded_code
             ss.append(despread_signal)
-    
+        print("resampled=",fs_resampled)
         time_before = np.arange(len(sumsignal))/fs_signal
         time = np.arange(len(ss[0]))/fs_resampled
 
@@ -239,7 +242,7 @@ class Filter:
         ntaps = self.conf.span*sps_symbol + 1  #must be odd, total length of the filter 
         #apply filter
         dt_filter, h_rrc = filter.rrcosfilter(ntaps, self.conf.alpha, ts, fs_signal)
-        #h_rrc /= np.sqrt(np.sum(h_rrc**2))
+        h_rrc /= np.sqrt(np.sum(h_rrc**2))
         filtered = np.convolve(samples, h_rrc, mode='full')
         h_delay = (ntaps-1)//2
         
@@ -247,7 +250,7 @@ class Filter:
 
         if mode == "rxmode":
             symbols = filtered_delay[::sps_symbol]
-            filtered_delay = filtered[h_delay+1:-h_delay+1]/np.max(filtered)
+            filtered_delay = filtered[h_delay+1:-h_delay+1]
 
         return filtered_delay, symbols
 
@@ -321,6 +324,9 @@ class Mixer:
             #fs_signal is now the spread signal sample frequency 
             #recall fcode is the spread signal frequency 
             fs_mixer = 3*fs_signal 
+
+        print("fs_mixer=",fs_mixer)
+        print("fs_signal=",fs_signal)
 
 
         #flo  = fcarrier 

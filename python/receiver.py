@@ -349,7 +349,7 @@ class Receiver():
         ):
         plt.rcParams['font.size'] = 15
         plt.figure(figsize=(15,7))
-        plt.title(f"Recovered Signal at Element Path={index+1}")
+        #plt.title(f"Recovered Signal at Element Path={index+1}")
         if self.conf.modType=="BPSK":
             plt.plot(signal.symbol_time, signal.rrcsymbols, '--b', label=f"Rx signal")
             plt.plot(self.recovered.time, self.recovered.signals[index], '-g', linewidth='3', label="Recovered signal")
@@ -454,7 +454,7 @@ if __name__ == "__main__":
         no_elem = 2,
         codefam="WH",
         modType="QPSK",
-        codeids=np.array([1,2])
+        codeids=np.array([3,2])
         )
     #create signal 
     signal = DiscreteSignal(config)
@@ -463,7 +463,7 @@ if __name__ == "__main__":
     rx = Receiver(config, {
         #PlotType.signal, 
         #PlotType.spread
-        PlotType.recovered
+        PlotType.ddc
         }) 
     rx.setup(signal)
     rx.assemble()
