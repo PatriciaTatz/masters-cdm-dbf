@@ -81,10 +81,12 @@ class CDMx:
 
 
     def spreader(self, signals, fs_signal, f_signal, codes):
-        fs_code = self.conf.sps_chip * self.conf.lc * f_signal
-        #fs_code = self.conf.sps_chip * self.conf.rc #atleast double the chip frequency
+        f_code = self.conf.lc * f_signal       #Transition xLc times over one period of signal
+        fs_code = self.conf.sps_chip * f_code  
+
         ss = []
         exp_codes = []
+        
         #create code sequence 
         for i in range(self.conf.no_elem):
             #upsample is required to do discrete multiplication 
@@ -95,15 +97,15 @@ class CDMx:
                     signal=signals[i]
                 )
 
-            code_sequence = np.repeat(codes[i], self.conf.sps_chip)                       #upsampled
+            code_sequence = np.repeat(codes[i], self.conf.sps_chip)                       #upsamples to f[+1 +1] -> [+1 +1 +1 +1] if sps_chip=2
             tile_repeats = int(np.ceil(len(resampled_signal) / len(code_sequence)))       #calculate number of repeats required 
             expanded_code = np.tile(code_sequence, tile_repeats)[:len(resampled_signal)]  #expand then trim to signal length  
-            exp_codes.append(expanded_code)              
+            exp_codes.append(expanded_code)             
 
             #spreading operation
             spread_signal = resampled_signal*expanded_code #resampled*expanded_code 
             ss.append(spread_signal)
-        
+    
         time_before = np.arange(len(signals[i]))/fs_signal
         time = np.arange(len(ss[0]))/fs_resampled
 
@@ -198,7 +200,6 @@ class Filter:
         #fs is sampling frequency! 
         nyquist = fs/2
         #cutoff = 1.5*self.rb
-        #3dB point at cutoff frequency 
         a,b = butter(
             N=4, 
             Wn = cutoff/nyquist, 
@@ -227,27 +228,46 @@ class Mixer:
         self.conf = conf 
         self.dsp = DiscreteSP()
 
-    def superhet(self, signal, signal_fs):
+    def superhet(self, signal, fs_signal, flo):
         #assumes signal is array of element signals!
-        fs_mixer = 3*self.conf.fcar
+        fs_mixer = 3*(self.conf.fcar + flo) 
 
         #for superhet, flo != fcar, just above zero-IF
-        flo_mixer = self.conf.fcar - self.conf.fbb
+        flo_mixer = flo
         
         mixer_output = [] 
         for i in range(self.conf.no_elem): 
-            lo_time = np.arange(len(signal[i]))*(1/fs_mixer)
+            if fs_signal != fs_mixer:
+                signal_resampled, fs_resampled = self.dsp.resample_signal(
+                    targetfs=fs_mixer,
+                    oldfs=fs_signal,
+                    signal=signal[i])
+                if fs_resampled != fs_mixer:
+                    raise ValueError("Resampling did not work!")
+            lo_time = np.arange(len(signal_resampled))*(1/fs_mixer)
             lo_signal = np.cos(2*np.pi*flo_mixer*lo_time)
 
             #mix signal by multiplication 
-            mixed_signal = signal[i] * lo_signal 
+            mixed_signal = signal_resampled * lo_signal 
             mixer_output.append(mixed_signal)
 
-        return mixer_output
+        return ResampledSignals(mixer_output, lo_time, fs_resampled)
 
     def quadrature(self,signal,fs_signal, flo):
         #mixer sampling frequency is 3x the carrier frequency 
-        fs_mixer = 3*flo
+
+        if fs_signal < flo: 
+            #upconverting to carrier 
+            #fs_signal is just symbol sample frequency at this stage 
+            #recall rb is symbol frequency exactly but now has bandwidth of b=(1+alpha)rb
+            fs_mixer = 3*self.conf.fcar 
+        elif fs_signal > flo:
+            #downconverting to zero-IF 
+            #fs_signal is now the spread signal sample frequency 
+            #recall fcode is the spread signal frequency 
+            fs_mixer = 3*fs_signal 
+            print(fs_mixer)
+
 
         #flo  = fcarrier 
         flo_mixer = flo
@@ -285,10 +305,10 @@ class SpecAn:
                 signal, 
                 fs=fs, 
                 window='hann',             # Window function applied to each segment
-                nperseg=len(signal),     #frequency bins averaged over segments
+                nperseg=len(signal)/8,     #frequency bins averaged over segments
                 return_onesided=False,      #double sided to see rrc filtered effect
                 scaling='density',       # Returns V^2/Hz (use 'spectrum' for V^2)
-                noverlap=0#overlap of frequency bins 
+                noverlap=len(signal)/16#overlap of frequency bins 
             )
         #this shifts a twosided spectrum from 0 +f -f into -f 0 +f 
         f = np.fft.fftshift(f)

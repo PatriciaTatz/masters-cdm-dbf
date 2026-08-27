@@ -40,7 +40,7 @@ class Receiver():
 
         #recieve the signal
         self.rxsignals = copy.deepcopy(signal.elements) #element signals
-        self.rx_fs = signal.fs                          #sampling frequency
+        self.fs_rx = signal.fs                          #sampling frequency
         self.rx_time = signal.time                      #element signal time axis
         self.element_delays = signal.psi                #element signal spatial delay 
         
@@ -49,7 +49,7 @@ class Receiver():
                 "Rx Signal at Element 1",
                 self.rx_time,
                 self.rxsignals[0],
-                self.rx_fs,
+                self.fs_rx,
             )
           
     def assemble(self):
@@ -57,46 +57,65 @@ class Receiver():
             #===================================
             #   D/C TO BASEBAND PER ELEMENT     |
             #   Fsignal change not Fs_signal!!  |
-            #===================================            
+            #===================================     
+            
+            #Baseband: baseband [array] Signal for each element 
+            #Time = self.rx_time
+            #Signal Frequency =  self.conf.fbb
+            #Sampling Frequency = fs_rx
+            flo = self.conf.fcar - self.conf.fbb 
             baseband = self.mixer.superhet(
                 self.rxsignals,
-                self.rx_fs
-            )
-            """
-            if PlotType.signal in self.plot:
-                self.signal_plot(
-                    "After D/C at Element=1",
-                    self.rx_time, baseband[0],
-                    self.rx_fs
-                )
-            """
-            #===============================
-            #       LPF PER ELEMENT        |
-            #   TO REMOVE SUPERHET IMAGE   |
-            #===============================
-            flow = self.conf.fbb - self.conf.rb
-            fhigh = self.conf.fbb + self.conf.rb
-            self.filtered_bb = self.filter.butterworth(
-                cutoff = np.array([flow,fhigh]),
-                fs = self.rx_fs,
-                signals =  baseband,
-                filter_type="bandpass"
+                fs_signal = self.fs_rx, 
+                flo = flo 
             )
             
             if PlotType.signal in self.plot:
                 self.signal_plot(
-                    "After LPF at Element=1",
-                    self.rx_time, self.filtered_bb[0],
-                    self.rx_fs
+                    "After D/C at Element=1",
+                    baseband.time, baseband.signals[0],
+                    baseband.fs
                 )
+            
+            #===============================
+            #       LPF PER ELEMENT        |
+            #   TO REMOVE SUPERHET IMAGE   |
+            #===============================
+
+            #Filtered Baseband: filtered_bb [array], Signal for each element 
+            #Time = self.rx_time
+            #Signal Frequency =  self.conf.fbb w/o image 
+            #Sampling Frequency = fs_rx
+
+            flow = 1.5*(self.conf.fbb + self.conf.rb)
+            self.filtered_bb = self.filter.butterworth(
+                cutoff = flow,
+                fs = self.fs_rx,
+                signals =  baseband.signals,
+                filter_type="lowpass"
+            )
+            if PlotType.signal in self.plot:
+                self.signal_plot(
+                    "After LPF at Element=1",
+                    baseband.time, self.filtered_bb[0],
+                    baseband.fs
+                )
+
             #============================
             #   SPREADER PER ELEMENT     |
             # CHANGES SAMPLING FREQUENCY |
             #============================
-            #time series goes from FROM RX_TIME -> SPREAD_BB.TIME
+
+            #Spread Resampled dataclass
+            #Spread Baseband: spread_bb.signals, Signal for each element 
+            #Spread Time: spread_bb.time, Timestep changed to match timestep of code sequence 
+            #Spread Code: spread_bb.codes, Codes equal length to Spread Signal
+            #Spread Sampling Frequency: spread_bb.fs, Fs_chip 
+            #Signal Frequency = self.conf.fbb * self.conf.lc  , NOT returned 
+
             self.spread_bb = self.cdmx.spreader(
                 signals=self.filtered_bb,
-                fs_signal = self.rx_fs,
+                fs_signal = self.fs_rx,
                 f_signal = self.conf.fbb,
                 codes=self.codes
             )
@@ -109,6 +128,12 @@ class Receiver():
             #====================
             #     COMBINER      |
             #====================
+
+            #Summed Baseband: summed_signal [array]
+            #Summed Time: spread_bb.time
+            #Summed Sampling Frequency: spread_bb.fs, Fs_chip=Fchip*self.conf.sps_chip  
+            #Summed Signal Frequency = Fchip= self.conf.fbb * self.conf.lc  , NOT returned 
+
             summed_signal = [sum(values) for values in zip(*self.spread_bb.signals)]
             if PlotType.summed in self.plot: 
                 self.sum_plot(self.spread_bb.time, summed_signal)
@@ -117,8 +142,15 @@ class Receiver():
             #        DIGITAL DOWNCONVERTER        |
             # RESAMPLING HAPPENS HERE             |
             #=====================================
-            ddc_signal = self.mixer.quadrature(
-                        summed_signal,
+
+            #DDC Resampled dataclass
+            #DDC Baseband: ddc.signals, Signal for each element 
+            #DDC Time: ddc.time, Timestep changed to match timestep of code sequence 
+            #DDC Sampling Frequency: ddc.fs = 3*flo   to match mixer 
+            #DDC Signal Frequency = spread bandwidth (self.conf.b * self.conf.lc) centered at 0Hz
+
+            ddc = self.mixer.quadrature(
+                        np.array(summed_signal),
                         fs_signal=self.spread_bb.fs,
                         flo=self.conf.fbb
                     )
@@ -126,8 +158,8 @@ class Receiver():
             if PlotType.ddc in self.plot:
                 self.signal_plot(
                     "After DDC at Element=1",
-                    ddc_signal.time, np.real(ddc_signal.signals),
-                    self.rx_fs
+                    ddc.time, ddc.signals,
+                    ddc.fs
                 )
             
             #=====================================
@@ -135,9 +167,9 @@ class Receiver():
             #   NOT RESAMPLED BUT MF DELAY TRUNC  |
             #=====================================
             recovered = self.cdmx.recover(
-                ddc_signal.signals,
+                ddc.signals,
                 self.spread_bb.codes,
-                ddc_signal.fs
+                ddc.fs
                 )
             
             if PlotType.recovered in self.plot:
@@ -185,12 +217,36 @@ class Receiver():
 
     def sum_plot(self, time, signal):
         plt.rcParams['font.size'] = 15
-        plt.figure()
+        plt.figure(figsize=(15,7))
         plt.plot(time, signal)
         plt.title(f"Combined Signal from {self.conf.no_elem} Elements")
         plt.xlabel("Time")
         plt.ylabel("Amplitude")
+
+        plt.figure(figsize=(15,7))
+        plt.title(f"PSD of Combined Signal")
+        specan = SpecAn().calculate_psd(
+            self.spread_bb.fs,
+            np.array(signal),
+            )
+        
+        """
+        plt.semilogy(
+            specan.f,
+            specan.Pxx_dB,
+            color="blue",
+            labqel="PSD")
+        """
+        plt.plot(
+            specan.f,
+            specan.Pxx_dB,
+            '-b' 
+        )
+        
+        plt.ylabel("Power")
+        plt.xlabel("Frequency (MHz)")
         plt.grid()
+
         plt.show()
 
     def signal_plot(self, 
@@ -235,7 +291,7 @@ class Receiver():
         )
         
         plt.ylabel("Power")
-        plt.xlabel("Frequency (MHz)")
+        plt.xlabel("Frequency")
         plt.grid()
         plt.show()
 
@@ -256,7 +312,7 @@ class Receiver():
         plt.grid()
 
         specan = SpecAn().calculate_psd(
-            self.conf.fbb,
+            self.spread_bb.fs,
             self.spread_bb.signals[index]
             )
         
@@ -370,9 +426,9 @@ if __name__ == "__main__":
     
     Rb = 1e3
     Tb = 1/Rb
-    symbols = 10
+    symbols = 500
     totaltime = symbols*Tb
-    lc = 8
+    lc = 4
     config = CDMcfg(
         rb = Rb,
         lc = lc,
@@ -388,6 +444,6 @@ if __name__ == "__main__":
     signal = DiscreteSignal(config)
 
     #initiate and assemble receiver 
-    rx = Receiver(config, {PlotType.spread, PlotType.ddc}) 
+    rx = Receiver(config, {PlotType.signal, PlotType.spread, PlotType.summed, PlotType.ddc}) 
     rx.setup(signal)
     rx.assemble()
