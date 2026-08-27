@@ -141,14 +141,22 @@ class CDMx:
         else:
             dss = sumsignal 
             
+        if self.conf.modType=="BPSK":
+            decorrelated = self.decorrelate(
+                np.real(dss.signals),
+                fs_signal=dss.fs)
+            dss.signals = decorrelated
+        elif self.conf.modType=="QPSK":
+            decorrelated_I = self.decorrelate(
+                np.real(dss.signals),
+                fs_signal=dss.fs)
+            decorrelated_Q = self.decorrelate(
+                np.imag(dss.signals),
+                fs_signal=dss.fs)   
+            dss.signals = decorrelated_I + 1j*decorrelated_Q
         
-        decorrelated = self.decorrelate(
-            dss.signals,
-            fs_signal=dss.fs)
         #removes delay and fs unchanged 
-        new_time = np.arange(len(decorrelated[0]))*(1/fs_signal)
-
-        dss.signals = decorrelated
+        new_time = np.arange(len(dss.signals[0]))*(1/fs_signal)
         
         return dss #Signals_Time(new_time, decorrelated)
 
@@ -203,7 +211,7 @@ class CDMx:
                 mode="rxmode"
                 )
             decorr.append(decorrelated_signal)
-        return decorr
+        return np.array(decorr)
 
 
 class Filter:

@@ -355,14 +355,16 @@ class Receiver():
             plt.plot(self.recovered.time, self.recovered.signals[index], '-g', linewidth='3', label="Recovered signal")
         elif self.conf.modType=="QPSK":
             plt.subplot(2, 1, 1)
-            plt.plot(signal.symbol_time, np.real(signal.rrcsymbols), '-b')
             plt.plot(self.recovered.time, np.real(self.recovered.signals[index]), '-g', linewidth='3', label="Recovered signal")
+            plt.plot(signal.symbol_time, np.real(signal.rrcsymbols), '-b')
+
             plt.title("Real Part (In-Phase / I)")
             plt.grid()
 
             plt.subplot(2, 1, 2)
-            plt.plot(signal.symbol_time, np.imag(signal.rrcsymbols), '-b')
             plt.plot(self.recovered.time, np.imag(self.recovered.signals[index]), '-g', linewidth='3', label="Recovered signal")
+            plt.plot(signal.symbol_time, np.imag(signal.rrcsymbols), '-b')
+
             plt.title("Imaginary Part (Quadrature / Q)")
             plt.xlabel("Sample Index")
         
