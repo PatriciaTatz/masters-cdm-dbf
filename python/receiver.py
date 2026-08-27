@@ -143,7 +143,7 @@ class Receiver():
             #=====================================
 
             #DDC Resampled dataclass
-            #DDC Baseband: ddc.signals, Signal for each element 
+            #DDC Baseband: ddc.signals, but only ONE combined signal. 
             #DDC Time: ddc.time, Timestep changed to match timestep of code sequence 
             #DDC Sampling Frequency: ddc.fs = 3*flo   to match mixer 
             #DDC Signal Frequency = spread bandwidth (self.conf.b * self.conf.lc) centered at 0Hz
@@ -173,15 +173,16 @@ class Receiver():
                 ddc.fs
                 )
             """
-            recovered = self.cdmx.spreader(
-                
+            self.recovered = self.cdmx.recover(
+                sumsignal=ddc.signals,
+                fs_signal = ddc.fs,
+                f_signal = self.conf.fbb,
+                codes=self.codes
+
             )
             if PlotType.recovered in self.plot:
                 self.recover_plot(
-                    self.rx_time, self.filtered_bb, 
-                    recovered.time, recovered.signals,
-                    self.spread_bb.fs,
-                    0
+                    index=0
                 )
             
         else: 
@@ -200,24 +201,24 @@ class Receiver():
                     0
                 )
 
-        if self.conf.BEAMFORM:
         #=============================
         #     DIGITAL BEAMFORMING    |
         #=============================
+        if self.conf.BEAMFORM:
             bf = self.bf.align_combine_signals(
                 self.element_delays,
-                recovered.signals
+                self.recovered.signals
             )
 
             if PlotType.bf in self.plot:
                 self.bf_plot(
                     self.rx_time, filtered_bb, 
-                    recovered.time, bf,
+                    self.recovered.time, bf,
                     0
                 )  
             return ResampledSignals(bf, recovered.time, self.spread_bb.fs)
         else:
-            return ResampledSignals(recovered.signals, recovered.time, spread_bb.fs)
+            return recovered
 
     def sum_plot(self, time, signal):
         plt.rcParams['font.size'] = 15
@@ -267,7 +268,7 @@ class Receiver():
         if self.conf.modType == "BPSK":
             #Real symbol waveform recovered after downconversion 
             #otherwise QPSK does not look like anything useful
-            plt.stem(signal.symbol_time, signal.rrcsymbols, 'orange', label="Upsampled Symbols")
+            plt.stem(signal.symbol_time, signal.symbols, 'orange', label="Upsampled Symbols")
     
         plt.legend(loc='upper right')
         plt.grid()
@@ -344,18 +345,27 @@ class Receiver():
         plt.show()
 
     def recover_plot(self,
-        tbefore,
-        before_signal,
-        tafter,
-        after_signal,
-        fs,
         index=0
         ):
         plt.rcParams['font.size'] = 15
         plt.figure(figsize=(15,7))
         plt.title(f"Recovered Signal at Element Path={index+1}")
-        plt.plot(tbefore, before_signal[index], '--b', label=f"Rx signal")
-        plt.plot(tafter, after_signal[index], '-g', linewidth='3', label="Recovered signal")
+        if self.conf.modType=="BPSK":
+            plt.plot(signal.symbol_time, signal.rrcsymbols, '--b', label=f"Rx signal")
+            plt.plot(self.recovered.time, self.recovered.signals[index], '-g', linewidth='3', label="Recovered signal")
+        elif self.conf.modType=="QPSK":
+            plt.subplot(2, 1, 1)
+            plt.plot(signal.symbol_time, np.real(signal.rrcsymbols), '-b')
+            plt.plot(self.recovered.time, np.real(self.recovered.signals[index]), '-g', linewidth='3', label="Recovered signal")
+            plt.title("Real Part (In-Phase / I)")
+            plt.grid()
+
+            plt.subplot(2, 1, 2)
+            plt.plot(signal.symbol_time, np.imag(signal.rrcsymbols), '-b')
+            plt.plot(self.recovered.time, np.imag(self.recovered.signals[index]), '-g', linewidth='3', label="Recovered signal")
+            plt.title("Imaginary Part (Quadrature / Q)")
+            plt.xlabel("Sample Index")
+        
         plt.legend(loc='upper right')
         plt.grid()
         plt.xlabel("Time (seconds)")
@@ -363,8 +373,8 @@ class Receiver():
 
 
         specan = SpecAn().calculate_psd(
-            fs,
-            after_signal[index]
+            self.recovered.fs,
+            self.recovered.signals[index]
             )
 
 
@@ -430,7 +440,7 @@ if __name__ == "__main__":
     
     Rb = 1e3
     Tb = 1/Rb
-    symbols = 500
+    symbols = 1000
     totaltime = symbols*Tb
     lc = 4
     config = CDMcfg(
@@ -441,7 +451,7 @@ if __name__ == "__main__":
         simtime = totaltime,
         no_elem = 2,
         codefam="WH",
-        modType="BPSK",
+        modType="QPSK",
         codeids=np.array([1,2])
         )
     #create signal 
@@ -451,7 +461,7 @@ if __name__ == "__main__":
     rx = Receiver(config, {
         #PlotType.signal, 
         #PlotType.spread
-        PlotType.ddc
+        PlotType.recovered
         }) 
     rx.setup(signal)
     rx.assemble()

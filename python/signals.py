@@ -26,7 +26,7 @@ class DiscreteSignal:
 
         #generate signal/s
         self.filters = Filter(conf)
-        txsignal = self.create_symbols() #create symbols, rrc filtered
+        txsignal = self.create_symbols().copy() #create symbols, rrc filtered, copy of transmit to avoid overwriting original waveform 
         self.create_timeseries(txsignal) #create time series based on input symbol rate
 
         if self.conf.INTERFERENCE: 
@@ -80,10 +80,10 @@ class DiscreteSignal:
         #self.txsymbols = np.load("input.npy")
 
         #add rrcfilter
-        self.transmit, self.rrcsymbols = self.filters.rrcfilter(self.txsymbols, self.conf.fs)
-        self.symbol_time = np.arange(len(self.rrcsymbols))/self.conf.fs
+        self.rrcsymbols, self.symbols = self.filters.rrcfilter(self.txsymbols, self.conf.fs)
+        self.symbol_time = np.arange(len(self.symbols))/self.conf.fs
         #np.save("transmit_clean", self.transmit)
-        return self.transmit
+        return self.rrcsymbols
 
     def create_timeseries(self, signal):
         #the timestep is the symbol period divided by how much each sample was upsampled by the RRC filter
@@ -106,6 +106,7 @@ class DiscreteSignal:
             tau_i = d*sin(theta)
             psi_i = 2*pi*i*tau_i/lam
             signalNs = signal*np.exp(-1j*psi_i)*np.exp(+1j*2*pi*fd*self.time) 
+            
             self.elements.append(signalNs)
             self.psi.append(psi_i)
         return self.elements 
@@ -169,19 +170,19 @@ class DiscreteSignal:
         elements_to_plot = range(len(self.elements))
         for i in elements_to_plot:
             if self.conf.modType=="BPSK":
-                plt.stem(signal.symbol_time, signal.rrcsymbols , 'orange')
+                plt.stem(signal.symbol_time, signal.symbols , 'orange')
                 plt.plot(self.time, self.elements[i], '-', label=f"Element {i} Signal")
                 plt.grid()
 
             elif self.conf.modType=="QPSK":
                 plt.subplot(2, 1, 1)
-                plt.stem(self.symbol_time, np.real(self.rrcsymbols), 'orange')
+                plt.stem(self.symbol_time, np.real(self.symbols), 'orange')
                 plt.plot(self.time, np.real(self.elements[i]), '-b')
                 plt.title("Real Part (In-Phase / I)")
                 plt.grid()
 
                 plt.subplot(2, 1, 2)
-                plt.stem(self.symbol_time, np.imag(self.rrcsymbols), 'orange')
+                plt.stem(self.symbol_time, np.imag(self.symbols), 'orange')
                 plt.plot(self.time, np.imag(self.elements[i]), '-g')
                 plt.title("Imaginary Part (Quadrature / Q)")
                 plt.xlabel("Sample Index")

@@ -131,31 +131,75 @@ class CDMx:
         """
         return SpreadSignals(os, ss, time, exp_codes, fs_resampled)
 
-    def recover(self, sumsignal, codes, fs):
+    def recover(self, sumsignal, codes, fs_signal, f_signal):
         if not self.conf.CALIBRATE:
-            dss = self.despread(sumsignal, codes)
+            dss = self.despread(
+                sumsignal,
+                codes,
+                fs_signal=fs_signal,
+                f_signal=f_signal)
         else:
             dss = sumsignal 
-
-        decorrelated = self.decorrelate(dss, fs)
+            
+        
+        decorrelated = self.decorrelate(
+            dss.signals,
+            fs_signal=dss.fs)
         #removes delay and fs unchanged 
-        new_time = np.arange(len(decorrelated[0]))*(1/fs)
-        return Signals_Time(new_time, decorrelated)
+        new_time = np.arange(len(decorrelated[0]))*(1/fs_signal)
 
-    def despread(self, sumsignal, codes):
+        dss.signals = decorrelated
+        
+        return dss #Signals_Time(new_time, decorrelated)
+
+    def despread(self, sumsignal, codes,fs_signal,f_signal):
         #Despread signal by multiplying with code block
         dss = [] #despread
+
+        f_code = self.conf.lc * f_signal       #Transition xLc times over one period of signal
+        fs_code = self.conf.sps_chip * f_code  
+        ss = []
+        os = []
+        exp_codes = []
+
+        #create code sequence 
+        for i in range(self.conf.no_elem):
+            #upsample is required to do discrete multiplication 
+            if fs_code != fs_signal:
+                resampled_signal, fs_resampled = self.dsp.resample_signal(
+                    targetfs=fs_code,
+                    oldfs=fs_signal,
+                    signal=sumsignal
+                )
+
+            os.append(resampled_signal)
+
+            code_sequence = np.repeat(codes[i], self.conf.sps_chip)                       #upsamples to f[+1 +1] -> [+1 +1 +1 +1] if sps_chip=2
+            tile_repeats = int(np.ceil(len(resampled_signal) / len(code_sequence)))       #calculate number of repeats required 
+            expanded_code = np.tile(code_sequence, tile_repeats)[:len(resampled_signal)]  #expand then trim to signal length  
+            exp_codes.append(expanded_code)             
+
+            #spreading operation
+            despread_signal  = resampled_signal*expanded_code
+            ss.append(despread_signal)
+    
+        time_before = np.arange(len(sumsignal))/fs_signal
+        time = np.arange(len(ss[0]))/fs_resampled
+
+        """
         for i in range(self.conf.no_elem):
             despread_signal = sumsignal*codes[i]
             dss.append(despread_signal)
-        return dss
+        """
 
-    def decorrelate(self, despread_signal, fs):
+        return SpreadSignals(os, ss, time, exp_codes, fs_resampled) #dss
+
+    def decorrelate(self, despread_signal, fs_signal):
         decorr = [] 
         for i in range(self.conf.no_elem):
             decorrelated_signal, symbols = self.mf.rrcfilter(
                 despread_signal[i],
-                fs,
+                fs_signal=fs_signal,
                 mode="rxmode"
                 )
             decorr.append(decorrelated_signal)
@@ -166,10 +210,10 @@ class Filter:
     def __init__(self, conf):
         self.conf = conf
 
-    def rrcfilter(self, signal, fs, mode="txmode"):
+    def rrcfilter(self, signal, fs_signal, mode="txmode"):
         #upsampling
         if mode == "txmode":
-            sps_symbol  = int(round(fs / self.conf.rb)) #changes from config due to resampling
+            sps_symbol  = int(round(fs_signal / self.conf.rb)) #changes from config due to resampling
             ts = 1 / self.conf.rb #symbol period
 
             prepad = sps_symbol
@@ -179,14 +223,14 @@ class Filter:
             symbols[prepad::sps_symbol] = signal
             samples = symbols
         else:
-            sps_symbol = int(round(fs/self.conf.rb)) #now we are filtering to resolve the fbb 
+            sps_symbol = int(round(fs_signal/self.conf.rb)) #now we are filtering to resolve the fbb 
             ts = 1/self.conf.rb
 
             samples = signal
         
         ntaps = self.conf.span*sps_symbol + 1  #must be odd, total length of the filter 
         #apply filter
-        dt_filter, h_rrc = filter.rrcosfilter(ntaps, self.conf.alpha, ts, fs)
+        dt_filter, h_rrc = filter.rrcosfilter(ntaps, self.conf.alpha, ts, fs_signal)
         #h_rrc /= np.sqrt(np.sum(h_rrc**2))
         filtered = np.convolve(samples, h_rrc, mode='full')
         h_delay = (ntaps-1)//2
@@ -292,8 +336,6 @@ class Mixer:
         else:
             #quadrature downconversion
             lo_signal = np.exp(-1j*2*np.pi*flo_mixer*lo_time) 
-
-
 
         #mix signal by multiplication 
         mixer_output = signal_resampled * lo_signal
