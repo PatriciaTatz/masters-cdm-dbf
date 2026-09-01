@@ -24,6 +24,15 @@ class SpreadSignals:
     fs: float 
 
 @dataclass
+class DespreadSignals:
+    original: list[np.ndarray]
+    signals: list[np.ndarray]
+    time: np.ndarray
+    codes: list[np.ndarray]
+    fs: float 
+
+
+@dataclass
 class Specan:
     f: np.ndarray
     Pxx_dB: np.ndarray

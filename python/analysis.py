@@ -32,6 +32,9 @@ class BER:
         sps = int(1 / (self.conf.rb * dt)) 
         symbols_at_rb = signal[sps::sps]
 
+        if self.conf.modType == "QPSK":
+            I_symbols = np.real(signals[sps::sps])
+            Q_symbols 
         """
         #plot for where the sampler is occuring
         plt.figure()
@@ -66,11 +69,12 @@ class BER:
         ebno_db = np.arange(0, maxSNR)
         ebno_linear = 10**(ebno_db/10)
         
+
         txbits = np.where(self.signal.txsymbols > 0, 1, -1)
 
         arrpath = 0
-        signal_len = len(self.signal.transmit)
-        signal = self.signal.transmit.copy()
+        signal_len = len(self.signal.rrcsymbols)
+        signal = self.signal.rrcsymbols.copy()
         eb = np.sum(signal**2) / len(txbits)
 
         #BER simulation 
@@ -165,14 +169,15 @@ def plot_curve(ebno_db, ber_array, ber_titles):
 
 if __name__ == "__main__":
     #configure
-    Rb = 6.25e6
+    Rb = 1e3
     Tb = 1/Rb
     symbols = 1000
     totaltime = symbols*Tb
     
     Nelem = [2]
-    lc = 31
-    fam="Gold"
+    lc = 4
+    fam="WH"
+    mod = "QPSK"
 
     ber_title = ['Theoretical'] 
     SNR =  11
@@ -192,7 +197,8 @@ if __name__ == "__main__":
             lc=lc,
             codeids=np.arange(0,lc),
             CALIBRATE=False,
-            codefam=fam
+            codefam=fam,
+            modType=mod
             )
         WHcodes = CodeSelector(baseconfig)
         weights = WHcodes.generate_weights()
@@ -209,7 +215,7 @@ if __name__ == "__main__":
         ber_worst = BER(config_worst,signal)
 
         print(f"N={nelem} with best code pairs={best}")
-        _, curve_best = ber_best.sim(10**7, SNR)
+        _, curve_best = ber_best.sim(1, SNR)
         ber_title.append(f"{fam}_N_{str(nelem)}_Lc_{lc}_best")
         ber_data.append(curve_best)
 

@@ -101,6 +101,7 @@ class CDMx:
             os.append(resampled_signal)
             print("resampled=", fs_resampled)
             code_sequence = np.repeat(codes[i], self.conf.sps_chip)                       #upsamples to f[+1 +1] -> [+1 +1 +1 +1] if sps_chip=2
+            print(code_sequence)
             tile_repeats = int(np.ceil(len(resampled_signal) / len(code_sequence)))       #calculate number of repeats required 
             expanded_code = np.tile(code_sequence, tile_repeats)[:len(resampled_signal)]  #expand then trim to signal length  
             exp_codes.append(expanded_code)             
@@ -140,20 +141,21 @@ class CDMx:
                 f_signal=f_signal)
         else:
             dss = sumsignal 
-            
-        if self.conf.modType=="BPSK":
-            decorrelated = self.decorrelate(
-                np.real(dss.signals),
-                fs_signal=dss.fs)
-            #dss.signals = decorrelated
-        elif self.conf.modType=="QPSK":
-            decorrelated_I = self.decorrelate(
-                np.real(dss.signals),
-                fs_signal=dss.fs)
-            decorrelated_Q = self.decorrelate(
-                np.imag(dss.signals),
-                fs_signal=dss.fs)   
-            dss.signals = decorrelated_I + 1j*decorrelated_Q
+
+        decorrelated = self.decorrelate(
+            dss.signals,
+            fs_signal=dss.fs)
+        dss.signals=decorrelated
+
+        plt.figure()
+        plt.title(f"Constellation Diagram of Tx Signal on Element=1")
+        plt.scatter(
+            np.real(dss.signals),
+            np.imag(dss.signals),
+            color="blue",
+            alpha=0.5,
+            s=10,
+        )
         
         #removes delay and fs unchanged 
         new_time = np.arange(len(dss.signals[0]))*(1/fs_signal)
@@ -167,6 +169,7 @@ class CDMx:
         f_code = self.conf.lc * f_signal       #Transition xLc times over one period of signal
         fs_code = self.conf.sps_chip * f_code  
         ss = []
+        symbol_elements = []
         os = []
         exp_codes = []
 
@@ -214,6 +217,8 @@ class CDMx:
                 mode="rxmode"
                 )
             decorr.append(decorrelated_signal)
+
+
         return np.array(decorr)
 
 

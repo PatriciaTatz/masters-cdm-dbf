@@ -255,7 +255,7 @@ if __name__ == "__main__":
         alpha = 0.5,
         simtime = totaltime,
         no_elem = 2,
-        modType="BPSK"
+        modType="QPSK"
     )
     
     signal = DiscreteSignal(config)

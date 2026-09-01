@@ -182,12 +182,12 @@ class Receiver():
             )
             if PlotType.recovered in self.plot:
                 self.recover_plot(
-                    index=0
+                    index=1
                 )
             
         else: 
             #WHEN CALIBRATING: ONLY PASSING THROUGH MATCHED FILTER
-            recovered = self.cdmx.recover(
+            self.recovered = self.cdmx.recover(
                 filtered_signals,
                 self.spread.codes,
                 self.spread_bb.fs
@@ -197,7 +197,7 @@ class Receiver():
                 self.recover_plot(
                     self.time, self.filtered_bb, 
                     recovered.time, recovered.signals,
-                    self.spread_bb.fs,
+                    self.recovered.fs,
                     0
                 )
 
@@ -216,9 +216,9 @@ class Receiver():
                     self.recovered.time, bf,
                     0
                 )  
-            return ResampledSignals(bf, recovered.time, self.spread_bb.fs)
+            return ResampledSignals(bf, self.recovered.time, self.spread_bb.fs)
         else:
-            return recovered
+            return ResampledSignals(self.recovered.signals, self.recovered.time, self.recovered.fs)
 
     def sum_plot(self, time, signal):
         plt.rcParams['font.size'] = 15
@@ -373,7 +373,6 @@ class Receiver():
         plt.xlabel("Time (seconds)")
         plt.ylabel("Amplitude")
 
-
         specan = SpecAn().calculate_psd(
             self.recovered.fs,
             self.recovered.signals[index]
@@ -454,7 +453,7 @@ if __name__ == "__main__":
         no_elem = 2,
         codefam="WH",
         modType="QPSK",
-        codeids=np.array([3,2])
+        codeids=np.array([1,3])
         )
     #create signal 
     signal = DiscreteSignal(config)
@@ -463,7 +462,7 @@ if __name__ == "__main__":
     rx = Receiver(config, {
         #PlotType.signal, 
         #PlotType.spread
-        PlotType.ddc
+        PlotType.recovered
         }) 
     rx.setup(signal)
     rx.assemble()
