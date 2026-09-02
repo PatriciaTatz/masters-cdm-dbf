@@ -177,7 +177,7 @@ if __name__ == "__main__":
     Nelem = [2]
     lc = 4
     fam="WH"
-    mod = "QPSK"
+    mod = "BPSK"
 
     ber_title = ['Theoretical'] 
     SNR =  11

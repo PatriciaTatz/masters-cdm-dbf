@@ -82,7 +82,7 @@ class CDMx:
 
     def spreader(self, signals, fs_signal, f_signal, codes):
         f_code = self.conf.lc * f_signal       #Transition xLc times over one period of signal
-        fs_code = self.conf.sps_chip * f_code  
+        fs_code = self.conf.sps_chip*f_code  
         ss = []
         os = []
         exp_codes = []
@@ -100,8 +100,9 @@ class CDMx:
                 )
             os.append(resampled_signal)
             print("resampled=", fs_resampled)
+
+            #generate code sequencec 
             code_sequence = np.repeat(codes[i], self.conf.sps_chip)                       #upsamples to f[+1 +1] -> [+1 +1 +1 +1] if sps_chip=2
-            print(code_sequence)
             tile_repeats = int(np.ceil(len(resampled_signal) / len(code_sequence)))       #calculate number of repeats required 
             expanded_code = np.tile(code_sequence, tile_repeats)[:len(resampled_signal)]  #expand then trim to signal length  
             exp_codes.append(expanded_code)             
@@ -133,6 +134,7 @@ class CDMx:
         return SpreadSignals(os, ss, time, exp_codes, fs_resampled)
 
     def recover(self, sumsignal, codes, fs_signal, f_signal):
+
         if not self.conf.CALIBRATE:
             dss = self.despread(
                 sumsignal,
@@ -142,24 +144,40 @@ class CDMx:
         else:
             dss = sumsignal 
 
-        decorrelated = self.decorrelate(
+        #returns for all arrays
+        decorrelated, symbols = self.decorrelate(
             dss.signals,
             fs_signal=dss.fs)
+
         dss.signals=decorrelated
 
+        #removes delay and fs unchanged 
+        new_time = np.arange(len(dss.signals[1]))*(1/fs_signal)
+        
+        """
+        #QUICK CONSTELLATION PLOT 
+        plt.subplot(2, 1, 1)
+        plt.plot(new_time, np.real(dss.signals[1]))
+        plt.stem(new_time[::80][1:],np.real(symbols[1][1:]), 'red')
+        plt.title("Real Part (In-Phase / I)")
+
+        plt.subplot(2, 1, 2)
+        plt.plot(new_time, np.imag(dss.signals[1]))
+        plt.stem(new_time[::80][1:],np.imag(symbols[1][1:]), 'red')
+        plt.title("Imaginary Part (Quadrature / Q)")
+
         plt.figure()
-        plt.title(f"Constellation Diagram of Tx Signal on Element=1")
+        plt.title(f"Constellation Diagram of Tx Signal on Element=2")
         plt.scatter(
-            np.real(dss.signals),
-            np.imag(dss.signals),
+            np.real(symbols[1][1:]),
+            np.imag(symbols[1][1:]),
             color="blue",
             alpha=0.5,
-            s=10,
+            s=40,
         )
-        
-        #removes delay and fs unchanged 
-        new_time = np.arange(len(dss.signals[0]))*(1/fs_signal)
-        
+        plt.show()
+        """
+
         return dss #Signals_Time(new_time, decorrelated)
 
     def despread(self, sumsignal, codes,fs_signal,f_signal):
@@ -168,7 +186,7 @@ class CDMx:
 
         f_code = self.conf.lc * f_signal       #Transition xLc times over one period of signal
         fs_code = self.conf.sps_chip * f_code  
-        ss = []
+        dss = []
         symbol_elements = []
         os = []
         exp_codes = []
@@ -185,9 +203,12 @@ class CDMx:
                     oldfs=fs_signal,
                     signal=sumsignal
                 )
-
+            else:
+                #No resampling required
+                resampled_signal = sumsignal
+                fs_resampled = fs_signal
+            
             os.append(resampled_signal)
-
             code_sequence = np.repeat(codes[i], self.conf.sps_chip)                       #upsamples to f[+1 +1] -> [+1 +1 +1 +1] if sps_chip=2
             tile_repeats = int(np.ceil(len(resampled_signal) / len(code_sequence)))       #calculate number of repeats required 
             expanded_code = np.tile(code_sequence, tile_repeats)[:len(resampled_signal)]  #expand then trim to signal length  
@@ -195,21 +216,16 @@ class CDMx:
 
             #spreading operation
             despread_signal  = resampled_signal*expanded_code
-            ss.append(despread_signal)
-        print("resampled=",fs_resampled)
-        time_before = np.arange(len(sumsignal))/fs_signal
-        time = np.arange(len(ss[0]))/fs_resampled
-
-        """
-        for i in range(self.conf.no_elem):
-            despread_signal = sumsignal*codes[i]
             dss.append(despread_signal)
-        """
+            
+        #time_before = np.arange(len(sumsignal))/fs_signal
+        time = np.arange(len(dss[0]))/fs_resampled
 
-        return SpreadSignals(os, ss, time, exp_codes, fs_resampled) #dss
+        return SpreadSignals(os, dss, time, exp_codes, fs_resampled) 
 
     def decorrelate(self, despread_signal, fs_signal):
         decorr = [] 
+        syms = []
         for i in range(self.conf.no_elem):
             decorrelated_signal, symbols = self.mf.rrcfilter(
                 despread_signal[i],
@@ -217,9 +233,10 @@ class CDMx:
                 mode="rxmode"
                 )
             decorr.append(decorrelated_signal)
+            syms.append(symbols)
 
 
-        return np.array(decorr)
+        return decorr, syms
 
 
 class Filter:
@@ -241,7 +258,6 @@ class Filter:
         else:
             sps_symbol = int(round(fs_signal/self.conf.rb)) #now we are filtering to resolve the fbb 
             ts = 1/self.conf.rb
-
             samples = signal
         
         ntaps = self.conf.span*sps_symbol + 1  #must be odd, total length of the filter 
@@ -254,8 +270,10 @@ class Filter:
         filtered_delay = filtered[h_delay:-h_delay]
 
         if mode == "rxmode":
-            symbols = filtered_delay[::sps_symbol]
+            symbols = filtered_delay[::sps_symbol][1:]
             filtered_delay = filtered[h_delay+1:-h_delay+1]
+        else:
+            symbols = filtered_delay[::sps_symbol][1:]
 
         return filtered_delay, symbols
 
@@ -297,6 +315,7 @@ class Mixer:
 
         #for superhet, flo != fcar, just above zero-IF
         flo_mixer = flo
+        print(flo)
         
         mixer_output = [] 
         for i in range(self.conf.no_elem): 
@@ -374,12 +393,12 @@ class SpecAn:
         """
         f, X = welch(
                 signal, 
-                fs=fs, 
-                window='hann',             # Window function applied to each segment
-                nperseg=len(signal)/8,     #frequency bins averaged over segments
+                fs=fs, detrend=False,
+                window='hamming',              # Window function applied to each segment
+                nperseg=len(signal)/15,#4096,      #frequency bins averaged over segments
                 return_onesided=False,      #double sided to see rrc filtered effect
-                scaling='density',       # Returns V^2/Hz (use 'spectrum' for V^2)
-                noverlap=len(signal)/16#overlap of frequency bins 
+                scaling='density',        # Returns V^2/Hz (use 'spectrum' for V^2)
+                noverlap=0#len(signal)/(10*2)   #overlap of frequency bins 
             )
         #this shifts a twosided spectrum from 0 +f -f into -f 0 +f 
         f = np.fft.fftshift(f)

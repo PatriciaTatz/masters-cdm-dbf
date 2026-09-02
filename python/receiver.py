@@ -40,7 +40,7 @@ class Receiver():
 
         #recieve the signal
         self.rxsignals = copy.deepcopy(signal.elements) #element signals
-        self.fs_rx = signal.fs                          #sampling frequency
+        self.fs_rx = signal.fs                        #sampling frequency
         self.rx_time = signal.time                      #element signal time axis
         self.element_delays = signal.psi                #element signal spatial delay 
         
@@ -54,7 +54,7 @@ class Receiver():
     def assemble(self):
         if not self.conf.CALIBRATE: 
             #===================================
-            #   D/C TO BASEBAND PER ELEMENT     |
+            #   D/C TO IF OR BB PER ELEMENT     |
             #   Fsignal change not Fs_signal!!  |
             #===================================     
             
@@ -62,13 +62,19 @@ class Receiver():
             #Time = self.rx_time
             #Signal Frequency =  self.conf.fbb
             #Sampling Frequency = fs_rx
-            flo = self.conf.fcar - self.conf.fbb 
+            if self.conf.SPREADING_STAGE=="IF":
+                #Carrier enabled implies spreading at IF 
+                flo = self.conf.fcar - self.conf.fbb 
+            elif self.conf.SPREADING_STAGE=="BB":
+                #No carrier implies spreading at BB
+                flo = self.conf.fcar 
+
             self.baseband = self.mixer.superhet(
                 self.rxsignals,
                 fs_signal = self.fs_rx, 
                 flo = flo 
             )
-            
+
             if PlotType.signal in self.plot:
                 self.signal_plot(
                     "After D/C at Element=1",
@@ -86,7 +92,12 @@ class Receiver():
             #Signal Frequency =  self.conf.fbb w/o image 
             #Sampling Frequency = fs_rx
 
-            flow = 1.5*(self.conf.fbb + self.conf.rb)
+            if self.conf.SPREADING_STAGE=="IF":
+                flow = 1.5*(self.conf.fbb + self.conf.rb)
+            elif self.conf.SPREADING_STAGE=="BB":
+                flow = self.conf.b
+
+
             self.filtered_bb = self.filter.butterworth(
                 cutoff = flow,
                 fs = self.fs_rx,
@@ -112,12 +123,22 @@ class Receiver():
             #Spread Sampling Frequency: spread_bb.fs, Fs_chip 
             #Signal Frequency = self.conf.fbb * self.conf.lc  , NOT returned 
 
-            self.spread_bb = self.cdmx.spreader(
-                signals=self.filtered_bb,
-                fs_signal = self.baseband.fs,
-                f_signal = self.conf.fbb,
-                codes=self.codes
-            )
+            if self.conf.SPREADING_STAGE=="IF":
+                
+                self.spread_bb = self.cdmx.spreader(
+                    signals=self.filtered_bb,
+                    fs_signal = self.baseband.fs,
+                    f_signal = self.conf.fbb,
+                    codes=self.codes
+                )
+            elif self.conf.SPREADING_STAGE=="BB":
+                print("bb=",self.baseband.fs)
+                self.spread_bb = self.cdmx.spreader(
+                    signals=self.filtered_bb,
+                    fs_signal = self.baseband.fs,
+                    f_signal = self.conf.b,
+                    codes=self.codes
+                )
 
             if PlotType.spread in self.plot:
                 self.spread_plot(
@@ -148,19 +169,20 @@ class Receiver():
             #DDC Sampling Frequency: ddc.fs = 3*flo   to match mixer 
             #DDC Signal Frequency = spread bandwidth (self.conf.b * self.conf.lc) centered at 0Hz
 
-            ddc = self.mixer.quadrature(
-                        np.array(summed_signal),
-                        fs_signal=self.spread_bb.fs,
-                        flo=self.conf.fbb
-                    )
+            if self.conf.SPREADING_STAGE=="IF":
+                ddc = self.mixer.quadrature(
+                            np.array(summed_signal),
+                            fs_signal=self.spread_bb.fs,
+                            flo=self.conf.fbb
+                        )
 
-            if PlotType.ddc in self.plot:
-                self.signal_plot(
-                    "After DDC at Element=1",
-                    ddc.time, ddc.signals,
-                    ddc.fs
-                )
-            
+                if PlotType.ddc in self.plot:
+                    self.signal_plot(
+                        "After DDC at Element=1",
+                        ddc.time, ddc.signals,
+                        ddc.fs
+                    )
+                
             #=====================================
             #   DIGITAL DESPREAD  PER ELEMENT     |
             #   NOT RESAMPLED BUT MF DELAY TRUNC  |
@@ -173,17 +195,30 @@ class Receiver():
                 ddc.fs
                 )
             """
-            self.recovered = self.cdmx.recover(
-                sumsignal=ddc.signals,
-                fs_signal = ddc.fs,
-                f_signal = self.conf.fbb,
-                codes=self.codes
+            if self.conf.SPREADING_STAGE=="IF":
+                self.recovered = self.cdmx.recover(
+                    sumsignal=ddc.signals,
+                    fs_signal = ddc.fs,
+                    f_signal = self.conf.fbb,
+                    codes=self.codes
 
-            )
-            if PlotType.recovered in self.plot:
-                self.recover_plot(
-                    index=1
                 )
+                if PlotType.recovered in self.plot:
+                    self.recover_plot(
+                        index=0
+                    )
+            elif self.conf.SPREADING_STAGE=="BB":
+                self.recovered = self.cdmx.recover(
+                    sumsignal=summed_signal,
+                    fs_signal = self.spread_bb.fs,
+                    f_signal = self.conf.b,
+                    codes=self.codes
+
+                )
+                if PlotType.recovered in self.plot:
+                    self.recover_plot(
+                        index=0
+                    )        
             
         else: 
             #WHEN CALIBRATING: ONLY PASSING THROUGH MATCHED FILTER
@@ -308,7 +343,7 @@ class Receiver():
         plt.figure(figsize=(15,7))
         plt.title(f"Spread Signals of Element={index}")
         plt.plot(self.spread_bb.time, self.spread_bb.original[index], '-ob', label=f"Rx signal")
-        plt.plot(self.spread_bb.time, self.spread_bb.signals[index], '-og', label="Spread signal")
+        plt.plot(self.spread_bb.time, self.spread_bb.signals[index], '-og', label=f"Spread with {self.codes[index]}")
 
         plt.xlabel("Time (seconds)")
         plt.ylabel("Amplitude")
@@ -351,19 +386,19 @@ class Receiver():
         plt.figure(figsize=(15,7))
         #plt.title(f"Recovered Signal at Element Path={index+1}")
         if self.conf.modType=="BPSK":
-            plt.plot(signal.symbol_time, signal.rrcsymbols, '--b', label=f"Rx signal")
+            plt.plot(signal.symbol_time, signal.symbols, '--b', label=f"Rx signal")
             plt.plot(self.recovered.time, self.recovered.signals[index], '-g', linewidth='3', label="Recovered signal")
         elif self.conf.modType=="QPSK":
             plt.subplot(2, 1, 1)
             plt.plot(self.recovered.time, np.real(self.recovered.signals[index]), '-g', linewidth='3', label="Recovered signal")
-            plt.plot(signal.symbol_time, np.real(signal.rrcsymbols), '-b')
+            plt.plot(signal.symbol_time, np.real(signal.symbols), '-b')
 
             plt.title("Real Part (In-Phase / I)")
             plt.grid()
 
             plt.subplot(2, 1, 2)
             plt.plot(self.recovered.time, np.imag(self.recovered.signals[index]), '-g', linewidth='3', label="Recovered signal")
-            plt.plot(signal.symbol_time, np.imag(signal.rrcsymbols), '-b')
+            plt.plot(signal.symbol_time, np.imag(signal.symbols), '-b')
 
             plt.title("Imaginary Part (Quadrature / Q)")
             plt.xlabel("Sample Index")
@@ -441,7 +476,7 @@ if __name__ == "__main__":
     
     Rb = 1e3
     Tb = 1/Rb
-    symbols = 1000
+    symbols = 100
     totaltime = symbols*Tb
     lc = 4
     config = CDMcfg(
@@ -452,17 +487,13 @@ if __name__ == "__main__":
         simtime = totaltime,
         no_elem = 2,
         codefam="WH",
-        modType="QPSK",
-        codeids=np.array([1,3])
+        modType="BPSK",
+        codeids=np.array([1,2])
         )
     #create signal 
     signal = DiscreteSignal(config)
 
     #initiate and assemble receiver 
-    rx = Receiver(config, {
-        #PlotType.signal, 
-        #PlotType.spread
-        PlotType.recovered
-        }) 
+    rx = Receiver(config, PlotType.all())
     rx.setup(signal)
     rx.assemble()

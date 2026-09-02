@@ -11,6 +11,7 @@ class CDMcfg():
     CALIBRATE: bool=False
     INTERFERENCE: bool=False
     CARRIER: bool=True
+    SPREADING_STAGE: str="IF"
     fcar: float = 1e5
     fbb: float = 1e4
     rb: float = 6.25e6
@@ -21,7 +22,7 @@ class CDMcfg():
     codefam: str = "WH"
     no_elem: int = 1 
     degree: int = 1
-    span: int = 8
+    span: int = 10
     codeids: np.ndarray = field(default_factory=lambda: np.array([]))
     def __post_init__(self):
         #calculate and assign derived parameter
