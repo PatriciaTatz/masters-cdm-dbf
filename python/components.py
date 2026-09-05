@@ -16,7 +16,7 @@ import komm as km  # type:ignore[import-untyped]
 import matplotlib.pyplot as plt
 import numpy as np
 from commpy.sequences import pnsequence  # type:ignore[import-untyped]
-from scipy.signal import periodogram, max_len_seq, resample_poly, welch, butter, filtfilt
+from scipy.signal import periodogram, max_len_seq, resample_poly, welch, butter, freqz, filtfilt
 import matplotlib.pyplot as plt 
 from fractions import Fraction
 
@@ -133,52 +133,30 @@ class CDMx:
         """
         return SpreadSignals(os, ss, time, exp_codes, fs_resampled)
 
-    def recover(self, sumsignal, codes, fs_signal, f_signal):
+    def recover(self, signal, codes, fs_signal, f_signal):
 
         if not self.conf.CALIBRATE:
+            #despread returns a Spread Signal object
             dss = self.despread(
-                sumsignal,
+                signal,
                 codes,
                 fs_signal=fs_signal,
                 f_signal=f_signal)
+
+            #returns for all arrays
+            decorrelated, symbols = self.decorrelate(
+                dss.signals,
+                fs_signal=dss.fs)
+
+            dss.signals = decorrelated
+            return dss
         else:
-            dss = sumsignal 
-
-        #returns for all arrays
-        decorrelated, symbols = self.decorrelate(
-            dss.signals,
-            fs_signal=dss.fs)
-
-        dss.signals=decorrelated
-
-        #removes delay and fs unchanged 
-        new_time = np.arange(len(dss.signals[1]))*(1/fs_signal)
+            dss = signal 
+            decorrelated, symbols = self.decorrelate(
+                dss,
+                fs_signal=fs_signal)
+            return decorrelated
         
-        """
-        #QUICK CONSTELLATION PLOT 
-        plt.subplot(2, 1, 1)
-        plt.plot(new_time, np.real(dss.signals[1]))
-        plt.stem(new_time[::80][1:],np.real(symbols[1][1:]), 'red')
-        plt.title("Real Part (In-Phase / I)")
-
-        plt.subplot(2, 1, 2)
-        plt.plot(new_time, np.imag(dss.signals[1]))
-        plt.stem(new_time[::80][1:],np.imag(symbols[1][1:]), 'red')
-        plt.title("Imaginary Part (Quadrature / Q)")
-
-        plt.figure()
-        plt.title(f"Constellation Diagram of Tx Signal on Element=2")
-        plt.scatter(
-            np.real(symbols[1][1:]),
-            np.imag(symbols[1][1:]),
-            color="blue",
-            alpha=0.5,
-            s=40,
-        )
-        plt.show()
-        """
-
-        return dss #Signals_Time(new_time, decorrelated)
 
     def despread(self, sumsignal, codes,fs_signal,f_signal):
         #Despread signal by multiplying with code block
@@ -235,7 +213,6 @@ class CDMx:
             decorr.append(decorrelated_signal)
             syms.append(symbols)
 
-
         return decorr, syms
 
 
@@ -246,36 +223,96 @@ class Filter:
     def rrcfilter(self, signal, fs_signal, mode="txmode"):
         #upsampling
         if mode == "txmode":
-            sps_symbol  = int(round(fs_signal / self.conf.rb)) #changes from config due to resampling
-            ts = 1 / self.conf.rb #symbol period
-
-            prepad = sps_symbol
+            sps_symbol  = self.conf.sps_symbol    #number of samples per symbol
+            ts = 1 / (self.conf.rb)               #symbol period in seconds 
             symbols = np.zeros(
-                prepad + len(signal)*sps_symbol,
+                len(signal)*sps_symbol,
                 dtype=signal.dtype)
-            symbols[prepad::sps_symbol] = signal
-            samples = symbols
+            symbols[::sps_symbol] = signal
+            samples = symbols            
         else:
             sps_symbol = int(round(fs_signal/self.conf.rb)) #now we are filtering to resolve the fbb 
             ts = 1/self.conf.rb
-            samples = signal
+            samples = signal   #this is the full rx signal 
         
-        ntaps = self.conf.span*sps_symbol + 1  #must be odd, total length of the filter 
-        #apply filter
-        dt_filter, h_rrc = filter.rrcosfilter(ntaps, self.conf.alpha, ts, fs_signal)
+
+        #evaluate filter parameters
+        ntaps = self.conf.span*sps_symbol  #must be odd, total length of the filter 
+        delay = int(ntaps)//2 #remove the odd component 
+
+        #generate filter coefficients
+        dt_filter, h_rrc = filter.rrcosfilter(
+            int(ntaps),
+            self.conf.alpha,
+            ts,
+            fs_signal
+            )
+        
+        #filter normalisation 
         h_rrc /= np.sqrt(np.sum(h_rrc**2))
+
+        #apply filter to the samples
         filtered = np.convolve(samples, h_rrc, mode='full')
-        h_delay = (ntaps-1)//2
-        
-        filtered_delay = filtered[h_delay:-h_delay]
 
-        if mode == "rxmode":
-            symbols = filtered_delay[::sps_symbol][1:]
-            filtered_delay = filtered[h_delay+1:-h_delay+1]
+        #remove delay caused by the filter
+        print(delay)
+        filtered_no_delay = filtered[delay:-delay]
+
+        #sample at the symbol
+        symbols = filtered_no_delay[::sps_symbol]
+
+
+        if self.conf.modType=="BPSK":
+            #Figure 3.4
+            time = np.arange(0, len(filtered))
+            plt.figure(figsize=(15,6))
+            plt.rcParams['font.size'] = 15
+            plt.stem(samples[:sps_symbol*10], label="Upsampled Symbols")
+            plt.plot(filtered_no_delay[:sps_symbol*10], '-o', c='orange', label="RRC filtered symbols w/o group delay")
+            plt.grid()
+            plt.title("BPSK with RRC Pulse Shaping")
+            plt.ylabel("Symbol")
+            plt.xlabel("Sample Index\n")
+            plt.legend(loc='upper right')
+
+            #Figure 3.5, constellation q
+            plt.figure(figsize=(10,8))
+            plt.rcParams['font.size'] = 15
+            plt.axhline(y=0, color='orange', linestyle='-', linewidth=1.5)
+            plt.axvline(x=0, color='orange', linestyle='-', linewidth=1.5)
+            plt.title(f"Constellation Diagram of BPSK Signal")
+            plt.ylabel("Quadrature (Q)")
+            plt.xlabel("In-Phase (I)")
+            plt.scatter(
+                np.real(symbols),
+                np.imag(symbols),
+                color="blue",
+                alpha=0.5,
+                s=30,
+            )
+            plt.grid()
         else:
-            symbols = filtered_delay[::sps_symbol][1:]
+            plt.figure(figsize=(15,10))
+            plt.rcParams['font.size'] = 15
+            plt.suptitle("QPSK with RRC Pulse Shaping")
+            plt.subplot(2, 1, 1)
+            plt.stem(np.real(samples[:sps_symbol*10]),  label="Upsampled Symbols")
+            plt.plot(np.real(filtered_no_delay[:sps_symbol*10]),  '-o', c='orange', label="RRC filtered symbols w/o group delay")
+            plt.ylabel("Real Part (In-Phase / I)")
+            plt.grid()
+            plt.legend(loc='upper right')
 
-        return filtered_delay, symbols
+            plt.subplot(2, 1, 2)
+            plt.stem(np.imag(samples[:sps_symbol*10]),  label="Upsampled Symbols")
+            plt.plot(np.imag(filtered_no_delay[:sps_symbol*10]),  '-o', c='orange', label="RRC filtered symbols w/o group delay")
+            plt.ylabel("Imaginary Part (Quadrature / Q)")
+            plt.xlabel("Sample Index")
+            plt.grid()
+
+            plt.legend(loc='upper right')
+        plt.show()
+        
+        return filtered_no_delay, symbols
 
     def butterworth(self, cutoff, fs, signals, filter_type="low"):
         #fs is sampling frequency! 
@@ -286,6 +323,25 @@ class Filter:
             Wn = cutoff/nyquist, 
             btype=filter_type
         )
+        """
+        #computer frequency response
+        #w in radians/sample, h the complex frequency response of filter
+        w, h = freqz(b,a, fs=fs)
+        #convert rad/sample to Hz
+        plt.figure(figsize=(10,7))
+        plt.rcParams['font.size'] = 15
+
+        plt.semilogx(w, 20 * np.log10(abs(h)), label="LPF Response")
+        plt.title(f'4th order Butterworth LPF frequency response \n Spreading at {self.conf.SPREADING_STAGE}')
+        plt.xlabel('Frequency [Hz]')
+        plt.ylabel('Amplitude [dB]')
+        plt.xlim(0, fs/2)
+        plt.grid(which='both', axis='both')
+        plt.axvline(cutoff, color='green', linewidth=2, label="Cuttoff Frequency") # cutoff frequency
+        plt.legend()
+        plt.show()
+        """
+
         #filter can be applied to an array type which signal is 
         filteredsignals = filtfilt(a,b, signals)
         return filteredsignals
@@ -338,7 +394,7 @@ class Mixer:
     def quadrature(self,signal,fs_signal, flo):
         #mixer sampling frequency is 3x the carrier frequency 
 
-        if fs_signal < flo: 
+        if fs_signal <= flo: 
             #upconverting to carrier 
             #fs_signal is just symbol sample frequency at this stage 
             #recall rb is symbol frequency exactly but now has bandwidth of b=(1+alpha)rb
@@ -348,11 +404,6 @@ class Mixer:
             #fs_signal is now the spread signal sample frequency 
             #recall fcode is the spread signal frequency 
             fs_mixer = 3*fs_signal 
-
-        print("fs_mixer=",fs_mixer)
-        print("fs_signal=",fs_signal)
-
-
         #flo  = fcarrier 
         flo_mixer = flo
 
@@ -387,20 +438,26 @@ class SpecAn:
         X = np.fft.fft(signal)
         N = len(X)
         f = np.fft.fftfreq(N,1/fs)
-        
+        q
         #Using scipy periodogram
         f, X = periodogram(signal, fs)
-        """
+        
         f, X = welch(
                 signal, 
                 fs=fs, detrend=False,
-                window='hamming',              # Window function applied to each segment
-                nperseg=len(signal)/15,#4096,      #frequency bins averaged over segments
+                window='hann',              # Window function applied to each segment
+                nperseg=len(signal)/40,#4096,      #frequency bins averaged over segments
                 return_onesided=False,      #double sided to see rrc filtered effect
                 scaling='density',        # Returns V^2/Hz (use 'spectrum' for V^2)
-                noverlap=0#len(signal)/(10*2)   #overlap of frequency bins 
+                noverlap=len(signal)/(40*2)   #overlap of frequency bins 
             )
         #this shifts a twosided spectrum from 0 +f -f into -f 0 +f 
         f = np.fft.fftshift(f)
         X = np.fft.fftshift(X)
-        return Specan(f,X/np.max(X))
+        """
+        x = signal
+        X = 10*np.log10(np.fft.fftshift(np.abs(np.fft.fft(x))**2)/len(x))
+        f = np.linspace(-fs/2, fs/2, len(X))
+        #Xnorm
+        X /= np.max(X)
+        return Specan(f,X)
