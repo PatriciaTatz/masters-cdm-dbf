@@ -40,7 +40,7 @@ class Receiver():
 
         #recieve the signal
         self.rxsignals = copy.deepcopy(signal.elements) #element signals
-        self.fs_rx = signal.fs                        #sampling frequency
+        self.fs_rx = signal.fs                          #sampling frequency
         self.rx_time = signal.time                      #element signal time axis
         self.element_delays = signal.psi                #element signal spatial delay 
         
@@ -223,15 +223,16 @@ class Receiver():
         else: 
             #WHEN CALIBRATING: ONLY PASSING THROUGH MATCHED FILTER
             self.recovered = self.cdmx.recover(
-                filtered_signals,
-                self.spread.codes,
-                self.spread_bb.fs
+                self.rxsignals,
+                [],
+                fs_signal=self.fs_rx,
+                f_signal=self.conf.rb
                 )
 
-            if PlotType.recovered in self.plot:
+            if PlotType.signal in self.plot:
                 self.recover_plot(
-                    self.time, self.filtered_bb, 
-                    recovered.time, recovered.signals,
+                    self.rx_time, self.rxsignals, 
+                    self.rx_time, self.recovered,
                     self.recovered.fs,
                     0
                 )
@@ -255,40 +256,6 @@ class Receiver():
         else:
             return ResampledSignals(self.recovered.signals, self.recovered.time, self.recovered.fs)
 
-    def sum_plot(self, time, signal):
-        plt.rcParams['font.size'] = 15
-        plt.figure(figsize=(15,7))
-        plt.plot(time, signal)
-        plt.title(f"Combined Signal from {self.conf.no_elem} Elements")
-        plt.xlabel("Time")
-        plt.ylabel("Amplitude")
-
-        plt.figure(figsize=(15,7))
-        plt.title(f"PSD of Combined Signal")
-        specan = SpecAn().calculate_psd(
-            self.spread_bb.fs,
-            np.array(signal),
-            )
-        
-        """
-        plt.semilogy(
-            specan.f,
-            specan.Pxx_dB,
-            color="blue",
-            labqel="PSD")
-        """
-        plt.plot(
-            specan.f,
-            specan.Pxx_dB,
-            '-b' 
-        )
-        
-        plt.ylabel("Power")
-        plt.xlabel("Frequency (MHz)")
-        plt.grid()
-
-        plt.show()
-
     def signal_plot(self, 
         title,
         time,
@@ -296,42 +263,29 @@ class Receiver():
         fsample
         ):
         plt.rcParams['font.size'] = 15
-        plt.figure()
-        plt.plot(time, asignal, '-o', label="RRC Filtered Signal")
+        plt.figure(figsize=(12,7))
+        plt.plot(time[:1000], asignal[:1000], '-o', label="RRC Filtered Signal")
         plt.title(f"{title}")
 
-        if self.conf.modType == "BPSK":
-            #Real symbol waveform recovered after downconversion 
-            #otherwise QPSK does not look like anything useful
-            plt.stem(signal.symbol_time, signal.symbols, 'orange', label="Upsampled Symbols")
-    
         plt.legend(loc='upper right')
         plt.grid()
         plt.xlabel("Time (seconds)")
         plt.ylabel("Amplitude")
     
-        plt.figure(figsize=(15,7))
-        plt.title(f"PSD of {title}")
+        plt.figure(figsize=(15,6))
+        plt.title(f"{title}")
         specan = SpecAn().calculate_psd(
             fsample,
             asignal,
             )
-        
-        """
-        plt.semilogy(
-            specan.f,
-            specan.Pxx_dB,
-            color="blue",
-            labqel="PSD")
-        """
         plt.plot(
-            specan.f,
+            specan.f/1e6,
             specan.Pxx_dB,
             '-b' 
         )
         
-        plt.ylabel("Power")
-        plt.xlabel("Frequency")
+        plt.ylabel("Normalized Power (dB)")
+        plt.xlabel("Frequency (MHz)")
         plt.grid()
         plt.show()
 
@@ -377,6 +331,41 @@ class Receiver():
         """
         plt.ylabel("Power (1/Hz)")
         plt.grid()
+        plt.show()
+
+
+    def sum_plot(self, time, signal):
+        plt.rcParams['font.size'] = 15
+        plt.figure(figsize=(15,7))
+        plt.plot(time, signal)
+        plt.title(f"Combined Signal from {self.conf.no_elem} Elements")
+        plt.xlabel("Time")
+        plt.ylabel("Amplitude")
+
+        plt.figure(figsize=(15,7))
+        plt.title(f"PSD of Combined Signal")
+        specan = SpecAn().calculate_psd(
+            self.spread_bb.fs,
+            np.array(signal),
+            )
+        
+        """
+        plt.semilogy(
+            specan.f,
+            specan.Pxx_dB,
+            color="blue",
+            label="PSD")
+        """
+        plt.plot(
+            specan.f,
+            specan.Pxx_dB,
+            '-b' 
+        )
+        
+        plt.ylabel("Power")
+        plt.xlabel("Frequency (MHz)")
+        plt.grid()
+
         plt.show()
 
     def recover_plot(self,
@@ -473,14 +462,14 @@ if __name__ == "__main__":
     # ==============================
     # PARAMETERS 
     # ==============================
-    
-    Rb = 1e3
+    Rb = 30e6
     Tb = 1/Rb
-    symbols = 100
+    symbols = 1000
     totaltime = symbols*Tb
     lc = 4
     config = CDMcfg(
         rb = Rb,
+        fcar=200e6,
         lc = lc,
         sps_chip= 2,
         alpha = 0.5,
@@ -492,8 +481,9 @@ if __name__ == "__main__":
         )
     #create signal 
     signal = DiscreteSignal(config)
+    #signal.show_signal_plot()
 
     #initiate and assemble receiver 
-    rx = Receiver(config, PlotType.all())
+    rx = Receiver(config, {PlotType.spread})
     rx.setup(signal)
     rx.assemble()
