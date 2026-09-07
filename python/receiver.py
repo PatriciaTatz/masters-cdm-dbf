@@ -295,9 +295,9 @@ class Receiver():
 
         plt.rcParams['font.size'] = 15
         plt.figure(figsize=(15,7))
-        plt.title(f"Spread Signals of Element={index}")
+        plt.title(f"Spread Signals of Element={index+1}")
         plt.plot(self.spread_bb.time, self.spread_bb.original[index], '-ob', label=f"Rx signal")
-        plt.plot(self.spread_bb.time, self.spread_bb.signals[index], '-og', label=f"Spread with {self.codes[index]}")
+        plt.plot(self.spread_bb.time, self.spread_bb.signals[index], '-og', label=f"c1={self.codes[index]}")
 
         plt.xlabel("Time (seconds)")
         plt.ylabel("Amplitude")
@@ -314,22 +314,14 @@ class Receiver():
         #np.save(f"sps_{self.conf.lc}_psd_f", specan.f)
         #np.save(f"sps_{self.conf.lc}_psd_Pxx_dB", specan.Pxx_dB)
 
-        plt.figure(figsize=(15,7))
-        plt.plot(specan.f, specan.Pxx_dB, '-g')
-        plt.xlabel("Frequency")
-        plt.ylabel("Amplitude")
-        plt.title(f"PSD of Spread Signals of Element={index}")
-        """
-        plt.text(
-            0.02, 0.95,
-            f"Est. BW={specan.bw/1e6:.2f}MHz",
-            transform=plt.gca().transAxes,
-            ha='left',
-            va='top',
-            bbox=dict(facecolor='white', edgecolor='black')
-        )
-        """
-        plt.ylabel("Power (1/Hz)")
+        plt.figure(figsize=(15,8))
+        plt.plot(specan.f/1e6, specan.Pxx_dB, '-g')
+        plt.axvline(x=self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
+        plt.axvline(x=-self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
+
+        plt.xlabel("Frequency (MHz)")
+        plt.ylabel("Normalised Power (dB)")
+        plt.title(f"Spread Signals of Element={index}")
         plt.grid()
         plt.show()
 
@@ -466,10 +458,10 @@ if __name__ == "__main__":
     Tb = 1/Rb
     symbols = 1000
     totaltime = symbols*Tb
-    lc = 4
+    lc = 16
     config = CDMcfg(
         rb = Rb,
-        fcar=200e6,
+        fcar=500e6,
         lc = lc,
         sps_chip= 2,
         alpha = 0.5,
