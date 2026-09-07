@@ -56,18 +56,17 @@ class DiscreteSignal:
             self.create_elementsignals(txsignal)
             self.fs = self.conf.fs
 
-        
 
     def create_symbols(self):
         #This does not worry about bit generation and modulation 
         no_symbols = int(self.conf.simtime*self.conf.rb)
 
-        #modType, Ns, Ts: required
+        #modType, Ns, Ts: requiredq
         if self.conf.modType == "BPSK":
             constellation = np.array([1, -1])
             
         elif self.conf.modType == "QPSK":
-            #normalised QPSK symbols 
+            #normalised QPSKqq symbols 
             constellation = np.array([
                 1 + 1j,
                 1 - 1j,
@@ -80,41 +79,40 @@ class DiscreteSignal:
         self.txsymbols = np.random.choice(constellation, no_symbols) 
     
         #OVERWRITE WARNING!! FOR REPEATABLE RESULTS SAVE DATA
-        #np.save("input_thesis_1e5sym", self.txsymbols)
+        #np.save("input_thesis_QPSK_pulse_shaping", self.txsymbols)
 
         #FOR REPEATABLE RESULTS LOAD DATA
-        #self.txsymbols = np.load("input_thesis_1e5sym.npy")
+        self.txsymbols = np.load("input_thesis_pulse_shaping.npy")
 
         #add rrcfilter
-        self.rrcsymbols, self.symbols = self.filters.rrcfilter(self.txsymbols, self.conf.fs)
+        self.symbol_waveform, self.symbols = self.filters.rrcfilter(
+            self.txsymbols,
+            self.conf.fs
+            )
 
         #np.save("transmit_clean", self.transmit)
-        return self.rrcsymbols
+        return self.symbol_waveform
 
     def create_timeseries(self, signal):
         #the timestep is the symbol period divided by how much each sample was upsampled by the RRC filter
         self.dt = 1 / self.conf.fs 
         self.time =  np.arange(len(signal)) * self.dt
-        self.symbol_time = self.time[::self.conf.sps_symbol][1:] #np.arange(len(self.symbols))/self.conf.fs
+        self.symbol_time = self.time[::self.conf.sps_symbol] #np.arange(len(self.symbols))/self.conf.fs
 
         
     def create_elementsignals(self, signal):
         #apply phase rotation as delay is too small to be seen as lagged samples. Why? 
         #psi = pi 
         #applying d <= lambda/2 and lambda is for 10GHz (lambda=30mm) for Xband operations
-        d = 0.015
         c = 3*10**8
-        theta = pi/2
-        lam = 0.03
+        theta = pi/4
         fd = 0
         #each time this is recreated
         self.elements = [signal]
         self.psi = [0]
         for i in range(1,self.conf.no_elem):
-            tau_i = d*sin(theta)
-            psi_i = 2*pi*i*tau_i/lam
-            signalNs = signal#*np.exp(-1j*psi_i)*np.exp(+1j*2*pi*fd*self.time) 
-            
+            psi_i = i*pi*sin(theta)
+            signalNs = signal*np.exp(-1j*psi_i)*np.exp(+1j*2*pi*fd*self.time) 
             self.elements.append(signalNs)
             self.psi.append(psi_i)
 
@@ -162,30 +160,50 @@ class DiscreteSignal:
         """
         modsignal.signals = np.real(modsignal.signals)
         
+    
         
         #PLOT FOR AFTER THE MODULATION
-        plt.figure()
-        plt.title(f"After U/C: Power Spectrum Density of Tx Signal on Element=1")
+        plt.figure(figsize=(15,6))
+        plt.rcParams['font.size'] = 15
+
+        plt.title(f"Carrier Modulated {self.conf.modType} Signal")
         specan = SpecAn().calculate_psd(
             modsignal.fs,
             modsignal.signals,
             )
-        plt.plot(specan.f, specan.Pxx_dB, label="PSD")
-        plt.xlabel("Frequency MHz")
+        plt.plot(specan.f/1e6, specan.Pxx_dB, label="PSD")
+        plt.axvline(x=self.conf.fcar/1e6, color='red', linestyle='--', linewidth=1.5, label="Carrier Frequency")
+        plt.xlim(-2*self.conf.fcar/1e6,2*self.conf.fcar/1e6)
+        plt.ylabel("Normalised PSD (dB)")
+        plt.xlabel("Frequency (MHz)")
+        #plt.ylim(-9, 1)
+        plt.legend(loc="upper right")
         plt.grid()
+
+        plt.figure(figsize=(15,6))
+        plt.rcParams['font.size'] = 15
+
+        plt.title(f"Carrier Modulated {self.conf.modType} Signal")
+        plt.stem(self.symbol_time, self.symbols, 'orange', label="BPSK Symbols")
+        plt.plot(modsignal.time, modsignal.signals, '-', label="Carrier modulated signal")
+        plt.legend(loc='upper right')
+        plt.xlabel("Time (seconds)")
+        plt.ylabel("Amplitude")
+        plt.grid()
+
+        plt.show()
         
+
         return modsignal
 
     def show_signal_plot(self):
-        plt.figure()
+        plt.figure(figsize=(15,6))
         elements_to_plot = range(len(self.elements))
-
+        plt.rcParams['font.size'] = 15
         for i in elements_to_plot:
             if self.conf.modType=="BPSK":
                 print(len(self.symbols))
-                plt.stem(self.symbol_time, self.symbols, 'orange')
-                plt.plot(self.time, self.elements[i], '-', label=f"Element {i} Signal")
-                plt.grid()
+                plt.plot(self.time, self.elements[i], '-', label=f"Element {i+1} Signal")
 
             elif self.conf.modType=="QPSK":
                 plt.subplot(2, 1, 1)
@@ -205,18 +223,25 @@ class DiscreteSignal:
             else:
                 raise ValueError("Unknown modulation scheme. Cannot plot!")
         
-        plt.title(f"Tx Signals on all elements")
-        plt.legend()
+        plt.title(f"Received Signals by N=2 Elements")
         plt.xlabel("Time (seconds)")
         plt.ylabel("Amplitude")
-        
-        plt.figure()
-        plt.title(f"Power Spectrum Density of Tx Signal on Element=1")
+        plt.legend(loc="upper right")
+        plt.grid()
+
+
+        #Symbol Plot
+
+        #Spectum plot
+        plt.figure(figsize=(15,6))
+        plt.title(f"{self.conf.modType} with RRC Pulse Shaping")
         specan = SpecAn().calculate_psd(
-            self.fs,
-            self.elements[0],
+            self.conf.fs,
+            self.symbol_waveform,
             )
-        plt.plot(specan.f, specan.Pxx_dB, label="PSD")
+    
+        plt.plot(specan.f/1e6, specan.Pxx_dB, label="PSD")
+        #plt.ylim(-7,1)
         """
         plt.text(
             0.02, 0.95,
@@ -227,16 +252,18 @@ class DiscreteSignal:
             bbox=dict(facecolor='white', edgecolor='black')
         )
         """
-        plt.ylabel("Power (dB)")
-        plt.xlabel("Frequency")
+        plt.ylabel("Normalised PSD (dB)")
+        plt.xlabel("Frequency (MHz)")
+        plt.axvline(x=-(1+self.conf.alpha)*self.conf.rb/1e6/2, color='red', linestyle='--', linewidth=1.5)
+        plt.axvline(x=(1+self.conf.alpha)*self.conf.rb/1e6/2, color='red', linestyle='--', linewidth=1.5)
         plt.grid()
-
         
+        #constellation diagram
         plt.figure()
         plt.title(f"Constellation Diagram of Tx Signal on Element=1")
         plt.scatter(
-            np.real(self.symbols[1:]),
-            np.imag(self.symbols[1:]),
+            np.real(self.symbols),
+            np.imag(self.symbols),
             color="blue",
             alpha=0.5,
             s=30,
@@ -258,18 +285,19 @@ if __name__ == "__main__":
     #==================================
     #RUNSIMULATOR
     #==================================
-    Rb = 1e3
+    Rb = 30e6
     Tb = 1/Rb
-    symbols = 1e3
+    symbols = 2000
     totaltime = symbols*Tb
 
     config = CDMcfg(
         rb = Rb,
+        fcar= 200e6,
         lc = 4,
         sps_chip= 2,
         alpha = 0.5,
         simtime = totaltime,
-        no_elem = 2,
+        no_elem = 1,
         modType="BPSK"
     )
     
