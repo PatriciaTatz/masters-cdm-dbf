@@ -132,7 +132,6 @@ class Receiver():
                     codes=self.codes
                 )
             elif self.conf.SPREADING_STAGE=="BB":
-                print("bb=",self.baseband.fs)
                 self.spread_bb = self.cdmx.spreader(
                     signals=self.filtered_bb,
                     fs_signal = self.baseband.fs,
@@ -142,7 +141,7 @@ class Receiver():
 
             if PlotType.spread in self.plot:
                 self.spread_plot(
-                    index=0
+                    index=1
                 )
     
             #====================
@@ -156,7 +155,9 @@ class Receiver():
 
             summed_signal = [sum(values) for values in zip(*self.spread_bb.signals)]
             if PlotType.summed in self.plot: 
-                self.sum_plot(self.spread_bb.time, summed_signal)
+                self.sum_plot(
+                    self.spread_bb.time, summed_signal
+                    )
 
             #=====================================
             #        DIGITAL DOWNCONVERTER        |
@@ -209,7 +210,7 @@ class Receiver():
                     )
             elif self.conf.SPREADING_STAGE=="BB":
                 self.recovered = self.cdmx.recover(
-                    sumsignal=summed_signal,
+                    signal=summed_signal,
                     fs_signal = self.spread_bb.fs,
                     f_signal = self.conf.b,
                     codes=self.codes
@@ -301,7 +302,6 @@ class Receiver():
 
         plt.xlabel("Time (seconds)")
         plt.ylabel("Amplitude")
-        #plt.stem(tbefore[:len(symbols)],symbols, 'orange')
         plt.legend(loc='upper right')
         plt.grid()
 
@@ -325,17 +325,17 @@ class Receiver():
         plt.grid()
         plt.show()
 
-
     def sum_plot(self, time, signal):
         plt.rcParams['font.size'] = 15
         plt.figure(figsize=(15,7))
-        plt.plot(time, signal)
+        plt.plot(time, signal, '-ob')
         plt.title(f"Combined Signal from {self.conf.no_elem} Elements")
-        plt.xlabel("Time")
+        plt.xlabel("Time (seconds)")
         plt.ylabel("Amplitude")
+        plt.grid()
 
-        plt.figure(figsize=(15,7))
-        plt.title(f"PSD of Combined Signal")
+        plt.figure(figsize=(15,8))
+        plt.title(f"The Combined Signal")
         specan = SpecAn().calculate_psd(
             self.spread_bb.fs,
             np.array(signal),
@@ -349,12 +349,14 @@ class Receiver():
             label="PSD")
         """
         plt.plot(
-            specan.f,
+            specan.f/1e6,
             specan.Pxx_dB,
             '-b' 
         )
-        
-        plt.ylabel("Power")
+        plt.axvline(x=self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
+        plt.axvline(x=-self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
+
+        plt.ylabel("Normalised Power (dB)")
         plt.xlabel("Frequency (MHz)")
         plt.grid()
 
@@ -476,6 +478,6 @@ if __name__ == "__main__":
     #signal.show_signal_plot()
 
     #initiate and assemble receiver 
-    rx = Receiver(config, {PlotType.spread})
+    rx = Receiver(config, {PlotType.recovered})
     rx.setup(signal)
     rx.assemble()
