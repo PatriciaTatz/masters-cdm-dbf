@@ -369,7 +369,7 @@ class Receiver():
         plt.figure(figsize=(15,7))
         #plt.title(f"Recovered Signal at Element Path={index+1}")
         if self.conf.modType=="BPSK":
-            plt.plot(signal.symbol_time, signal.symbols, '--b', label=f"Rx signal")
+            plt.plot(signal.symbol_wf_time, signal.symbol_waveform, '--b', label=f"Tx symbol waveform")
             plt.plot(self.recovered.time, self.recovered.signals[index], '-g', linewidth='3', label="Recovered signal")
         elif self.conf.modType=="QPSK":
             plt.subplot(2, 1, 1)
@@ -394,14 +394,17 @@ class Receiver():
         specan = SpecAn().calculate_psd(
             self.recovered.fs,
             self.recovered.signals[index]
-            )
+                        )
 
 
-        plt.figure(figsize=(15,7))
-        plt.plot(specan.f, specan.Pxx_dB, label="PSD")
-        plt.xlabel("Frequency")
-        plt.ylabel("Amplitude")
-        plt.title(f"PSD Recovered Signal at Element Path={index+1}")
+        plt.figure(figsize=(15,6))
+        plt.plot(specan.f/1e6, specan.Pxx_dB, '-b', label="PSD")
+        plt.axvline(x=self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
+        plt.axvline(x=-self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
+
+        plt.xlabel("Frequency (MHz)")
+        plt.ylabel("Normalised Power (dB)")
+        plt.title(f"Recovered Signal at Element Path={index+1}")
         
         """
         plt.text(

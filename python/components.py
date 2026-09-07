@@ -143,12 +143,13 @@ class CDMx:
                 fs_signal=fs_signal,
                 f_signal=f_signal)
 
-            #returns for all arrays
+            #returns N arrays of signals and symbols!
             decorrelated, symbols = self.decorrelate(
                 dss.signals,
                 fs_signal=dss.fs)
 
             dss.signals = decorrelated
+            dss.time = np.arange(len(dss.signals[0]))*(1/dss.fs)
             return dss
         else:
             dss = signal 
@@ -196,7 +197,6 @@ class CDMx:
             despread_signal  = resampled_signal*expanded_code
             dss.append(despread_signal)
             
-        #time_before = np.arange(len(sumsignal))/fs_signal
         time = np.arange(len(dss[0]))/fs_resampled
 
         return SpreadSignals(os, dss, time, exp_codes, fs_resampled) 
@@ -223,8 +223,8 @@ class Filter:
     def rrcfilter(self, signal, fs_signal, mode="txmode"):
         #upsampling
         if mode == "txmode":
-            sps_symbol  = self.conf.sps_symbol    #number of samples per symbol
-            ts = 1 / (self.conf.rb)               #symbol period in seconds 
+            sps_symbol  = self.conf.sps_symbol              #number of samples per symbol
+            ts = 1 / (self.conf.rb)                         #symbol period in seconds 
             symbols = np.zeros(
                 len(signal)*sps_symbol,
                 dtype=signal.dtype)
@@ -232,17 +232,17 @@ class Filter:
             samples = symbols            
         else:
             sps_symbol = int(round(fs_signal/self.conf.rb)) #now we are filtering to resolve the fbb 
-            ts = 1/self.conf.rb
-            samples = signal   #this is the full rx signal 
+            ts = 1/self.conf.rb                             #baseband symbol rate 
+            samples = signal                                #this is the full rx signal 
         
 
         #evaluate filter parameters
-        ntaps = self.conf.span*sps_symbol  #must be odd, total length of the filter 
-        delay = int(ntaps)//2 #remove the odd component 
+        ntaps = int(self.conf.span*sps_symbol) #must be odd, total length of the filter 
+        delay = ntaps//2 - sps_symbol//2 #remove the odd component 
 
         #generate filter coefficients
         dt_filter, h_rrc = filter.rrcosfilter(
-            int(ntaps),
+            ntaps,
             self.conf.alpha,
             ts,
             fs_signal
@@ -255,42 +255,89 @@ class Filter:
         filtered = np.convolve(samples, h_rrc, mode='full')
 
         #remove delay caused by the filter
-        print(delay)
-        filtered_no_delay = filtered[delay:-delay]
+        if mode == "txmode":
+            filtered_no_delay = filtered[delay+2*sps_symbol:-delay]
+        else:
+            filtered_no_delay = filtered[delay+sps_symbol//2:-delay]
 
         #sample at the symbol
         symbols = filtered_no_delay[::sps_symbol]
 
-
+        """
+        #Plot for pulse-shaping and constellation
         if self.conf.modType=="BPSK":
-            #Figure 3.4
-            time = np.arange(0, len(filtered))
-            plt.figure(figsize=(15,6))
-            plt.rcParams['font.size'] = 15
-            plt.stem(samples[:sps_symbol*10], label="Upsampled Symbols")
-            plt.plot(filtered_no_delay[:sps_symbol*10], '-o', c='orange', label="RRC filtered symbols w/o group delay")
-            plt.grid()
-            plt.title("BPSK with RRC Pulse Shaping")
-            plt.ylabel("Symbol")
-            plt.xlabel("Sample Index\n")
-            plt.legend(loc='upper right')
 
-            #Figure 3.5, constellation q
-            plt.figure(figsize=(10,8))
-            plt.rcParams['font.size'] = 15
-            plt.axhline(y=0, color='orange', linestyle='-', linewidth=1.5)
-            plt.axvline(x=0, color='orange', linestyle='-', linewidth=1.5)
-            plt.title(f"Constellation Diagram of BPSK Signal")
-            plt.ylabel("Quadrature (Q)")
-            plt.xlabel("In-Phase (I)")
-            plt.scatter(
-                np.real(symbols),
-                np.imag(symbols),
-                color="blue",
-                alpha=0.5,
-                s=30,
-            )
-            plt.grid()
+            if mode == 'txmode':
+                #Figure 3.4
+                offset = sps_symbol//2
+                time_sample_right_shift = np.arange(len(samples[:sps_symbol*10])) + offset
+                time = np.arange(0, len(filtered))
+                plt.figure(figsize=(15,6))
+                plt.rcParams['font.size'] = 15
+                plt.stem(time_sample_right_shift, samples[:sps_symbol*10], label="Upsampled Symbols")
+                plt.plot(filtered_no_delay[:sps_symbol*10], '-o', c='orange', label="RRC filtered symbols w/o group delay")
+                plt.grid()
+                plt.title("BPSK with RRC Pulse Shaping")
+                plt.ylabel("Symbol")
+                plt.xlabel("Sample Index\n")
+                plt.legend(loc='upper right')
+                #Figure 3.5, constellation q
+                plt.figure(figsize=(10,8))
+                plt.rcParams['font.size'] = 15
+                plt.axhline(y=0, color='orange', linestyle='-', linewidth=1.5)
+                plt.axvline(x=0, color='orange', linestyle='-', linewidth=1.5)
+                plt.title(f"Constellation Diagram of BPSK Signal")
+                plt.ylabel("Quadrature (Q)")
+                plt.xlabel("In-Phase (I)")
+                plt.scatter(
+                    np.real(symbols),
+                    np.imag(symbols),
+                    color="blue",
+                    alpha=0.5,
+                    s=30,
+                )
+                plt.grid()
+            else:
+                #Figure 3.4
+                offset = sps_symbol
+                idx = np.arange(0, len(filtered_no_delay))
+                plt.figure(figsize=(15,6))
+                plt.rcParams['font.size'] = 15
+                plt.stem(
+                    idx[::sps_symbol][1:-1],
+                    filtered_no_delay[::sps_symbol][1:-1],
+                    '-o', label="Symbols at Receiver"
+                    )
+                plt.plot(filtered_no_delay, '-o', c='orange', label="Rx RRC Matched Filter")
+                plt.grid()
+                plt.title("BPSK with RRC Pulse Shaping")
+                plt.ylabel("Symbol")
+                plt.xlabel("Sample Index\n")
+                plt.legend(loc='upper right')
+
+
+                #Figure 3.5, constellation 
+                plt.figure(figsize=(8,8))
+                theta = np.linspace(0, 2*np.pi, 1000)
+                plt.plot(np.cos(theta),np.sin(theta),'k--', alpha=0.5)
+
+                plt.rcParams['font.size'] = 15
+                plt.axhline(y=0, color='orange', linestyle='-', linewidth=1.5)
+                plt.axvline(x=0, color='orange', linestyle='-', linewidth=1.5)
+                plt.title(f"Constellation Diagram of BPSK Signal")
+                plt.ylabel("Quadrature (Q)")
+                plt.xlabel("In-Phase (I)")
+                plt.scatter(
+                    np.real(filtered_no_delay[::sps_symbol][1:-1]),
+                    np.imag(filtered_no_delay[::sps_symbol][1:-1]),
+                    color="blue",
+                    alpha=0.5,
+                    s=30,
+                )
+                plt.tight_layout()
+                plt.grid()
+
+
         else:
             plt.figure(figsize=(15,10))
             plt.rcParams['font.size'] = 15
@@ -304,26 +351,26 @@ class Filter:
 
             plt.subplot(2, 1, 2)
             plt.stem(np.imag(samples[:sps_symbol*10]),  label="Upsampled Symbols")
-            plt.plot(np.imag(filtered_no_delay[:sps_symbol*10]),  '-o', c='orange', label="RRC filtered symbols w/o group delay")
+            plt.plot(np.imag(filtered_no_delay[delay:sps_symbol*10:sps_symbol]),  '-o', c='orange', label="RRC filtered symbols w/o group delay")
             plt.ylabel("Imaginary Part (Quadrature / Q)")
             plt.xlabel("Sample Index")
             plt.grid()
 
             plt.legend(loc='upper right')
         plt.show()
-        
+        """
         return filtered_no_delay, symbols
 
     def butterworth(self, cutoff, fs, signals, filter_type="low"):
         #fs is sampling frequency! 
         nyquist = fs/2
         #cutoff = 1.5*self.rb
-        a,b = butter(
+        b,a= butter(
             N=4, 
             Wn = cutoff/nyquist, 
             btype=filter_type
         )
-        """
+        
         #computer frequency response
         #w in radians/sample, h the complex frequency response of filter
         w, h = freqz(b,a, fs=fs)
@@ -337,13 +384,13 @@ class Filter:
         plt.ylabel('Amplitude [dB]')
         plt.xlim(0, fs/2)
         plt.grid(which='both', axis='both')
-        plt.axvline(cutoff, color='green', linewidth=2, label="Cuttoff Frequency") # cutoff frequency
+        plt.axvline(cutoff, color='green', linewidth=2, label=f"Cuttoff Frequency = {cutoff/1e6} MHz") # cutoff frequency
         plt.legend()
         plt.show()
-        """
+        
 
         #filter can be applied to an array type which signal is 
-        filteredsignals = filtfilt(a,b, signals)
+        filteredsignals = filtfilt(b,a,signals)
         return filteredsignals
 
 
@@ -454,10 +501,12 @@ class SpecAn:
         #this shifts a twosided spectrum from 0 +f -f into -f 0 +f 
         f = np.fft.fftshift(f)
         X = np.fft.fftshift(X)
+        
         """
         x = signal
         X = 10*np.log10(np.fft.fftshift(np.abs(np.fft.fft(x))**2)/len(x))
         f = np.linspace(-fs/2, fs/2, len(X))
+        
         #Xnorm
-        X /= np.max(X)
+        X -= np.max(X)
         return Specan(f,X)
