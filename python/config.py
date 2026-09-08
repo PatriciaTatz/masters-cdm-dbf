@@ -39,9 +39,9 @@ class CDMcfg():
     def __post_init__(self):
         #Signal properties 
         self.sps_symbol = 8                         #Samples per symbol in RRC upsampler            
-        self.ts = 1/self.rb                         #Symbol period
-        self.fs = self.sps_symbol * self.rb         #Sampling frequency after RRC upsampler
-        self.b = self.rb * (1 + self.alpha)         #RRC limited bandwidth
+        self.ts = 1/self.fb                         #Symbol period
+        self.fs = self.sps_symbol * self.fb         #Sampling frequency after RRC upsampler
+        self.b = self.fb * (1 + self.alpha)         #RRC limited bandwidth
 
         #Receiver properties 
         if len(self.codeids) == 0:
