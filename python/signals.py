@@ -59,7 +59,7 @@ class DiscreteSignal:
 
     def create_symbols(self):
         #This does not worry about bit generation and modulation 
-        no_symbols = int(self.conf.simtime*self.conf.rb)
+        no_symbols = int(self.conf.simtime*self.conf.fb)
 
         #modType, Ns, Ts: requiredq
         if self.conf.modType == "BPSK":
@@ -76,7 +76,7 @@ class DiscreteSignal:
         else:
             raise ValueError("Unsupported modulation scheme. Choose [BPSK, QPSK]")
         #Random symbol generator    
-        self.txsymbols = np.random.choice(constellation, no_symbols) 
+        #self.txsymbols = np.random.choice(constellation, no_symbols) 
     
         #OVERWRITE WARNING!! FOR REPEATABLE RESULTS SAVE DATA
         #np.save("input_thesis_QPSK_pulse_shaping", self.txsymbols)
@@ -94,10 +94,14 @@ class DiscreteSignal:
         return self.symbol_waveform
 
     def create_timeseries(self, signal):
-        #the timestep is the symbol period divided by how much each sample was upsampled by the RRC filter
-        self.dt = 1 / self.conf.fs 
-        self.time =  np.arange(len(signal)) * self.dt
-        self.symbol_time = self.time[::self.conf.sps_symbol] #np.arange(len(self.symbols))/self.conf.fs
+        #time of series which can be overwritte by carrier modulated
+        self.time =  np.arange(len(signal))/ self.conf.fs 
+
+        #time of symbol sampler [+/-1]
+        self.symbol_time = self.time[::self.conf.sps_symbol] 
+
+        #time of full symbol pulses
+        self.symbol_wf_time = np.arange(len(self.symbol_waveform))/self.conf.fs
 
         
     def create_elementsignals(self, signal):
@@ -143,12 +147,12 @@ class DiscreteSignal:
         modsignal = self.mixer.quadrature(
             signal,
             fs_signal = self.conf.fs,
-            flo = self.conf.fcar
+            flo = self.conf.fc
         )
         """
         #bandpass filter to remove harmonics caused by resampling 
-        flow = self.conf.fcar-self.conf.rb
-        fhigh = self.conf.fcar+self.conf.rb
+        flow = self.conf.fc-self.conf.fb
+        fhigh = self.conf.fc+self.conf.fb
         filtered_modsignal = self.filters.butterworth(
             cutoff = np.array([flow,fhigh]),
             fs = modsignal.fs,
@@ -161,7 +165,7 @@ class DiscreteSignal:
         modsignal.signals = np.real(modsignal.signals)
         
     
-        
+        """
         #PLOT FOR AFTER THE MODULATION
         plt.figure(figsize=(15,6))
         plt.rcParams['font.size'] = 15
@@ -172,9 +176,9 @@ class DiscreteSignal:
             modsignal.signals,
             )
         plt.plot(specan.f/1e6, specan.Pxx_dB, label="PSD")
-        plt.axvline(x=self.conf.fcar/1e6, color='red', linestyle='--', linewidth=1.5, label="Carrier Frequency")
-        plt.xlim(-2*self.conf.fcar/1e6,2*self.conf.fcar/1e6)
-        plt.ylabel("Normalised PSD (dB)")
+        plt.axvline(x=self.conf.fc/1e6, color='red', linestyle='--', linewidth=1.5, label="Carrier Frequency")
+        plt.xlim(-2*self.conf.fc/1e6,2*self.conf.fc/1e6)
+        plt.ylabel("Normalised Power (dB)")
         plt.xlabel("Frequency (MHz)")
         #plt.ylim(-9, 1)
         plt.legend(loc="upper right")
@@ -192,7 +196,7 @@ class DiscreteSignal:
         plt.grid()
 
         plt.show()
-        
+        """
 
         return modsignal
 
@@ -202,7 +206,6 @@ class DiscreteSignal:
         plt.rcParams['font.size'] = 15
         for i in elements_to_plot:
             if self.conf.modType=="BPSK":
-                print(len(self.symbols))
                 plt.plot(self.time, self.elements[i], '-', label=f"Element {i+1} Signal")
 
             elif self.conf.modType=="QPSK":
@@ -252,10 +255,10 @@ class DiscreteSignal:
             bbox=dict(facecolor='white', edgecolor='black')
         )
         """
-        plt.ylabel("Normalised PSD (dB)")
+        plt.ylabel("Normalised Power (dB)")
         plt.xlabel("Frequency (MHz)")
-        plt.axvline(x=-(1+self.conf.alpha)*self.conf.rb/1e6/2, color='red', linestyle='--', linewidth=1.5)
-        plt.axvline(x=(1+self.conf.alpha)*self.conf.rb/1e6/2, color='red', linestyle='--', linewidth=1.5)
+        plt.axvline(x=-(1+self.conf.alpha)*self.conf.fb/1e6/2, color='red', linestyle='--', linewidth=1.5)
+        plt.axvline(x=(1+self.conf.alpha)*self.conf.fb/1e6/2, color='red', linestyle='--', linewidth=1.5)
         plt.grid()
         
         #constellation diagram
@@ -291,14 +294,14 @@ if __name__ == "__main__":
     totaltime = symbols*Tb
 
     config = CDMcfg(
-        rb = Rb,
-        fcar= 200e6,
+        fb = Rb,
+        fc = 200e6,
         lc = 4,
         sps_chip= 2,
         alpha = 0.5,
         simtime = totaltime,
-        no_elem = 1,
-        modType="BPSK"
+        no_elem = 2,
+        modType="QPSK"
     )
     
     signal = DiscreteSignal(config)

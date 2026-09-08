@@ -60,14 +60,14 @@ class Receiver():
             
             #Baseband: baseband [array] Signal for each element 
             #Time = self.rx_time
-            #Signal Frequency =  self.conf.fbb
+            #Signal Frequency =  self.conf.fIF
             #Sampling Frequency = fs_rx
             if self.conf.SPREADING_STAGE=="IF":
                 #Carrier enabled implies spreading at IF 
-                flo = self.conf.fcar - self.conf.fbb 
+                flo = self.conf.fc - self.conf.fIF 
             elif self.conf.SPREADING_STAGE=="BB":
                 #No carrier implies spreading at BB
-                flo = self.conf.fcar 
+                flo = self.conf.fc 
 
             self.baseband = self.mixer.superhet(
                 self.rxsignals,
@@ -89,11 +89,11 @@ class Receiver():
 
             #Filtered Baseband: filtered_bb [array], Signal for each element 
             #Time = self.rx_time
-            #Signal Frequency =  self.conf.fbb w/o image 
+            #Signal Frequency =  self.conf.fIF w/o image 
             #Sampling Frequency = fs_rx
 
             if self.conf.SPREADING_STAGE=="IF":
-                flow = 1.5*(self.conf.fbb + self.conf.rb)
+                flow = (self.conf.fIF + self.conf.fb)
             elif self.conf.SPREADING_STAGE=="BB":
                 flow = self.conf.b
 
@@ -107,7 +107,7 @@ class Receiver():
             if PlotType.signal in self.plot:
                 self.signal_plot(
                     "After LPF at Element=1",
-                    self.baseband.time, self.filtered_bb[0],
+                    self.baseband.time, self.filtered_bb[1],
                     self.baseband.fs
                 )
 
@@ -121,14 +121,14 @@ class Receiver():
             #Spread Time: spread_bb.time, Timestep changed to match timestep of code sequence 
             #Spread Code: spread_bb.codes, Codes equal length to Spread Signal
             #Spread Sampling Frequency: spread_bb.fs, Fs_chip 
-            #Signal Frequency = self.conf.fbb * self.conf.lc  , NOT returned 
+            #Signal Frequency = self.conf.fIF * self.conf.lc  , NOT returned 
 
             if self.conf.SPREADING_STAGE=="IF":
                 
                 self.spread_bb = self.cdmx.spreader(
                     signals=self.filtered_bb,
                     fs_signal = self.baseband.fs,
-                    f_signal = self.conf.fbb,
+                    f_signal = self.conf.fIF,
                     codes=self.codes
                 )
             elif self.conf.SPREADING_STAGE=="BB":
@@ -151,7 +151,7 @@ class Receiver():
             #Summed Baseband: summed_signal [array]
             #Summed Time: spread_bb.time
             #Summed Sampling Frequency: spread_bb.fs, Fs_chip=Fchip*self.conf.sps_chip  
-            #Summed Signal Frequency = Fchip= self.conf.fbb * self.conf.lc  , NOT returned 
+            #Summed Signal Frequency = Fchip= self.conf.fIF * self.conf.lc  , NOT returned 
 
             summed_signal = [sum(values) for values in zip(*self.spread_bb.signals)]
             if PlotType.summed in self.plot: 
@@ -174,7 +174,7 @@ class Receiver():
                 ddc = self.mixer.quadrature(
                             np.array(summed_signal),
                             fs_signal=self.spread_bb.fs,
-                            flo=self.conf.fbb
+                            flo=self.conf.fIF
                         )
 
                 if PlotType.ddc in self.plot:
@@ -198,9 +198,9 @@ class Receiver():
             """
             if self.conf.SPREADING_STAGE=="IF":
                 self.recovered = self.cdmx.recover(
-                    sumsignal=ddc.signals,
+                    signal=ddc.signals,
                     fs_signal = ddc.fs,
-                    f_signal = self.conf.fbb,
+                    f_signal = self.conf.fIF,
                     codes=self.codes
 
                 )
@@ -227,7 +227,7 @@ class Receiver():
                 self.rxsignals,
                 [],
                 fs_signal=self.fs_rx,
-                f_signal=self.conf.rb
+                f_signal=self.conf.fb
                 )
 
             if PlotType.signal in self.plot:
@@ -369,8 +369,9 @@ class Receiver():
         plt.figure(figsize=(15,7))
         #plt.title(f"Recovered Signal at Element Path={index+1}")
         if self.conf.modType=="BPSK":
+            plt.title(f"Despread Signal of Element={index+1}")
             plt.plot(signal.symbol_wf_time, signal.symbol_waveform, '--b', label=f"Tx symbol waveform")
-            plt.plot(self.recovered.time, self.recovered.signals[index], '-g', linewidth='3', label="Recovered signal")
+            plt.plot(self.recovered.time, self.recovered.signals[index], '-g', linewidth='2', label="Despread signal")
         elif self.conf.modType=="QPSK":
             plt.subplot(2, 1, 1)
             plt.plot(self.recovered.time, np.real(self.recovered.signals[index]), '-g', linewidth='3', label="Recovered signal")
@@ -465,8 +466,8 @@ if __name__ == "__main__":
     totaltime = symbols*Tb
     lc = 16
     config = CDMcfg(
-        rb = Rb,
-        fcar=500e6,
+        fb = Rb,
+        fc =200e6,
         lc = lc,
         sps_chip= 2,
         alpha = 0.5,
@@ -481,6 +482,6 @@ if __name__ == "__main__":
     #signal.show_signal_plot()
 
     #initiate and assemble receiver 
-    rx = Receiver(config, {PlotType.recovered})
+    rx = Receiver(config, {PlotType.signal})
     rx.setup(signal)
     rx.assemble()

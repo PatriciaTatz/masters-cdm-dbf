@@ -224,15 +224,15 @@ class Filter:
         #upsampling
         if mode == "txmode":
             sps_symbol  = self.conf.sps_symbol              #number of samples per symbol
-            ts = 1 / (self.conf.rb)                         #symbol period in seconds 
+            ts = 1 / (self.conf.fb)                         #symbol period in seconds 
             symbols = np.zeros(
                 len(signal)*sps_symbol,
                 dtype=signal.dtype)
             symbols[::sps_symbol] = signal
             samples = symbols            
         else:
-            sps_symbol = int(round(fs_signal/self.conf.rb)) #now we are filtering to resolve the fbb 
-            ts = 1/self.conf.rb                             #baseband symbol rate 
+            sps_symbol = int(round(fs_signal/self.conf.fb)) #now we are filtering to resolve the fIF 
+            ts = 1/self.conf.fb                             #baseband symbol rate 
             samples = signal                                #this is the full rx signal 
         
 
@@ -362,15 +362,17 @@ class Filter:
         return filtered_no_delay, symbols
 
     def butterworth(self, cutoff, fs, signals, filter_type="low"):
+        print(cutoff)
         #fs is sampling frequency! 
         nyquist = fs/2
-        #cutoff = 1.5*self.rb
+        #cutoff = 1.5*self.fb
         b,a= butter(
             N=4, 
             Wn = cutoff/nyquist, 
             btype=filter_type
         )
         
+        """
         #computer frequency response
         #w in radians/sample, h the complex frequency response of filter
         w, h = freqz(b,a, fs=fs)
@@ -378,16 +380,15 @@ class Filter:
         plt.figure(figsize=(10,7))
         plt.rcParams['font.size'] = 15
 
-        plt.semilogx(w, 20 * np.log10(abs(h)), label="LPF Response")
-        plt.title(f'4th order Butterworth LPF frequency response \n Spreading at {self.conf.SPREADING_STAGE}')
-        plt.xlabel('Frequency [Hz]')
-        plt.ylabel('Amplitude [dB]')
-        plt.xlim(0, fs/2)
+        plt.semilogx(w/1e6, 20 * np.log10(abs(h)), label="LPF Response")
+        plt.title(f'4th order Butterworth LPF frequency response')
+        plt.xlabel('Frequency (MHz)')
+        plt.ylabel('Amplitude (dB)')
         plt.grid(which='both', axis='both')
-        plt.axvline(cutoff, color='green', linewidth=2, label=f"Cuttoff Frequency = {cutoff/1e6} MHz") # cutoff frequency
+        plt.axvline(cutoff/1e6, color='green', linewidth=2, label=f"Cuttoff Frequency = {cutoff/1e6} MHz") # cutoff frequency
         plt.legend()
         plt.show()
-        
+        """
 
         #filter can be applied to an array type which signal is 
         filteredsignals = filtfilt(b,a,signals)
@@ -414,9 +415,9 @@ class Mixer:
 
     def superhet(self, signal, fs_signal, flo):
         #assumes signal is array of element signals!
-        fs_mixer = 3*(self.conf.fcar + flo) 
+        fs_mixer = 3*(self.conf.fc + flo) 
 
-        #for superhet, flo != fcar, just above zero-IF
+        #for superhet, flo != fc, just above zero-IF
         flo_mixer = flo
         print(flo)
         
@@ -444,14 +445,14 @@ class Mixer:
         if fs_signal <= flo: 
             #upconverting to carrier 
             #fs_signal is just symbol sample frequency at this stage 
-            #recall rb is symbol frequency exactly but now has bandwidth of b=(1+alpha)rb
-            fs_mixer = 3*self.conf.fcar 
+            #recall fb is symbol frequency exactly but now has bandwidth of b=(1+alpha)fb
+            fs_mixer = 3*self.conf.fc 
         elif fs_signal > flo:
             #downconverting to zero-IF 
             #fs_signal is now the spread signal sample frequency 
             #recall fcode is the spread signal frequency 
             fs_mixer = 3*fs_signal 
-        #flo  = fcarrier 
+        #flo  = fcr
         flo_mixer = flo
 
         #match sampling rates for discrete time mixing 
