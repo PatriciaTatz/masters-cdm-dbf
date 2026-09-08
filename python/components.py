@@ -73,9 +73,9 @@ class CDMx:
                     np.roll(seq_b, shift)
                 )
                 gold_codes.append(code)
-            codes = [2*gold_codes[idx]-1 for idx in self.conf.codeids]
+            codes = [2*gold_codes[idx]-1 for idx in self.conf.codeids]            
         else: 
-            raise Exception("Unrecognised code family! Choose from [WH, Gold]")
+            raise Exception("Unrecognised code family! Choose from [WH, Gold, ZC]")
 
         return codes 
 
