@@ -109,7 +109,7 @@ class DiscreteSignal:
         #psi = pi 
         #applying d <= lambda/2 and lambda is for 10GHz (lambda=30mm) for Xband operations
         c = 3*10**8
-        theta = pi/4
+        theta = 0
         fd = 0
         #each time this is recreated
         self.elements = [signal]
@@ -207,6 +207,9 @@ class DiscreteSignal:
         for i in elements_to_plot:
             if self.conf.modType=="BPSK":
                 plt.plot(self.time, self.elements[i], '-', label=f"Element {i+1} Signal")
+                plt.axvline(x=1/self.conf.b, color='red', linestyle='--', linewidth=1.5)
+                plt.axvline(x=2/self.conf.b, color='red', linestyle='--', linewidth=1.5)
+                plt.axvline(x=3/self.conf.b, color='red', linestyle='--', linewidth=1.5)
 
             elif self.conf.modType=="QPSK":
                 plt.subplot(2, 1, 1)
@@ -301,7 +304,7 @@ if __name__ == "__main__":
         alpha = 0.5,
         simtime = totaltime,
         no_elem = 2,
-        modType="QPSK"
+        modType="BPSK"
     )
     
     signal = DiscreteSignal(config)

@@ -9,7 +9,7 @@ RF components
 """
 
 from enum import Enum
-from math import ceil, log2, gcd
+from math import ceil, log2, gcd, pi
 
 import commpy.filters as filter  # type:ignore[import-untyped]
 import komm as km  # type:ignore[import-untyped]
@@ -73,7 +73,16 @@ class CDMx:
                     np.roll(seq_b, shift)
                 )
                 gold_codes.append(code)
-            codes = [2*gold_codes[idx]-1 for idx in self.conf.codeids]            
+            codes = [2*gold_codes[idx]-1 for idx in self.conf.codeids]     
+        elif self.conf.codefam == "ZC":
+            if self.conf.lc%2 == 0: 
+                raise ValueError("Code length must be odd for ZC")
+            n = np.arange(0,self.conf.lc)
+            codes = []
+            for i in self.conf.codeids: 
+                s = np.exp(-1j*pi*i*n*(n+1)/self.conf.lc)
+                codes.append(s)
+            np.set_printoptions(precision=4, suppress=True)
         else: 
             raise Exception("Unrecognised code family! Choose from [WH, Gold, ZC]")
 
@@ -87,9 +96,6 @@ class CDMx:
         os = []
         exp_codes = []
         #create code sequence 
-
-        print("fs_code=", fs_code)
-        print("fs_signal=", fs_signal)
         for i in range(self.conf.no_elem):
             #upsample is required to do discrete multiplication 
             if fs_code != fs_signal:
@@ -99,7 +105,6 @@ class CDMx:
                     signal=signals[i]
                 )
             os.append(resampled_signal)
-            print("resampled=", fs_resampled)
 
             #generate code sequencec 
             code_sequence = np.repeat(codes[i], self.conf.sps_chip)                       #upsamples to f[+1 +1] -> [+1 +1 +1 +1] if sps_chip=2
@@ -110,7 +115,20 @@ class CDMx:
             #spreading operation
             spread_signal = resampled_signal*expanded_code
             ss.append(spread_signal)
-    
+            
+            """
+            #PLOT for checking correct code period 
+            code_t = np.arange(len(expanded_code))*1/fs_resampled
+            sig_t = np.arange(len(resampled_signal))*1/fs_resampled
+            orig_t = np.arange(len(signals[i]))*1/fs_signal
+            plt.plot(orig_t[:1000], signals[i][:1000])
+            plt.plot(sig_t[:1000], resampled_signal[:1000])
+            plt.plot(code_t[:1000], expanded_code[:1000])
+            plt.axvline(x=1/self.conf.b, color='red', linestyle='--', linewidth=1.5)
+            plt.axvline(x=1/self.conf.fb, color='blue', linestyle='--', linewidth=1.5)
+            plt.show()
+            """
+        
         time_before = np.arange(len(signals[i]))/fs_signal
         time = np.arange(len(ss[0]))/fs_resampled
 
@@ -162,17 +180,12 @@ class CDMx:
     def despread(self, sumsignal, codes,fs_signal,f_signal):
         #Despread signal by multiplying with code block
         dss = [] #despread
-
         f_code = self.conf.lc * f_signal       #Transition xLc times over one period of signal
         fs_code = self.conf.sps_chip * f_code  
         dss = []
         symbol_elements = []
         os = []
         exp_codes = []
-
-        #create code sequence 
-        print("fs_code=",fs_code)
-        print("fs_signal=",fs_signal)
 
         for i in range(self.conf.no_elem):
             #upsample is required to do discrete multiplication 
@@ -191,8 +204,9 @@ class CDMx:
             code_sequence = np.repeat(codes[i], self.conf.sps_chip)                       #upsamples to f[+1 +1] -> [+1 +1 +1 +1] if sps_chip=2
             tile_repeats = int(np.ceil(len(resampled_signal) / len(code_sequence)))       #calculate number of repeats required 
             expanded_code = np.tile(code_sequence, tile_repeats)[:len(resampled_signal)]  #expand then trim to signal length  
-            exp_codes.append(expanded_code)             
+            exp_codes.append(expanded_code)   
 
+ 
             #spreading operation
             despread_signal  = resampled_signal*expanded_code
             dss.append(despread_signal)
@@ -229,7 +243,8 @@ class Filter:
                 len(signal)*sps_symbol,
                 dtype=signal.dtype)
             symbols[::sps_symbol] = signal
-            samples = symbols            
+            samples = symbols    
+            samples = np.pad(symbols, (sps_symbol,0))        
         else:
             sps_symbol = int(round(fs_signal/self.conf.fb)) #now we are filtering to resolve the fIF 
             ts = 1/self.conf.fb                             #baseband symbol rate 
@@ -238,7 +253,7 @@ class Filter:
 
         #evaluate filter parameters
         ntaps = int(self.conf.span*sps_symbol) #must be odd, total length of the filter 
-        delay = ntaps//2 - sps_symbol//2 #remove the odd component 
+        delay = ntaps//2  #remove the odd component 
 
         #generate filter coefficients
         dt_filter, h_rrc = filter.rrcosfilter(
@@ -256,26 +271,30 @@ class Filter:
 
         #remove delay caused by the filter
         if mode == "txmode":
-            filtered_no_delay = filtered[delay+2*sps_symbol:-delay]
+            filtered_no_delay = filtered[delay:-delay]
         else:
-            filtered_no_delay = filtered[delay+sps_symbol//2:-delay]
+            filtered_no_delay = filtered[delay:-delay]
 
         #sample at the symbol
         symbols = filtered_no_delay[::sps_symbol]
 
-        """
+        
         #Plot for pulse-shaping and constellation
         if self.conf.modType=="BPSK":
 
             if mode == 'txmode':
                 #Figure 3.4
-                offset = sps_symbol//2
-                time_sample_right_shift = np.arange(len(samples[:sps_symbol*10])) + offset
-                time = np.arange(0, len(filtered))
+                time_sample = np.arange(len(samples)) / self.conf.fs
+                time = np.arange(len(filtered_no_delay))/self.conf.fs
+            
                 plt.figure(figsize=(15,6))
                 plt.rcParams['font.size'] = 15
-                plt.stem(time_sample_right_shift, samples[:sps_symbol*10], label="Upsampled Symbols")
-                plt.plot(filtered_no_delay[:sps_symbol*10], '-o', c='orange', label="RRC filtered symbols w/o group delay")
+                plt.stem(time_sample[:100], samples[:100], label="Upsampled Symbols")
+                #plt.axvline(x=1/self.conf.fb, color='red', linestyle='--', linewidth=1.5)
+                #plt.axvline(x=2/self.conf.fb, color='red', linestyle='--', linewidth=1.5)
+                #plt.axvline(x=3/self.conf.fb, color='red', linestyle='--', linewidth=1.5)
+
+                plt.plot(time[:100], filtered_no_delay[:100], '-o', c='orange', label="RRC filtered symbols w/o group delay")
                 plt.grid()
                 plt.title("BPSK with RRC Pulse Shaping")
                 plt.ylabel("Symbol")
@@ -299,16 +318,11 @@ class Filter:
                 plt.grid()
             else:
                 #Figure 3.4
-                offset = sps_symbol
-                idx = np.arange(0, len(filtered_no_delay))
                 plt.figure(figsize=(15,6))
                 plt.rcParams['font.size'] = 15
-                plt.stem(
-                    idx[::sps_symbol][1:-1],
-                    filtered_no_delay[::sps_symbol][1:-1],
-                    '-o', label="Symbols at Receiver"
-                    )
-                plt.plot(filtered_no_delay, '-o', c='orange', label="Rx RRC Matched Filter")
+                time = np.arange(len(filtered_no_delay))/self.conf.fs
+                plt.stem(time[:100][::sps_symbol], filtered_no_delay[:100][::sps_symbol], label="Upsampled Symbols")
+                plt.plot(time[:100], filtered_no_delay[:100], '-o', c='orange', label="RRC filtered symbols w/o group delay")
                 plt.grid()
                 plt.title("BPSK with RRC Pulse Shaping")
                 plt.ylabel("Symbol")
@@ -328,8 +342,8 @@ class Filter:
                 plt.ylabel("Quadrature (Q)")
                 plt.xlabel("In-Phase (I)")
                 plt.scatter(
-                    np.real(filtered_no_delay[::sps_symbol][1:-1]),
-                    np.imag(filtered_no_delay[::sps_symbol][1:-1]),
+                    np.real(filtered_no_delay[::sps_symbol]),
+                    np.imag(filtered_no_delay[::sps_symbol]),
                     color="blue",
                     alpha=0.5,
                     s=30,
@@ -342,23 +356,46 @@ class Filter:
             plt.figure(figsize=(15,10))
             plt.rcParams['font.size'] = 15
             plt.suptitle("QPSK with RRC Pulse Shaping")
+            time = np.arange(len(filtered_no_delay))/fs_signal
             plt.subplot(2, 1, 1)
-            plt.stem(np.real(samples[:sps_symbol*10]),  label="Upsampled Symbols")
-            plt.plot(np.real(filtered_no_delay[:sps_symbol*10]),  '-o', c='orange', label="RRC filtered symbols w/o group delay")
+            plt.stem(time[:100][::sps_symbol],np.real(filtered_no_delay[:100][::sps_symbol]),  label="Upsampled Symbols")
+            plt.plot(time[:100],np.real(filtered_no_delay[:100]),  '-o', c='orange', label="RRC filtered symbols w/o group delay")
             plt.ylabel("Real Part (In-Phase / I)")
             plt.grid()
             plt.legend(loc='upper right')
 
             plt.subplot(2, 1, 2)
-            plt.stem(np.imag(samples[:sps_symbol*10]),  label="Upsampled Symbols")
-            plt.plot(np.imag(filtered_no_delay[delay:sps_symbol*10:sps_symbol]),  '-o', c='orange', label="RRC filtered symbols w/o group delay")
+            plt.stem(time[:100][::sps_symbol],np.imag(filtered_no_delay[:100][::sps_symbol]),  label="Upsampled Symbols")
+            plt.plot(time[:100],np.imag(filtered_no_delay[:100]),  '-o', c='orange', label="RRC filtered symbols w/o group delay")
             plt.ylabel("Imaginary Part (Quadrature / Q)")
             plt.xlabel("Sample Index")
             plt.grid()
 
             plt.legend(loc='upper right')
+
+            #Figure 3.5, constellation 
+            plt.figure(figsize=(8,8))
+            theta = np.linspace(0, 2*np.pi, 1000)
+            plt.plot(np.cos(theta),np.sin(theta),'k--', alpha=0.5)
+
+            plt.rcParams['font.size'] = 15
+            plt.axhline(y=0, color='orange', linestyle='-', linewidth=1.5)
+            plt.axvline(x=0, color='orange', linestyle='-', linewidth=1.5)
+            plt.title(f"Constellation Diagram of QPSK Signal")
+            plt.ylabel("Quadrature (Q)")
+            plt.xlabel("In-Phase (I)")
+            plt.scatter(
+                np.real(filtered_no_delay[::sps_symbol][1:-1]),
+                np.imag(filtered_no_delay[::sps_symbol][1:-1]),
+                color="blue",
+                alpha=0.5,
+                s=30,
+            )
+            plt.tight_layout()
+            plt.grid()
         plt.show()
-        """
+        
+        
         return filtered_no_delay, symbols
 
     def butterworth(self, cutoff, fs, signals, filter_type="low"):
@@ -366,6 +403,7 @@ class Filter:
         #fs is sampling frequency! 
         nyquist = fs/2
         #cutoff = 1.5*self.fb
+        
         b,a= butter(
             N=4, 
             Wn = cutoff/nyquist, 
@@ -419,7 +457,6 @@ class Mixer:
 
         #for superhet, flo != fc, just above zero-IF
         flo_mixer = flo
-        print(flo)
         
         mixer_output = [] 
         for i in range(self.conf.no_elem): 
@@ -430,7 +467,7 @@ class Mixer:
                     signal=signal[i])
                 if fs_resampled != fs_mixer:
                     raise ValueError("Resampling did not work!")
-            lo_time = np.arange(len(signal_resampled))*(1/fs_mixer)
+            lo_time = np.arange(len(signal_resampled))*(1/fs_resampled)
             lo_signal = np.cos(2*np.pi*flo_mixer*lo_time)
 
             #mix signal by multiplication 
@@ -478,6 +515,8 @@ class Mixer:
         mixer_output = signal_resampled * lo_signal
 
         return ResampledSignals(mixer_output, lo_time, fs_mixer)
+
+
 
 class SpecAn: 
     def calculate_psd(self ,fs, signal):

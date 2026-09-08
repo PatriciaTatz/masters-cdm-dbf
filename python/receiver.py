@@ -107,7 +107,7 @@ class Receiver():
             if PlotType.signal in self.plot:
                 self.signal_plot(
                     "After LPF at Element=1",
-                    self.baseband.time, self.filtered_bb[1],
+                    self.baseband.time, self.filtered_bb[0],
                     self.baseband.fs
                 )
 
@@ -141,7 +141,7 @@ class Receiver():
 
             if PlotType.spread in self.plot:
                 self.spread_plot(
-                    index=1
+                    index=0
                 )
     
             #====================
@@ -184,7 +184,7 @@ class Receiver():
                         ddc.fs
                     )
                 
-            #=====================================
+            #=====================q================
             #   DIGITAL DESPREAD  PER ELEMENT     |
             #   NOT RESAMPLED BUT MF DELAY TRUNC  |
             #=====================================
@@ -266,6 +266,10 @@ class Receiver():
         plt.rcParams['font.size'] = 15
         plt.figure(figsize=(12,7))
         plt.plot(time[:1000], asignal[:1000], '-o', label="RRC Filtered Signal")
+        plt.axvline(x=1/self.conf.fb, color='red', linestyle='--', linewidth=1.5)
+        plt.axvline(x=2/self.conf.fb, color='red', linestyle='--', linewidth=1.5)
+        plt.axvline(x=3/self.conf.fb, color='red', linestyle='--', linewidth=1.5)
+
         plt.title(f"{title}")
 
         plt.legend(loc='upper right')
@@ -309,10 +313,6 @@ class Receiver():
             self.spread_bb.fs,
             self.spread_bb.signals[index]
             )
-        
-        #FORPLOT
-        #np.save(f"sps_{self.conf.lc}_psd_f", specan.f)
-        #np.save(f"sps_{self.conf.lc}_psd_Pxx_dB", specan.Pxx_dB)
 
         plt.figure(figsize=(15,8))
         plt.plot(specan.f/1e6, specan.Pxx_dB, '-g')
@@ -464,12 +464,12 @@ if __name__ == "__main__":
     Tb = 1/Rb
     symbols = 1000
     totaltime = symbols*Tb
-    lc = 16
+    lc = 32
     config = CDMcfg(
         fb = Rb,
         fc =200e6,
         lc = lc,
-        sps_chip= 2,
+        sps_chip= 1,
         alpha = 0.5,
         simtime = totaltime,
         no_elem = 2,
@@ -482,6 +482,6 @@ if __name__ == "__main__":
     #signal.show_signal_plot()
 
     #initiate and assemble receiver 
-    rx = Receiver(config, {PlotType.signal})
+    rx = Receiver(config, {PlotType.recovered})
     rx.setup(signal)
     rx.assemble()
