@@ -20,7 +20,7 @@ from scipy.signal import periodogram, max_len_seq, resample_poly, welch, butter,
 import matplotlib.pyplot as plt 
 from fractions import Fraction
 
-from models import Signals_Time, ResampledSignals, Specan, SpreadSignals
+from models import Signals_Time, ResampledSignals, Specan, SpreadSignals, RecoveredSignals
 
 
 class DiscreteSP:
@@ -167,14 +167,17 @@ class CDMx:
                 fs_signal=dss.fs)
 
             dss.signals = decorrelated
+            dss.symbols = symbols
             dss.time = np.arange(len(dss.signals[0]))*(1/dss.fs)
-            return dss
+            return dss 
         else:
             dss = signal 
             decorrelated, symbols = self.decorrelate(
                 dss,
                 fs_signal=fs_signal)
-            return decorrelated
+            time  = np.arange(len(decorrelated[0]))*(1/fs_signal)
+            fs = fs_signal 
+            return RecoveredSignals(signal, decorrelated, symbols, time, codes, fs)
         
 
     def despread(self, sumsignal, codes,fs_signal,f_signal):
@@ -213,7 +216,7 @@ class CDMx:
             
         time = np.arange(len(dss[0]))/fs_resampled
 
-        return SpreadSignals(os, dss, time, exp_codes, fs_resampled) 
+        return RecoveredSignals(os, dss, [], time, exp_codes, fs_resampled) 
 
     def decorrelate(self, despread_signal, fs_signal):
         decorr = [] 
@@ -276,9 +279,9 @@ class Filter:
             filtered_no_delay = filtered[delay:-delay]
 
         #sample at the symbol
-        symbols = filtered_no_delay[::sps_symbol]
+        symbols = filtered_no_delay[::sps_symbol][1:]
 
-        
+        """        
         #Plot for pulse-shaping and constellation
         if self.conf.modType=="BPSK":
 
@@ -342,8 +345,8 @@ class Filter:
                 plt.ylabel("Quadrature (Q)")
                 plt.xlabel("In-Phase (I)")
                 plt.scatter(
-                    np.real(filtered_no_delay[::sps_symbol]),
-                    np.imag(filtered_no_delay[::sps_symbol]),
+                    np.real(filtered_no_delay[::sps_symbol][1:-1]),
+                    np.imag(filtered_no_delay[::sps_symbol][1:-1]),
                     color="blue",
                     alpha=0.5,
                     s=30,
@@ -394,7 +397,7 @@ class Filter:
             plt.tight_layout()
             plt.grid()
         plt.show()
-        
+        """
         
         return filtered_no_delay, symbols
 

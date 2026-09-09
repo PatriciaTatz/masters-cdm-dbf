@@ -124,7 +124,7 @@ class DiscreteSignal:
 
     def add_element_noise(self, signal, noise):
         for i in range(self.conf.no_elem):
-            self.elements[i] = signal + noise[i]
+            self.elements[i] = signal[i] + noise[i]
 
 
     def modulate_to_carrier(self, signal):

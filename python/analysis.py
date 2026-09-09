@@ -22,108 +22,45 @@ class BER:
         self.rx = Receiver(self.conf)
         self.signal = signal
 
-    def symbol_sampler(self, time, signal, dt):
-        """
-        signal: signal to sample
-        dt: the sampling time step of the input signal
-        rb: symbol rate
-        samples per symbol = Tsymbol / dt = (1/Rb)/dt = 1/(Rb*dt) 
-        """
-        sps = int(1 / (self.conf.rb * dt)) 
-        symbols_at_rb = signal[sps::sps]
-
-        if self.conf.modType == "QPSK":
-            I_symbols = np.real(signals[sps::sps])
-            Q_symbols 
-        """
-        #plot for where the sampler is occuring
-        plt.figure()
-        plt.title(f"Symbol sampler")
-        plt.plot(
-            self.signal.time,
-            self.signal.transmit, 'blue', linewidth=3, label="Tx Original")
-        plt.plot(
-            time,
-            signal, 'blue', label="Signal")
-
-        plt.stem(
-            time[sps::sps],
-            symbols_at_rb, 'red', label="Sig Sampled")     
-        
-        plt.stem(
-            self.signal.time,
-            self.signal.rrcsymbols, 'orange', label="Tx Symbols")
-        
-        plt.legend()
-        plt.grid()
-        plt.xlabel("Time (seconds)")
-        plt.ylabel("Amplitude")
-        
-        plt.show()
-        """
-        #BPSKDETECTOR, not SYM TO BITS, wrong name. 
-        bits = np.where(symbols_at_rb > 0, 1, -1) 
-        return bits
-
     def sim(self, maxSims, maxSNR):
-        ebno_db = np.arange(0, maxSNR)
-        ebno_linear = 10**(ebno_db/10)
+        #Directly from the random generator in SigGen
+        txsym = np.where(self.signal.txsymbols > 0, 1, -1)                              #Tx Symbols
+        arrpath = 0                                                                     #Element Number 
+        #Convert SNR from dB to linear ratio in prep for variance formula 
+        EbN0dBs = np.arange(0, maxSNR)
+        #Calculate enery per bit (Eb) of your signal 
+        element_signals = self.signal.elements.copy()                                   #Original transmitted signals
         
+        #BER simulation results
+        ber_curve = np.zeros(len(EbN0dBs))
+        len(ber_curve)
+        for i, EbN0dB in enumerate(EbN0dBs):
 
-        txbits = np.where(self.signal.txsymbols > 0, 1, -1)
+            print("snr=",EbN0dBs[i])
+            gamma = 10**(EbN0dB/10)    #SNR to linear scale
+            rx_noisy = []
+            for k in range(self.conf.no_elem):
+                s = element_signals[k]
+                P = np.sum(np.abs(s)**2) / len(s) #Power in array size
+                N0 = P / gamma #Noise spectral density 
+                n = np.sqrt(N0/2)*np.random.standard_normal(s.shape) #noise array
+                rx = s+n
+                rx_noisy.append(rx)
 
-        arrpath = 0
-        signal_len = len(self.signal.rrcsymbols)
-        signal = self.signal.rrcsymbols.copy()
-        eb = np.sum(signal**2) / len(txbits)
+            #overwrite the elements in the signal object to noisy signal     
+            self.signal.elements = rx_noisy
 
-        #BER simulation 
-        ber_curve = []
-        target_error = 10**5
-        maxbits = 10**7
-        for i, ebno in enumerate(ebno_linear):
-            print("snr=",ebno_db[i])
+            #setup rx, note this simulates for all path 
+            self.rx.setup(self.signal)
 
-            #calculate AWGN noise 
-            noise_std = np.sqrt(eb/ (2*ebno))
+            #run cdm for all paths 
+            recoveredSignal = self.rx.assemble() 
 
-            totalerrors = 0
-            totalbits = 0
-            
-            for txidx in range(maxSims):
-                
-                noise = []
-                for i in range(self.conf.no_elem):
-                    noise_arr = np.random.randn(signal_len)
-                    noise.append(noise_std*noise_arr)
+            #sample at symbol rate for arrpath only 
+            rxsym = recoveredSignal.symbols
+            rxsym[arrpath] =  np.where(rxsym[arrpath] > 0, 1, -1)   
+            ber_curve[i] = np.sum(rxsym[arrpath] != txsym)/maxSims
 
-                self.signal.add_element_noise(signal, noise)
-                
-                #setup rx, note this simulates for all path 
-                self.rx.setup(self.signal)
-
-                #run cdm for all paths 
-                decorr_signal = self.rx.assemble() 
-
-                #sample at symbole rate for arrpath only 
-                rxbits = self.symbol_sampler(
-                    decorr_signal.time,
-                    decorr_signal.signals[arrpath], 
-                    1/decorr_signal.fs
-                )  
-                
-                #TEST MF ONLY: SET CALIBRATE=TRUE in Config 
-
-                #get bit error rate per transmission, so this is no false match
-                # es / total bits 
-                totalerrors += np.sum(txbits!=rxbits)
-                totalbits += len(txbits)
-
-                if totalerrors >=target_error: break
-                if totalbits >= maxbits: break 
-
-            #average all the ber sum for each sim, so this is bersum divided by max sims 
-            ber_curve.append(totalerrors / totalbits)
         return ebno_db, ber_curve
 
 def plot_curve(ebno_db, ber_array, ber_titles):
@@ -169,13 +106,13 @@ def plot_curve(ebno_db, ber_array, ber_titles):
 
 if __name__ == "__main__":
     #configure
-    Rb = 1e3
+    Rb = 30e6
     Tb = 1/Rb
     symbols = 1000
     totaltime = symbols*Tb
     
     Nelem = [2]
-    lc = 4
+    lc = 16
     fam="WH"
     mod = "BPSK"
 
@@ -189,14 +126,15 @@ if __name__ == "__main__":
     #Note: when doing WH codes, important for codeids to start from 1 to avoid DC offset code idx=0
     for nelem in Nelem:
         baseconfig = CDMcfg(
-            rb=Rb,
+            fb=Rb,
             sps_chip=2,
             alpha=0.5,
             simtime=totaltime,
             no_elem=nelem,
             lc=lc,
             codeids=np.arange(0,lc),
-            CALIBRATE=False,
+            CALIBRATE=True,
+            CARRIER=False,
             codefam=fam,
             modType=mod
             )
@@ -208,11 +146,11 @@ if __name__ == "__main__":
                     )
         
         config_best = replace(baseconfig, codeids=best)
-        config_worst = replace(baseconfig, codeids=worst)
+        #config_worst = replace(baseconfig, codeids=worst)
         signal = DiscreteSignal(baseconfig)
 
         ber_best = BER(config_best, signal)
-        ber_worst = BER(config_worst,signal)
+        #ber_worst = BER(config_worst,signal)
 
         print(f"N={nelem} with best code pairs={best}")
         _, curve_best = ber_best.sim(1, SNR)

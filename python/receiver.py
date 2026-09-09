@@ -253,9 +253,9 @@ class Receiver():
                     self.recovered.time, bf,
                     0
                 )  
-            return ResampledSignals(bf, self.recovered.time, self.spread_bb.fs)
+            return bf
         else:
-            return ResampledSignals(self.recovered.signals, self.recovered.time, self.recovered.fs)
+            return self.recovered
 
     def signal_plot(self, 
         title,

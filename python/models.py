@@ -24,9 +24,10 @@ class SpreadSignals:
     fs: float 
 
 @dataclass
-class DespreadSignals:
+class RecoveredSignals:
     original: list[np.ndarray]
     signals: list[np.ndarray]
+    symbols: list[np.ndarray]
     time: np.ndarray
     codes: list[np.ndarray]
     fs: float 
