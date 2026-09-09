@@ -76,13 +76,13 @@ class DiscreteSignal:
         else:
             raise ValueError("Unsupported modulation scheme. Choose [BPSK, QPSK]")
         #Random symbol generator    
-        #self.txsymbols = np.random.choice(constellation, no_symbols) 
+        self.txsymbols = np.random.choice(constellation, no_symbols) 
     
         #OVERWRITE WARNING!! FOR REPEATABLE RESULTS SAVE DATA
         #np.save("input_thesis_QPSK_pulse_shaping", self.txsymbols)
 
         #FOR REPEATABLE RESULTS LOAD DATA
-        self.txsymbols = np.load("input_thesis_pulse_shaping.npy")
+        #self.txsymbols = np.load("input_thesis_pulse_shaping.npy")
 
         #add rrcfilter
         self.symbol_waveform, self.symbols = self.filters.rrcfilter(
@@ -121,11 +121,6 @@ class DiscreteSignal:
             self.psi.append(psi_i)
 
         return self.elements 
-
-    def add_element_noise(self, signal, noise):
-        for i in range(self.conf.no_elem):
-            self.elements[i] = signal[i] + noise[i]
-
 
     def modulate_to_carrier(self, signal):
         #carrier frequency = flo in config 

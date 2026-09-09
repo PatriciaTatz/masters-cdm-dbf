@@ -463,17 +463,17 @@ if __name__ == "__main__":
     # ==============================
     Rb = 30e6
     Tb = 1/Rb
-    symbols = 1000
+    symbols = 50
     totaltime = symbols*Tb
-    lc = 32
+    lc = 16
     config = CDMcfg(
         fb = Rb,
         fc =200e6,
-        lc = lc,
-        sps_chip= 1,
+        lc = lc, 
+        sps_chip= 2,
         alpha = 0.5,
         simtime = totaltime,
-        no_elem = 2,
+        no_elem = 1,
         codefam="WH",
         modType="BPSK",
         codeids=np.array([1,2])

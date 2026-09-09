@@ -4,13 +4,13 @@ from matplotlib.ticker import LogFormatterMathtext, LogLocator, NullFormatter
 
 
 ber_titles = [
-    'Rx with MF only',
-    'Rx only', 
+    'WH',
+    'WHxGC'
     ]
 
 ber_files = [
-    'noCDM.npy',
-    'noRx.npy'
+    './results/WH/raw_data/N_7_best.npy',
+    './results/GCWH/raw_data/N_7_best.npy',
 ]
 
 
@@ -25,7 +25,7 @@ plt.figure()
 print(len(ebno_db))
 
 for i in range(len(ber_titles)):
-    ber_data = np.load(f"{fileloc}/{ber_files[i]}")
+    ber_data = np.load(f"{ber_files[i]}")
 
     print(ber_titles[i])
     print(ber_data)
@@ -38,7 +38,7 @@ for i in range(len(ber_titles)):
         markersize=6,
         label=ber_titles[i]
     )
-plt.title('Calibration Plots')
+plt.title('Gold vs WH vs ZC [Optimised]')
 plt.semilogy(
     ebno_db,
     ber_theory,

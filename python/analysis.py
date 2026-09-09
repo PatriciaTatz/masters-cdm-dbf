@@ -32,12 +32,14 @@ class BER:
         element_signals = self.signal.elements.copy()                                   #Original transmitted signals
         
         #BER simulation results
-        ber_curve = np.zeros(len(EbN0dBs))
+        ber_curves = [] 
         for i, EbN0dB in enumerate(EbN0dBs):
-            total_error = 0 
-            total_bits_tx = 0 
-            while total_bits_tx < maxbits:
-                print("snr=",EbN0dBs[i])
+            print("snr=",EbN0dBs[i])
+
+            ber_k = np.zeros(self.conf.no_elem)
+            total_error = np.zeros(self.conf.no_elem)
+            total_bits_tx = np.zeros(self.conf.no_elem)
+            while total_bits_tx[0] < maxbits:
                 gamma = 10**(EbN0dB/10)    #SNR to linear scale
                 rx_noisy = []
                 for k in range(self.conf.no_elem):
@@ -63,24 +65,46 @@ class BER:
                 rxsym = recoveredSignal.symbols
 
                 #hard decisions
-                rxsym[arrpath] =  np.where(rxsym[arrpath] > 0, 1, -1)   
+                
+                for k in range(self.conf.no_elem):
+                    rxsym[k] =  np.where(rxsym[k] > 0, 1, -1)   
 
-                #calculate errors
-                errors = np.sum(rxsym[arrpath]!=txsym)
+                    #calculate errors
+                    errors = np.sum(rxsym[k]!=txsym)
 
-                #update counters
-                total_error += errors
-                total_bits_tx += len(txsym)
+                    #update counters
+                    total_error[k] += errors
+                    total_bits_tx[k] += len(txsym)
             
-            ber_curve[i] = total_error / total_bits_tx
-
-        return ebno_db, ber_curve
+            ber_k = total_error / total_bits_tx
+            ber_curves.append(ber_k)
+        ber_avg = [sum(ber_k) / len(ber_k) for ber_k in ber_curves]
+        return ebno_db, ber_curves, ber_avg
 
 def plot_curve(ebno_db, ber_array, ber_titles):
-    fileloc = "./results/WH/raw_data/"
+    fileloc = f"./results/GCWH/raw_data/"
     #np.save(f"{fileloc}/ebno.npy", ebno_db)
     plt.figure()
+
     
+    #np.save(f"{fileloc}/theory.npy", ber_array[0])
+    cmap = plt.get_cmap('turbo')
+    n_lines = len(ber_titles)-1
+    for i in range(1,len(ber_titles)):
+        color = cmap(i/(n_lines))
+
+        np.save(f"{fileloc}/{ber_title[i]}",ber_array[i])
+        plt.semilogy(
+            ebno_db,
+            ber_array[i],
+            linestyle='-',
+            marker='o',
+            linewidth=1,
+            markersize=2,
+            color=color,
+            label=ber_titles[i]
+        )
+
     plt.semilogy(
         ebno_db,
         ber_array[0],
@@ -91,21 +115,6 @@ def plot_curve(ebno_db, ber_array, ber_titles):
         markersize=6,
         label=ber_titles[0]
     )
-    
-    #np.save(f"{fileloc}/theory.npy", ber_array[0])
-
-    for i in range(1,len(ber_titles)):
-        np.save(f"{fileloc}/{ber_title[i]}",ber_array[i])
-        plt.semilogy(
-            ebno_db,
-            ber_array[i],
-            linestyle='--',
-            marker='o',
-            linewidth=2,
-            markersize=6,
-            label=ber_titles[i]
-        )
-
     # Show only 10^n labels
     ax = plt.gca()
     ax.yaxis.set_major_locator(LogLocator(base=10))
@@ -114,7 +123,7 @@ def plot_curve(ebno_db, ber_array, ber_titles):
 
     plt.xlabel("Eb/No (dB)")
     plt.ylabel("Bit Error Rate")
-    plt.title(f"Element Path=1 with Lc=4")
+    plt.title(f"Avg BER for all paths, N=7 with Lc=8")
     plt.grid(True, which='both', linestyle='--', alpha=0.6)
     plt.legend()
 
@@ -126,9 +135,10 @@ if __name__ == "__main__":
     symbols = 1000
     totaltime = symbols*Tb
     
-    Nelem = [2]
-    lc = 4
-    fam="WH"
+    lc = 8
+    Nelem = [7]
+    fam="GCWH"
+    print("running=", fam)
     mod = "BPSK"
 
     ber_title = ['Theoretical'] 
@@ -142,12 +152,12 @@ if __name__ == "__main__":
     for nelem in Nelem:
         baseconfig = CDMcfg(
             fb=Rb,
-            sps_chip=1,
+            sps_chip=2,
             alpha=0.5,
             simtime=totaltime,
-            no_elem=nelem,
+            no_elem=int(nelem),
             lc=lc,
-            codeids=np.arange(0,lc),
+            codeids=np.arange(1,lc),
             CALIBRATE=False,
             CARRIER=True,
             codefam=fam,
@@ -161,22 +171,25 @@ if __name__ == "__main__":
                     )
         
         config_best = replace(baseconfig, codeids=best)
-        #config_worst = replace(baseconfig, codeids=worst)
+        config_worst = replace(baseconfig, codeids=worst)
         signal = DiscreteSignal(baseconfig)
 
         ber_best = BER(config_best, signal)
-        #ber_worst = BER(config_worst,signal)
+        ber_worst = BER(config_worst,signal)
 
         print(f"N={nelem} with best code pairs={best}")
-        _, curve_best = ber_best.sim(10, SNR)
-        ber_title.append(f"{fam}_N_{str(nelem)}_Lc_{lc}_best")
-        ber_data.append(curve_best)
+        _, ber_curves, ber_avg  = ber_best.sim(10e2, SNR)                       #BER SIMULATION
+        ber_k_0  = [ber_curve[0] for ber_curve in ber_curves]
 
+        ber_title.append(f"N={nelem}_best")
+        ber_data.append(ber_avg)
 
-        #print(f"N={nelem} with worst code pairs={worst}")
-        #_, curve_worst= ber_worst.sim(10**3, SNR)
-        #ber_title.append(f"{fam}_N_{str(nelem)}_Lc_{lc}_worst")
-        #ber_data.append(curve_worst)
+        #ber_title.append(f"N={nelem}")
+        #ber_data.append(np.array(ber_k_0))
+
+        #_, ber_curves, ber_avg = ber_worst.sim(10, SNR)
+        #ber_title.append(f"N_{nelem}, worst")
+        #ber_data.append(ber_avg)
     
     plot_curve(ebno_db, ber_data, ber_title)
     plt.show()

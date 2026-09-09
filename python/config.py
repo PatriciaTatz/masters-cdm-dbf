@@ -19,7 +19,7 @@ class CDMcfg():
     #Signal properties
     fc: float = 500e6                   #Carrier frequency
     fb: float = 30e6                    #Baseband symbol frequency
-    alpha: float = 0.50                 #RRC roll off factor
+    alpha: float = 0.25                 #RRC roll off factor
     span: float = 10                    #RRC symbol span
     modType: str = "BPSK"               #Modulation scheme [BPSK or QPSK]
 

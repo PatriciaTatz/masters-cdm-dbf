@@ -73,7 +73,7 @@ class CDMx:
                     np.roll(seq_b, shift)
                 )
                 gold_codes.append(code)
-            codes = [2*gold_codes[idx]-1 for idx in self.conf.codeids]     
+            codes = [2*gold_codes[idx]-1 for idx in self.conf.codeids]    
         elif self.conf.codefam == "ZC":
             if self.conf.lc%2 == 0: 
                 raise ValueError("Code length must be odd for ZC")
@@ -83,6 +83,35 @@ class CDMx:
                 s = np.exp(-1j*pi*i*n*(n+1)/self.conf.lc)
                 codes.append(s)
             np.set_printoptions(precision=4, suppress=True)
+        elif self.conf.codefam == "DFT":
+            codes = []
+            n = np.arange(0, self.conf.lc)
+            for i in self.conf.codeids:
+                code = np.exp(-1j*2*pi*i*n/self.conf.lc)
+                codes.append(code)
+        elif self.conf.codefam == "GCWH":
+            #length #31
+            #generate one gold code 
+            degree = 5 #2^5-1=31 
+            seq_a, _ = max_len_seq(degree, taps=[2]) 
+            seq_b, _ = max_len_seq(degree, taps=[4,3,2])
+
+            gold_code = np.bitwise_xor(
+                    seq_a,
+                    np.roll(seq_b, 2)
+                )
+            gold_code = 2*gold_code - 1
+            gold_code = gold_code[:self.conf.lc]
+            #generate WH codes
+            codes = []
+            for i in self.conf.codeids:
+                WHcode = km.WalshHadamardSequence(
+                    length=self.conf.lc,
+                    index=i,
+                    ordering='sequency')
+                codes.append(WHcode.polar_sequence)  
+            codes *= gold_code              
+
         else: 
             raise Exception("Unrecognised code family! Choose from [WH, Gold, ZC]")
 
@@ -104,6 +133,9 @@ class CDMx:
                     oldfs=fs_signal,
                     signal=signals[i]
                 )
+            else:
+                fs_resampled = fs_code
+                resampled_signal = signals[i]
             os.append(resampled_signal)
 
             #generate code sequencec 
@@ -121,11 +153,15 @@ class CDMx:
             code_t = np.arange(len(expanded_code))*1/fs_resampled
             sig_t = np.arange(len(resampled_signal))*1/fs_resampled
             orig_t = np.arange(len(signals[i]))*1/fs_signal
-            plt.plot(orig_t[:1000], signals[i][:1000])
-            plt.plot(sig_t[:1000], resampled_signal[:1000])
-            plt.plot(code_t[:1000], expanded_code[:1000])
-            plt.axvline(x=1/self.conf.b, color='red', linestyle='--', linewidth=1.5)
-            plt.axvline(x=1/self.conf.fb, color='blue', linestyle='--', linewidth=1.5)
+            plt.plot(orig_t, signals[i])
+            plt.plot(sig_t, resampled_signal)
+            plt.title(f"{codes[i]}")
+            plt.plot(code_t, expanded_code, '-o')
+            plt.axvline(x=1/self.conf.b, color='black', linestyle='--', linewidth=1.5, label="BW")
+            plt.axvline(x=1/self.conf.fb, color='blue', linestyle='--', linewidth=1.5, label="Rb")
+            plt.axvline(x=len(code_sequence)/fs_resampled, color='yellow', linestyle='--', linewidth=1.5, label="Code period")
+            plt.legend()
+            plt.grid()
             plt.show()
             """
         
@@ -189,6 +225,8 @@ class CDMx:
         symbol_elements = []
         os = []
         exp_codes = []
+        codes = np.conj(codes)
+
 
         for i in range(self.conf.no_elem):
             #upsample is required to do discrete multiplication 
@@ -281,7 +319,7 @@ class Filter:
         #sample at the symbol
         symbols = filtered_no_delay[::sps_symbol][1:]
 
-        """        
+        """      
         #Plot for pulse-shaping and constellation
         if self.conf.modType=="BPSK":
 
@@ -292,12 +330,12 @@ class Filter:
             
                 plt.figure(figsize=(15,6))
                 plt.rcParams['font.size'] = 15
-                plt.stem(time_sample[:100], samples[:100], label="Upsampled Symbols")
+                plt.stem(time_sample, samples, label="Upsampled Symbols")
                 #plt.axvline(x=1/self.conf.fb, color='red', linestyle='--', linewidth=1.5)
                 #plt.axvline(x=2/self.conf.fb, color='red', linestyle='--', linewidth=1.5)
                 #plt.axvline(x=3/self.conf.fb, color='red', linestyle='--', linewidth=1.5)
 
-                plt.plot(time[:100], filtered_no_delay[:100], '-o', c='orange', label="RRC filtered symbols w/o group delay")
+                plt.plot(time, filtered_no_delay, '-o', c='orange', label="RRC filtered symbols w/o group delay")
                 plt.grid()
                 plt.title("BPSK with RRC Pulse Shaping")
                 plt.ylabel("Symbol")
@@ -306,6 +344,8 @@ class Filter:
                 #Figure 3.5, constellation q
                 plt.figure(figsize=(10,8))
                 plt.rcParams['font.size'] = 15
+                theta = np.linspace(0, 2*np.pi, 1000)
+                plt.plot(np.cos(theta),np.sin(theta),'k--', alpha=0.5)
                 plt.axhline(y=0, color='orange', linestyle='-', linewidth=1.5)
                 plt.axvline(x=0, color='orange', linestyle='-', linewidth=1.5)
                 plt.title(f"Constellation Diagram of BPSK Signal")
@@ -323,11 +363,11 @@ class Filter:
                 #Figure 3.4
                 plt.figure(figsize=(15,6))
                 plt.rcParams['font.size'] = 15
-                time = np.arange(len(filtered_no_delay))/self.conf.fs
-                plt.stem(time[:100][::sps_symbol], filtered_no_delay[:100][::sps_symbol], label="Upsampled Symbols")
-                plt.plot(time[:100], filtered_no_delay[:100], '-o', c='orange', label="RRC filtered symbols w/o group delay")
+                time = np.arange(len(filtered_no_delay))/fs_signal
+                plt.stem(time[::sps_symbol][1:-1], filtered_no_delay[::sps_symbol][1:-1], label="Upsampled Symbols")
+                plt.plot(time[1:-1], filtered_no_delay[1:-1], '-o', c='orange', label="RRC filtered symbols w/o group delay")
                 plt.grid()
-                plt.title("BPSK with RRC Pulse Shaping")
+                plt.title("RX BPSK with RRC Pulse Shaping")
                 plt.ylabel("Symbol")
                 plt.xlabel("Sample Index\n")
                 plt.legend(loc='upper right')
@@ -341,7 +381,7 @@ class Filter:
                 plt.rcParams['font.size'] = 15
                 plt.axhline(y=0, color='orange', linestyle='-', linewidth=1.5)
                 plt.axvline(x=0, color='orange', linestyle='-', linewidth=1.5)
-                plt.title(f"Constellation Diagram of BPSK Signal")
+                plt.title(f"RX Constellation Diagram of BPSK Signal")
                 plt.ylabel("Quadrature (Q)")
                 plt.xlabel("In-Phase (I)")
                 plt.scatter(
@@ -397,12 +437,11 @@ class Filter:
             plt.tight_layout()
             plt.grid()
         plt.show()
-        """
         
+        """
         return filtered_no_delay, symbols
 
     def butterworth(self, cutoff, fs, signals, filter_type="low"):
-        print(cutoff)
         #fs is sampling frequency! 
         nyquist = fs/2
         #cutoff = 1.5*self.fb

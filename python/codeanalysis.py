@@ -492,7 +492,7 @@ class CodeSelector:
 
 if __name__ == "__main__":
     #initiate code config
-    lc = 8
+    lc = 32
     ids = np.arange(1,lc)
     WHcfg = CDMcfg(
         simtime = 1, 
