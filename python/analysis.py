@@ -22,7 +22,7 @@ class BER:
         self.rx = Receiver(self.conf)
         self.signal = signal
 
-    def sim(self, maxSims, maxSNR):
+    def sim(self, maxbits, maxSNR):
         #Directly from the random generator in SigGen
         txsym = np.where(self.signal.txsymbols > 0, 1, -1)                              #Tx Symbols
         arrpath = 0                                                                     #Element Number 
@@ -33,33 +33,46 @@ class BER:
         
         #BER simulation results
         ber_curve = np.zeros(len(EbN0dBs))
-        len(ber_curve)
         for i, EbN0dB in enumerate(EbN0dBs):
+            total_error = 0 
+            total_bits_tx = 0 
+            while total_bits_tx < maxbits:
+                print("snr=",EbN0dBs[i])
+                gamma = 10**(EbN0dB/10)    #SNR to linear scale
+                rx_noisy = []
+                for k in range(self.conf.no_elem):
+                    s = element_signals[k]
+                    P = np.sum(np.abs(s)**2) / len(s) #Power in array size
+                    L = len(s)/len(txsym)
+                    Eb = P*L
+                    N0 = Eb / gamma #Noise spectral density 
+                    n = np.sqrt(N0/2)*np.random.standard_normal(s.shape) #noise array
+                    rx = s+n
+                    rx_noisy.append(rx)
 
-            print("snr=",EbN0dBs[i])
-            gamma = 10**(EbN0dB/10)    #SNR to linear scale
-            rx_noisy = []
-            for k in range(self.conf.no_elem):
-                s = element_signals[k]
-                P = np.sum(np.abs(s)**2) / len(s) #Power in array size
-                N0 = P / gamma #Noise spectral density 
-                n = np.sqrt(N0/2)*np.random.standard_normal(s.shape) #noise array
-                rx = s+n
-                rx_noisy.append(rx)
+                #overwrite the elements in the signal object to noisy signal     
+                self.signal.elements = rx_noisy
 
-            #overwrite the elements in the signal object to noisy signal     
-            self.signal.elements = rx_noisy
+                #setup rx, note this simulates for all path 
+                self.rx.setup(self.signal)
 
-            #setup rx, note this simulates for all path 
-            self.rx.setup(self.signal)
+                #run cdm for all paths 
+                recoveredSignal = self.rx.assemble() 
 
-            #run cdm for all paths 
-            recoveredSignal = self.rx.assemble() 
+                #sample at symbol rate for arrpath only 
+                rxsym = recoveredSignal.symbols
 
-            #sample at symbol rate for arrpath only 
-            rxsym = recoveredSignal.symbols
-            rxsym[arrpath] =  np.where(rxsym[arrpath] > 0, 1, -1)   
-            ber_curve[i] = np.sum(rxsym[arrpath] != txsym)/maxSims
+                #hard decisions
+                rxsym[arrpath] =  np.where(rxsym[arrpath] > 0, 1, -1)   
+
+                #calculate errors
+                errors = np.sum(rxsym[arrpath]!=txsym)
+
+                #update counters
+                total_error += errors
+                total_bits_tx += len(txsym)
+            
+            ber_curve[i] = total_error / total_bits_tx
 
         return ebno_db, ber_curve
 
@@ -67,6 +80,7 @@ def plot_curve(ebno_db, ber_array, ber_titles):
     fileloc = "./results/WH/raw_data/"
     #np.save(f"{fileloc}/ebno.npy", ebno_db)
     plt.figure()
+    
     plt.semilogy(
         ebno_db,
         ber_array[0],
@@ -77,6 +91,7 @@ def plot_curve(ebno_db, ber_array, ber_titles):
         markersize=6,
         label=ber_titles[0]
     )
+    
     #np.save(f"{fileloc}/theory.npy", ber_array[0])
 
     for i in range(1,len(ber_titles)):
@@ -112,7 +127,7 @@ if __name__ == "__main__":
     totaltime = symbols*Tb
     
     Nelem = [2]
-    lc = 16
+    lc = 4
     fam="WH"
     mod = "BPSK"
 
@@ -127,7 +142,7 @@ if __name__ == "__main__":
     for nelem in Nelem:
         baseconfig = CDMcfg(
             fb=Rb,
-            sps_chip=2,
+            sps_chip=1,
             alpha=0.5,
             simtime=totaltime,
             no_elem=nelem,
@@ -153,7 +168,7 @@ if __name__ == "__main__":
         #ber_worst = BER(config_worst,signal)
 
         print(f"N={nelem} with best code pairs={best}")
-        _, curve_best = ber_best.sim(1, SNR)
+        _, curve_best = ber_best.sim(100, SNR)
         ber_title.append(f"{fam}_N_{str(nelem)}_Lc_{lc}_best")
         ber_data.append(curve_best)
 

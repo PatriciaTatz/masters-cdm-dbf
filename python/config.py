@@ -26,7 +26,7 @@ class CDMcfg():
     #Receiver properties 
     fIF: float = 80e6                   #IF frequency
     lc: int = 32                        #Code length
-    sps_chip: int = 2                   #Samples per chip >=2
+    sps_chip: int = 1                  #Samples per chip >=2
     codefam: str = "WH"                 #Code family 
     no_elem: int = 2                    #No elements multiplexed
     degree: int = 1                     #Degree used by Gold Codes

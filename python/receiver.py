@@ -51,6 +51,7 @@ class Receiver():
                 self.rxsignals[0],
                 self.fs_rx
             )
+
     def assemble(self):
         if not self.conf.CALIBRATE: 
             #===================================
