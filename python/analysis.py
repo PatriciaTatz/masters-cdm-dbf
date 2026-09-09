@@ -148,8 +148,8 @@ if __name__ == "__main__":
             no_elem=nelem,
             lc=lc,
             codeids=np.arange(0,lc),
-            CALIBRATE=True,
-            CARRIER=False,
+            CALIBRATE=False,
+            CARRIER=True,
             codefam=fam,
             modType=mod
             )
@@ -168,7 +168,7 @@ if __name__ == "__main__":
         #ber_worst = BER(config_worst,signal)
 
         print(f"N={nelem} with best code pairs={best}")
-        _, curve_best = ber_best.sim(100, SNR)
+        _, curve_best = ber_best.sim(10, SNR)
         ber_title.append(f"{fam}_N_{str(nelem)}_Lc_{lc}_best")
         ber_data.append(curve_best)
 
