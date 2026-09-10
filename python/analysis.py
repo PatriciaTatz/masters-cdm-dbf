@@ -7,7 +7,7 @@ from matplotlib.ticker import LogFormatterMathtext, LogLocator, NullFormatter
 from scipy.special import erfc
 import copy 
 from dataclasses import replace
-
+import itertools
 
 from codeanalysis import CodeSelector
 from config import CDMcfg
@@ -39,7 +39,7 @@ class BER:
             ber_k = np.zeros(self.conf.no_elem)
             total_error = np.zeros(self.conf.no_elem)
             total_bits_tx = np.zeros(self.conf.no_elem)
-            while total_bits_tx[0] < maxbits:
+            while np.any(total_bits_tx < maxbits):
                 gamma = 10**(EbN0dB/10)    #SNR to linear scale
                 rx_noisy = []
                 for k in range(self.conf.no_elem):
@@ -67,22 +67,22 @@ class BER:
                 #hard decisions
                 
                 for k in range(self.conf.no_elem):
-                    rxsym[k] =  np.where(rxsym[k] > 0, 1, -1)   
+                    rsym =  np.where(rxsym[k] > 0, 1, -1)   
 
                     #calculate errors
-                    errors = np.sum(rxsym[k]!=txsym)
+                    errors = np.sum(rsym!=txsym)
 
-                    #update counters
+                    #update counters - this doesnt allow for rotations 
                     total_error[k] += errors
                     total_bits_tx[k] += len(txsym)
             
             ber_k = total_error / total_bits_tx
             ber_curves.append(ber_k)
         ber_avg = [sum(ber_k) / len(ber_k) for ber_k in ber_curves]
-        return ebno_db, ber_curves, ber_avg
+        return ber_curves, ber_avg
 
 def plot_curve(ebno_db, ber_array, ber_titles):
-    fileloc = f"./results/GCWH/raw_data/"
+    fileloc = f"./results/{fam}/raw_data/"
     #np.save(f"{fileloc}/ebno.npy", ebno_db)
     plt.figure()
 
@@ -135,9 +135,9 @@ if __name__ == "__main__":
     symbols = 1000
     totaltime = symbols*Tb
     
-    lc = 8
-    Nelem = [7]
-    fam="GCWH"
+    lc  = 31
+    Nelem = [2]
+    fam="ZC"
     print("running=", fam)
     mod = "BPSK"
 
@@ -169,6 +169,18 @@ if __name__ == "__main__":
                     weights, 
                     baseconfig.no_elem
                     )
+        """
+        for clique in best:
+            config_pair = replace(baseconfig, codeids=np.array(clique))
+            signal = DiscreteSignal(config_pair)
+
+            ber = BER(config_pair, signal)
+            print("clique=",clique)
+            ber_curves, ber_avg = ber.sim(10e2,SNR)
+            ber_title.append(f"clique_{clique}_N_{nelem}_Lc_{lc}")
+            ber_data.append(ber_avg)
+        """
+
         
         config_best = replace(baseconfig, codeids=best)
         config_worst = replace(baseconfig, codeids=worst)
@@ -178,16 +190,16 @@ if __name__ == "__main__":
         ber_worst = BER(config_worst,signal)
 
         print(f"N={nelem} with best code pairs={best}")
-        _, ber_curves, ber_avg  = ber_best.sim(10e2, SNR)                       #BER SIMULATION
+        ber_curves, ber_avg  = ber_best.sim(10e6, SNR)                       #BER SIMULATION
         ber_k_0  = [ber_curve[0] for ber_curve in ber_curves]
 
-        ber_title.append(f"N={nelem}_best")
+        ber_title.append(f"N_{nelem}_Lc_{lc}_best")
         ber_data.append(ber_avg)
-
+        
         #ber_title.append(f"N={nelem}")
         #ber_data.append(np.array(ber_k_0))
 
-        #_, ber_curves, ber_avg = ber_worst.sim(10, SNR)
+        #ber_curves, ber_avg = ber_worst.sim(10, SNR)
         #ber_title.append(f"N_{nelem}, worst")
         #ber_data.append(ber_avg)
     

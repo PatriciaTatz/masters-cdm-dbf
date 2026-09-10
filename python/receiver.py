@@ -372,7 +372,7 @@ class Receiver():
         if self.conf.modType=="BPSK":
             plt.title(f"Despread Signal of Element={index+1}")
             plt.plot(signal.symbol_wf_time, signal.symbol_waveform, '--b', label=f"Tx symbol waveform")
-            plt.plot(self.recovered.time, self.recovered.signals[index], '-g', linewidth='2', label="Despread signal")
+            plt.plot(self.recovered.time, self.recovered.signals[index], '-g', linewidth='2', label="Recovered signal")
         elif self.conf.modType=="QPSK":
             plt.subplot(2, 1, 1)
             plt.plot(self.recovered.time, np.real(self.recovered.signals[index]), '-g', linewidth='3', label="Recovered signal")

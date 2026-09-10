@@ -82,7 +82,7 @@ class DiscreteSignal:
         #np.save("input_thesis_QPSK_pulse_shaping", self.txsymbols)
 
         #FOR REPEATABLE RESULTS LOAD DATA
-        #self.txsymbols = np.load("input_thesis_pulse_shaping.npy")
+        self.txsymbols = np.load("input_thesis_pulse_shaping.npy")
 
         #add rrcfilter
         self.symbol_waveform, self.symbols = self.filters.rrcfilter(

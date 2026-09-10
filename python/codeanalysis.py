@@ -49,7 +49,7 @@ class CodeSelector:
         #for both node and edge, large weight BAD, small weight GOOD, total algo minimises weight 
         self.codeids = [int(x) for x in self.codeids]
         self.node_weight = {
-            codeid: float(0.5*acf + 0.5*sf)
+            codeid: float(0.1*acf + 0.9*sf)
             for codeid, sf, acf in zip(self.codeids, self.sfs, self.acfs)
         }
 
@@ -61,9 +61,9 @@ class CodeSelector:
             )
             """
             self.edge_weight[f"{ci}-{cj}"] += (
-                1/3*csd_height+
-                1/3*ccf_width+
-                1/3*abs(ccf_peak)
+                1/2*csd_height+
+                1/4*ccf_width+
+                1/4*abs(ccf_peak)
             )
             
         """
@@ -222,7 +222,7 @@ class CodeSelector:
                     return_onesided=False
                 )
                 """
-                codes_mixed = self.allcodes[i]*self.allcodes[j]
+                codes_mixed = self.allcodes[i]*np.conj(self.allcodes[j])
                 Sxy = np.fft.fft(codes_mixed)
                 fbins = np.fft.fftfreq(self.Lc, d=1)
 
@@ -252,7 +252,7 @@ class CodeSelector:
                         int(self.codeids[j]),
                         float(widths[0]),      # CCF width
                         float(ccf[zero_lag]),   # zero-lag CCF peak as plotted
-                        float(np.abs(Sxy[1])) # CSD amplitude at 1/Lc
+                        float(np.sum(np.abs(Sxy[1:3]))) # CSD amplitude at 1/Lc
                     )
                 )
 
@@ -293,8 +293,11 @@ class CodeSelector:
             """
 
         result = dict(zip(cliques,totals))
+
+        #self.best = sorted(result, key=result.get, reverse=False)[:5]
         self.best = min(result, key=result.get)
         self.worst = max(result, key=result.get)
+        
         """
         n = 10
         for key, value in sorted(result.items(), key=lambda x: x[1], reverse=False)[:n]:
@@ -492,13 +495,13 @@ class CodeSelector:
 
 if __name__ == "__main__":
     #initiate code config
-    lc = 32
+    lc = 8
     ids = np.arange(1,lc)
     WHcfg = CDMcfg(
         simtime = 1, 
         lc = lc,
         codefam="WH",
-        no_elem= 6,
+        no_elem= 2,
         codeids=ids)
 
 
@@ -507,8 +510,8 @@ if __name__ == "__main__":
     best, worst = WHcodes.find_best_clique(weights, WHcfg.no_elem)
     print("best =",best)
     print("worst = ", worst)
-    #WHcodes.plot("CSD")
-    #WHcodes.plot("ACF")
-    #WHcodes.plot("CCF")
-    #WHcodes.plot("SF")
+    WHcodes.plot("CSD")
+    WHcodes.plot("ACF")
+    WHcodes.plot("CCF")
+    WHcodes.plot("SF")
     #WHcodes.plot("network", "best")
