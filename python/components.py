@@ -58,13 +58,13 @@ class CDMx:
         elif self.conf.codefam == "Gold": 
             #for length N=31
             #use preferred polynomial from Matlab
-            degree = 5 #2^5-1=31 
-            seq_a, _ = max_len_seq(degree, taps=[2]) 
-            seq_b, _ = max_len_seq(degree, taps=[4,3,2])
+            #degree = 5 #2^5-1=31 
+            #seq_a, _ = max_len_seq(degree, taps=[2]) 
+            #seq_b, _ = max_len_seq(degree, taps=[4,3,2])
 
-            #degree = 3 #2^3 - 1 = 7 
-            #seq_a, _ = max_len_seq(degree, taps=[1])
-            #seq_b, _ = max_len_seq(degree, taps=[2])
+            degree = 3 #2^3 - 1 = 7 
+            seq_a, _ = max_len_seq(degree, taps=[1])
+            seq_b, _ = max_len_seq(degree, taps=[2])
 
             gold_codes = []
             for shift in range(len(seq_a)):
@@ -319,7 +319,7 @@ class Filter:
         #sample at the symbol
         symbols = filtered_no_delay[::sps_symbol][1:]
 
-        """      
+        """            
         #Plot for pulse-shaping and constellation
         if self.conf.modType=="BPSK":
 
@@ -360,6 +360,7 @@ class Filter:
                 )
                 plt.grid()
             else:
+
                 #Figure 3.4
                 plt.figure(figsize=(15,6))
                 plt.rcParams['font.size'] = 15
@@ -395,21 +396,21 @@ class Filter:
                 plt.grid()
 
 
-        else:
+        elif self.conf.modType == "QPSK":
             plt.figure(figsize=(15,10))
             plt.rcParams['font.size'] = 15
             plt.suptitle("QPSK with RRC Pulse Shaping")
             time = np.arange(len(filtered_no_delay))/fs_signal
             plt.subplot(2, 1, 1)
-            plt.stem(time[:100][::sps_symbol],np.real(filtered_no_delay[:100][::sps_symbol]),  label="Upsampled Symbols")
-            plt.plot(time[:100],np.real(filtered_no_delay[:100]),  '-o', c='orange', label="RRC filtered symbols w/o group delay")
+            plt.stem(time[:1000][::sps_symbol],np.real(filtered_no_delay[:1000][::sps_symbol]),  label="Upsampled Symbols")
+            plt.plot(time[:1000],np.real(filtered_no_delay[:1000]),  '-o', c='orange', label="RRC filtered symbols w/o group delay")
             plt.ylabel("Real Part (In-Phase / I)")
             plt.grid()
             plt.legend(loc='upper right')
 
             plt.subplot(2, 1, 2)
-            plt.stem(time[:100][::sps_symbol],np.imag(filtered_no_delay[:100][::sps_symbol]),  label="Upsampled Symbols")
-            plt.plot(time[:100],np.imag(filtered_no_delay[:100]),  '-o', c='orange', label="RRC filtered symbols w/o group delay")
+            plt.stem(time[:1000][::sps_symbol],np.imag(filtered_no_delay[:1000][::sps_symbol]),  label="Upsampled Symbols")
+            plt.plot(time[:1000],np.imag(filtered_no_delay[:1000]),  '-o', c='orange', label="RRC filtered symbols w/o group delay")
             plt.ylabel("Imaginary Part (Quadrature / Q)")
             plt.xlabel("Sample Index")
             plt.grid()
@@ -437,8 +438,8 @@ class Filter:
             plt.tight_layout()
             plt.grid()
         plt.show()
-        
         """
+    
         return filtered_no_delay, symbols
 
     def butterworth(self, cutoff, fs, signals, filter_type="low"):
@@ -509,6 +510,10 @@ class Mixer:
                     signal=signal[i])
                 if fs_resampled != fs_mixer:
                     raise ValueError("Resampling did not work!")
+            else:
+                signal_resampled = signal
+                fs_resampled = fs_signal
+
             lo_time = np.arange(len(signal_resampled))*(1/fs_resampled)
             lo_signal = np.cos(2*np.pi*flo_mixer*lo_time)
 

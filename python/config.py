@@ -17,7 +17,7 @@ class CDMcfg():
     SPREADING_STAGE: str="BB"           #Location of the spreading [IF or BB]
 
     #Signal properties
-    fc: float = 500e6                   #Carrier frequency
+    fc: float = 1000e6                   #Carrier frequency
     fb: float = 30e6                    #Baseband symbol frequency
     alpha: float = 0.25                 #RRC roll off factor
     span: float = 10                    #RRC symbol span
@@ -42,7 +42,7 @@ class CDMcfg():
         self.ts = 1/self.fb                         #Symbol period
         self.fs = self.sps_symbol * self.fb         #Sampling frequency after RRC upsampler
         self.b = self.fb * (1 + self.alpha)         #RRC limited bandwidth
-
+        self.fIF = self.b*self.lc + 10e6            #720Mhz default 
         #Receiver properties 
         if len(self.codeids) == 0:
             self.codeids = np.arange(0,self.lc)     #If no code ids given, go from to 0-Lc

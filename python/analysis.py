@@ -135,9 +135,9 @@ if __name__ == "__main__":
     symbols = 1000
     totaltime = symbols*Tb
     
-    lc  = 31
-    Nelem = [2]
-    fam="ZC"
+    lc  = 8
+    Nelem = [5]
+    fam="WH"
     print("running=", fam)
     mod = "BPSK"
 

@@ -5,12 +5,15 @@ from matplotlib.ticker import LogFormatterMathtext, LogLocator, NullFormatter
 
 ber_titles = [
     'WH',
-    'WHxGC'
+    'Gold',
+    'ZC'
     ]
 
 ber_files = [
-    './results/WH/raw_data/N_7_best.npy',
-    './results/GCWH/raw_data/N_7_best.npy',
+    './results/WH/raw_data/N_5_Lc_8_best.npy',
+    './results/Gold/raw_data/N_5_Lc_7_best.npy',
+    './results/ZC/raw_data/N_5_Lc_7_best.npy',
+
 ]
 
 
@@ -38,7 +41,7 @@ for i in range(len(ber_titles)):
         markersize=6,
         label=ber_titles[i]
     )
-plt.title('Gold vs WH vs ZC [Optimised]')
+plt.title('Code Families with N=7 elements[Optimised]')
 plt.semilogy(
     ebno_db,
     ber_theory,

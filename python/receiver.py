@@ -65,7 +65,9 @@ class Receiver():
             #Sampling Frequency = fs_rx
             if self.conf.SPREADING_STAGE=="IF":
                 #Carrier enabled implies spreading at IF 
+                print("fc=",self.conf.fc)
                 flo = self.conf.fc - self.conf.fIF 
+                print("flo=",flo)
             elif self.conf.SPREADING_STAGE=="BB":
                 #No carrier implies spreading at BB
                 flo = self.conf.fc 
@@ -94,7 +96,7 @@ class Receiver():
             #Sampling Frequency = fs_rx
 
             if self.conf.SPREADING_STAGE=="IF":
-                flow = (self.conf.fIF + self.conf.fb)
+                flow = (self.conf.fIF)
             elif self.conf.SPREADING_STAGE=="BB":
                 flow = self.conf.b
 
@@ -129,7 +131,7 @@ class Receiver():
                 self.spread_bb = self.cdmx.spreader(
                     signals=self.filtered_bb,
                     fs_signal = self.baseband.fs,
-                    f_signal = self.conf.fIF,
+                    f_signal = self.conf.b,
                     codes=self.codes
                 )
             elif self.conf.SPREADING_STAGE=="BB":
@@ -201,7 +203,7 @@ class Receiver():
                 self.recovered = self.cdmx.recover(
                     signal=ddc.signals,
                     fs_signal = ddc.fs,
-                    f_signal = self.conf.fIF,
+                    f_signal = self.conf.b,
                     codes=self.codes
 
                 )
@@ -376,14 +378,14 @@ class Receiver():
         elif self.conf.modType=="QPSK":
             plt.subplot(2, 1, 1)
             plt.plot(self.recovered.time, np.real(self.recovered.signals[index]), '-g', linewidth='3', label="Recovered signal")
-            plt.plot(signal.symbol_time, np.real(signal.symbols), '-b')
+            plt.plot(signal.symbol_wf_time, np.real(signal.symbol_waveform), '-b', label="Tx symbol waveform")
 
             plt.title("Real Part (In-Phase / I)")
             plt.grid()
 
             plt.subplot(2, 1, 2)
             plt.plot(self.recovered.time, np.imag(self.recovered.signals[index]), '-g', linewidth='3', label="Recovered signal")
-            plt.plot(signal.symbol_time, np.imag(signal.symbols), '-b')
+            plt.plot(signal.symbol_wf_time, np.imag(signal.symbol_waveform), '-b', label="Tx symbol waveform ")
 
             plt.title("Imaginary Part (Quadrature / Q)")
             plt.xlabel("Sample Index")
@@ -468,15 +470,16 @@ if __name__ == "__main__":
     lc = 16
     config = CDMcfg(
         fb = Rb,
-        fc =200e6,
         lc = lc, 
         sps_chip= 2,
         alpha = 0.5,
         simtime = totaltime,
         no_elem = 1,
         codefam="WH",
-        modType="BPSK",
-        codeids=np.array([1,2])
+        modType="QPSK",
+        codeids=np.array([1,2]),
+        SPREADING_STAGE = "IF"           #Location of the spreading [IF or BB]
+
         )
     #create signal 
     signal = DiscreteSignal(config)
