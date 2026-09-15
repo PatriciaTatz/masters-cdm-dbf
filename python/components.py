@@ -167,11 +167,42 @@ class CDMx:
         
         time_before = np.arange(len(signals[i]))/fs_signal
         time = np.arange(len(ss[0]))/fs_resampled
-
         if max(time)>max(time_before)*1.2:
             raise ValueError("Something went wrong with upsampling of the time series! Exceeds sim time")
 
+        
         """
+        #PLOT for code spectrum at the BW rate
+        plt.rcParams['font.size'] = 15
+        plt.grid()
+        plt.ylabel("Normalised Power (dB)")
+        plt.xlabel("Frequency (MHz)")
+
+        specan = SpecAn().calculate_psd(
+            fs_code,
+            resampled_signal
+        )
+        plt.plot(
+            specan.f/1e6,
+            specan.Pxx_dB,
+            '-b',
+            label="s1(t)"
+        )
+
+        specan = SpecAn().calculate_psd(
+            fs_code,
+            resampled_signal*exp_codes[0]*exp_codes[1]
+        )
+        plt.plot(
+            specan.f/1e6,
+            specan.Pxx_dB,
+            '-r',
+            alpha=0.7,
+            label="s1(t)*(c1xc6)"
+        )
+        plt.legend(loc="upper right")
+        plt.show()
+        
         #PLOT FOR CODE SERIES ONLY
         for i in range(len(exp_codes)):
             print("code=", codes[i])
