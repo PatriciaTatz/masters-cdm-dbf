@@ -65,9 +65,7 @@ class Receiver():
             #Sampling Frequency = fs_rx
             if self.conf.SPREADING_STAGE=="IF":
                 #Carrier enabled implies spreading at IF 
-                print("fc=",self.conf.fc)
                 flo = self.conf.fc - self.conf.fIF 
-                print("flo=",flo)
             elif self.conf.SPREADING_STAGE=="BB":
                 #No carrier implies spreading at BB
                 flo = self.conf.fc 
@@ -96,7 +94,8 @@ class Receiver():
             #Sampling Frequency = fs_rx
 
             if self.conf.SPREADING_STAGE=="IF":
-                flow = (self.conf.fIF)
+                flow = self.conf.fIF
+
             elif self.conf.SPREADING_STAGE=="BB":
                 flow = self.conf.b
 
@@ -179,7 +178,15 @@ class Receiver():
                             fs_signal=self.spread_bb.fs,
                             flo=self.conf.fIF
                         )
-
+                """
+                BPF after DDC 
+                ddc.signals = self.filter.butterworth(
+                    cutoff = np.array([1e6, self.conf.b*self.conf.lc/2]),
+                    fs = ddc.fs,
+                    signals =  ddc.signals,
+                    filter_type="bandpass"
+                )
+                """
                 if PlotType.ddc in self.plot:
                     self.signal_plot(
                         "After DDC at Element=1",
@@ -211,6 +218,7 @@ class Receiver():
                     self.recover_plot(
                         index=0
                     )
+
             elif self.conf.SPREADING_STAGE=="BB":
                 self.recovered = self.cdmx.recover(
                     signal=summed_signal,
@@ -269,9 +277,9 @@ class Receiver():
         plt.rcParams['font.size'] = 15
         plt.figure(figsize=(12,7))
         plt.plot(time[:1000], asignal[:1000], '-o', label="RRC Filtered Signal")
-        plt.axvline(x=1/self.conf.fb, color='red', linestyle='--', linewidth=1.5)
-        plt.axvline(x=2/self.conf.fb, color='red', linestyle='--', linewidth=1.5)
-        plt.axvline(x=3/self.conf.fb, color='red', linestyle='--', linewidth=1.5)
+        #plt.axvline(x=1/self.conf.fb, color='red', linestyle='--', linewidth=1.5)
+        #plt.axvline(x=2/self.conf.fb, color='red', linestyle='--', linewidth=1.5)
+        #plt.axvline(x=3/self.conf.fb, color='red', linestyle='--', linewidth=1.5)
 
         plt.title(f"{title}")
 
@@ -291,6 +299,9 @@ class Receiver():
             specan.Pxx_dB,
             '-b' 
         )
+        plt.axvline(x=self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
+        plt.axvline(x=-self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
+
         
         plt.ylabel("Normalized Power (dB)")
         plt.xlabel("Frequency (MHz)")
@@ -300,12 +311,24 @@ class Receiver():
     def spread_plot(self, 
         index=0
         ):
-
         plt.rcParams['font.size'] = 15
         plt.figure(figsize=(15,7))
-        plt.title(f"Spread Signals of Element={index+1}")
-        plt.plot(self.spread_bb.time, self.spread_bb.original[index], '-ob', label=f"Rx signal")
-        plt.plot(self.spread_bb.time, self.spread_bb.signals[index], '-og', label=f"c1={self.codes[index]}")
+        if not self.conf.codefam == "ZC":
+            plt.title(f"Spread Signals of Element={index+1}")
+            plt.plot(self.spread_bb.time, self.spread_bb.original[index], '-ob', label=f"Rx signal")
+            plt.plot(self.spread_bb.time, self.spread_bb.signals[index], '-og', label=f"c1={self.codes[index]}")
+        else:
+            plt.subplot(2, 1, 1)
+            plt.plot(self.spread_bb.time, self.spread_bb.original[index], '-ob', label=f"Rx signal")
+            plt.plot(self.spread_bb.time, np.real(self.spread_bb.signals[index]), '-og', label=f"Real c1")
+            plt.title("Real Part (In-Phase / I)")
+            plt.grid()
+
+            plt.subplot(2, 1, 2)
+            plt.plot(self.spread_bb.time, self.spread_bb.original[index], '-ob', label=f"Rx signal")
+            plt.plot(self.spread_bb.time, np.imag(self.spread_bb.signals[index]), '-og', label=f"Imag c1")
+            plt.title("Imaginary Part (Quadrature / Q)")
+    
 
         plt.xlabel("Time (seconds)")
         plt.ylabel("Amplitude")
@@ -319,8 +342,12 @@ class Receiver():
 
         plt.figure(figsize=(15,8))
         plt.plot(specan.f/1e6, specan.Pxx_dB, '-g')
-        plt.axvline(x=self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
-        plt.axvline(x=-self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
+        if self.conf.SPREADING_STAGE=="BB":
+            plt.axvline(x=self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
+            plt.axvline(x=-self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
+        elif self.conf.SPREADING_STAGE=="IF":
+            plt.axvline(x=0 , color='red', linestyle='--', linewidth=1.5)
+            plt.axvline(x=10 + self.conf.lc*self.conf.b/1e6, color='red', linestyle='--', linewidth=1.5)
 
         plt.xlabel("Frequency (MHz)")
         plt.ylabel("Normalised Power (dB)")
@@ -404,8 +431,8 @@ class Receiver():
         plt.figure(figsize=(15,6))
         plt.plot(specan.f/1e6, specan.Pxx_dB, '-b', label="PSD")
         plt.axvline(x=self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
-        plt.axvline(x=-self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
-
+        plt.axvline(x=-self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5, label="Original bandwidth before spreading")
+        plt.legend()
         plt.xlabel("Frequency (MHz)")
         plt.ylabel("Normalised Power (dB)")
         plt.title(f"Recovered Signal at Element Path={index+1}")
@@ -465,18 +492,18 @@ if __name__ == "__main__":
     # ==============================
     Rb = 30e6
     Tb = 1/Rb
-    symbols = 50
+    symbols = 1000
     totaltime = symbols*Tb
-    lc = 16
+    lc = 8
     config = CDMcfg(
         fb = Rb,
         lc = lc, 
         sps_chip= 2,
         alpha = 0.5,
         simtime = totaltime,
-        no_elem = 1,
+        no_elem = 2,
         codefam="WH",
-        modType="QPSK",
+        modType="BPSK",
         codeids=np.array([1,2]),
         SPREADING_STAGE = "IF"           #Location of the spreading [IF or BB]
 
@@ -486,6 +513,6 @@ if __name__ == "__main__":
     #signal.show_signal_plot()
 
     #initiate and assemble receiver 
-    rx = Receiver(config, {PlotType.recovered})
+    rx = Receiver(config, {PlotType.ddc, PlotType.recovered})
     rx.setup(signal)
     rx.assemble()
