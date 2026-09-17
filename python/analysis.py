@@ -44,9 +44,10 @@ class BER:
         EbN0dB, conf, maxbits = args
         rx = Receiver(conf)
         total_error = np.zeros(conf.no_elem)
-        total_bits_tx = np.zeros(conf.no_elem)
+        total_bits_tx = 0
+        maxerrors = 1000
 
-        while np.any(total_bits_tx < maxbits):
+        while total_bits_tx < maxbits and np.any(total_error < maxerrors):
             #generate signal
             signal = DiscreteSignal(conf)
             txsym = np.where(signal.txsymbols > 0, 1, -1)                              #Tx Symbols
@@ -84,7 +85,7 @@ class BER:
 
                 #update counters - this doesnt allow for rotations 
                 total_error[k] += errors
-                total_bits_tx[k] += len(txsym)
+            total_bits_tx += len(txsym)
         ber_k = total_error/total_bits_tx
         return {
             "snr": EbN0dB,
@@ -213,14 +214,14 @@ if __name__ == "__main__":
     totaltime = symbols*Tb
     
     lc  = 8
-    Nelem = np.array([1,2])
+    Nelem = np.array([1])
     fam="WH"
     print("running=", fam)
     mod = "BPSK"
-    stage="BB"
+    stage="IF"
 
     ber_title = ['Theoretical'] 
-    SNR =  6
+    SNR =  11
     ebno_db = np.arange(0, SNR)
     ebno_linear = 10**(ebno_db/10)
     ber_theory = 0.5*erfc(np.sqrt(ebno_linear))
@@ -271,10 +272,10 @@ if __name__ == "__main__":
 
         print(f"N={nelem} with best code pairs={best}")
         #ber_curves, ber_avg  = ber_best.sim(1e5, SNR)                       #BER SIMULATION
-        ber_curves, ber_avg = ber_best.sim_parallel(1e2,SNR)
+        ber_curves, ber_avg = ber_best.sim_parallel(1e3,SNR)
         ber_k_0  = [ber_curve[0] for ber_curve in ber_curves]
 
-        ber_title.append(f"N_{nelem}_Lc_{lc}_best_{stage}")
+        ber_title.append(f"N_{nelem}_Lc_{lc}_bw_b")
         ber_data.append(ber_avg)
         
         #ber_title.append(f"N={nelem}")

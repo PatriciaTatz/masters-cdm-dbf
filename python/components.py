@@ -187,8 +187,7 @@ class CDMx:
         if max(time)>max(time_before)*1.2:
             raise ValueError("Something went wrong with upsampling of the time series! Exceeds sim time")
 
-        
-        """
+        """        
         #PLOT for code spectrum at the BW rate
         plt.rcParams['font.size'] = 15
         plt.grid()
@@ -215,7 +214,7 @@ class CDMx:
             specan.Pxx_dB,
             '-b',
             alpha=0.3,
-            label="s1(t)*(c1)"
+            label="s1(t)*(c1*c2)"
         )
         
         specan = SpecAn().calculate_psd(
@@ -225,10 +224,11 @@ class CDMx:
         plt.plot(
             specan.f/1e6,
             specan.Pxx_dB,
-            'o',
+            '-g',
+            linewidth=2,
             label="(c1xc2)"
         )
-        plt.axvline(x=f_signal/1e6, color='red', linestyle='--', linewidth=1.5, label=f"{f_signal/1e6}")
+        plt.axvline(x=f_signal/1e6, color='red', linestyle='--', linewidth=1.5, label=f"Bs")
 
         plt.legend(loc="upper right")
         plt.show()
@@ -259,12 +259,13 @@ class CDMx:
                 f_signal=f_signal)
 
             #returns N arrays of signals and symbols!
-            decorrelated, symbols = self.decorrelate(
+            decorrelated, symbols, fs = self.decorrelate(
                 dss.signals,
                 fs_signal=dss.fs)
 
             dss.signals = decorrelated
             dss.symbols = symbols
+            dss.fs = fs 
             dss.time = np.arange(len(dss.signals[0]))*(1/dss.fs)
             return dss 
         else:
@@ -274,6 +275,7 @@ class CDMx:
                 fs_signal=fs_signal)
             time  = np.arange(len(decorrelated[0]))*(1/fs_signal)
             fs = fs_signal 
+            
             return RecoveredSignals(signal, decorrelated, symbols, time, codes, fs)
         
 
@@ -317,19 +319,56 @@ class CDMx:
 
         return RecoveredSignals(os, dss, [], time, exp_codes, fs_resampled) 
 
-    def decorrelate(self, despread_signal, fs_signal):
+    def decorrelate(self, despread_signal, fs_signal):       
         decorr = [] 
         syms = []
         for i in range(self.conf.no_elem):
+            if self.conf.SPREADING_STAGE=="IF":
+                ddc = Mixer(self.conf).quadrature(
+                            despread_signal[i],
+                            fs_signal=fs_signal,
+                            flo=self.conf.fIF
+                        )
+                plt.figure()
+                specan = SpecAn().calculate_psd(
+                    ddc.fs,
+                    ddc.signals,
+                    )
+                plt.plot(
+                    specan.f/1e6,
+                    specan.Pxx_dB,
+                    '-b' 
+                )
+                plt.title("after ddc")
+                plt.show()
+
+                despread_signal[i] = ddc.signals
+                fs_signal = ddc.fs
+
             decorrelated_signal, symbols = self.mf.rrcfilter(
                 despread_signal[i],
                 fs_signal=fs_signal,
                 mode="rxmode"
                 )
+            
+            
+            plt.figure()
+            specan = SpecAn().calculate_psd(
+                ddc.fs,
+                decorrelated_signal,
+                )
+            plt.plot(
+                specan.f/1e6,
+                specan.Pxx_dB,
+                '-b' 
+                )
+            plt.title("after despread")
+            plt.show()
+
             decorr.append(decorrelated_signal)
             syms.append(symbols)
 
-        return decorr, syms
+        return decorr, syms, fs_signal
 
 
 class Filter:
@@ -378,9 +417,14 @@ class Filter:
             filtered_no_delay = filtered[delay:-delay]
 
         #sample at the symbol
-        symbols = filtered_no_delay[::sps_symbol][1:]
+        if mode == "txmode":
+            symbols = filtered_no_delay[::sps_symbol][1:]
+        elif mode == "rxmode":
+            new_sps_symbol = int((fs_signal/self.conf.fb))
+            symbols = filtered_no_delay[::new_sps_symbol][1:]
+            print(len(symbols))
 
-        """            
+                 
         #Plot for pulse-shaping and constellation
         if self.conf.modType=="BPSK":
 
@@ -426,8 +470,9 @@ class Filter:
                 plt.figure(figsize=(15,6))
                 plt.rcParams['font.size'] = 15
                 time = np.arange(len(filtered_no_delay))/fs_signal
-                plt.stem(time[::sps_symbol][1:-1], filtered_no_delay[::sps_symbol][1:-1], label="Upsampled Symbols")
                 plt.plot(time[1:-1], filtered_no_delay[1:-1], '-o', c='orange', label="RRC filtered symbols w/o group delay")
+                plt.stem(time[::new_sps_symbol][1:], filtered_no_delay[::new_sps_symbol][1:], label="Upsampled Symbols")
+                
                 plt.grid()
                 plt.title("RX BPSK with RRC Pulse Shaping")
                 plt.ylabel("Symbol")
@@ -499,8 +544,7 @@ class Filter:
             plt.tight_layout()
             plt.grid()
         plt.show()
-        """
-    
+        
         return filtered_no_delay, symbols
 
     def butterworth(self, cutoff, fs, signals, filter_type="low"):

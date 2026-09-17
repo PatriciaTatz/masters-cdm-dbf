@@ -125,20 +125,19 @@ class Receiver():
             #Spread Sampling Frequency: spread_bb.fs, Fs_chip 
             #Signal Frequency = self.conf.fIF * self.conf.lc  , NOT returned 
 
-            BW = self.conf.fb/2
+            BW = self.conf.fIF + self.conf.b/2
             if self.conf.SPREADING_STAGE=="IF":
-                
                 self.spread_bb = self.cdmx.spreader(
                     signals=self.filtered_bb,
                     fs_signal = self.baseband.fs,
-                    f_signal = self.conf.b,
+                    f_signal = BW,
                     codes=self.codes
                 )
             elif self.conf.SPREADING_STAGE=="BB":
                 self.spread_bb = self.cdmx.spreader(
                     signals=self.filtered_bb,
                     fs_signal = self.baseband.fs,
-                    f_signal = BW,
+                    f_signal =  self.conf.b,
                     codes=self.codes
                 )
 
@@ -162,6 +161,7 @@ class Receiver():
                     self.spread_bb.time, summed_signal
                     )
 
+            
             #=====================================
             #        DIGITAL DOWNCONVERTER        |
             # RESAMPLING HAPPENS HERE             |
@@ -173,7 +173,7 @@ class Receiver():
             #DDC Sampling Frequency: ddc.fs = 3*flo   to match mixer 
             #DDC Signal Frequency = spread bandwidth (self.conf.b * self.conf.lc) centered at 0Hz
 
-            if self.conf.SPREADING_STAGE=="IF":
+            if self.conf.SPREADING_STAGE=="XX":
                 ddc = self.mixer.quadrature(
                             np.array(summed_signal),
                             fs_signal=self.spread_bb.fs,
@@ -194,7 +194,7 @@ class Receiver():
                         ddc.time, ddc.signals,
                         ddc.fs
                     )
-                
+            
             #=====================q================
             #   DIGITAL DESPREAD  PER ELEMENT     |
             #   NOT RESAMPLED BUT MF DELAY TRUNC  |
@@ -209,9 +209,9 @@ class Receiver():
             """
             if self.conf.SPREADING_STAGE=="IF":
                 self.recovered = self.cdmx.recover(
-                    signal=ddc.signals,
-                    fs_signal = ddc.fs,
-                    f_signal = self.conf.b,
+                    signal=summed_signal,
+                    fs_signal = self.spread_bb.fs,
+                    f_signal = BW,
                     codes=self.codes
 
                 )
@@ -224,7 +224,7 @@ class Receiver():
                 self.recovered = self.cdmx.recover(
                     signal=summed_signal,
                     fs_signal = self.spread_bb.fs,
-                    f_signal = BW,
+                    f_signal = self.conf.b,
                     codes=self.codes
 
                 )
@@ -403,6 +403,8 @@ class Receiver():
             plt.title(f"Despread Signal of Element={index+1}")
             plt.plot(signal.symbol_wf_time, signal.symbol_waveform, '--b', label=f"Tx symbol waveform")
             plt.plot(self.recovered.time, self.recovered.signals[index], '-g', linewidth='2', label="Recovered signal")
+            #plt.stem(self.recovered.time[::self.conf.sps_symbol][1:], self.recovered.signals[0][::self.conf.sps_symbol][1:], label="symbols")
+        
         elif self.conf.modType=="QPSK":
             plt.subplot(2, 1, 1)
             plt.plot(self.recovered.time, np.real(self.recovered.signals[index]), '-g', linewidth='3', label="Recovered signal")
@@ -505,8 +507,8 @@ if __name__ == "__main__":
         no_elem = 1,
         codefam="WH",
         modType="BPSK",
-        codeids=np.array([1]),
-        SPREADING_STAGE = "BB"           #Location of the spreading [IF or BB]
+        codeids=np.array([2,3]),
+        SPREADING_STAGE = "IF"           #Location of the spreading [IF or BB]
 
         )
     #create signal 
