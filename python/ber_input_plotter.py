@@ -27,19 +27,22 @@ def ebno_at_ber(ebno_db, ber, ber_target):
 #############
 
 ber_titles = [
-    'WH, Lc=8',
-    'Gold, Lc=7',
-    'ZC, Lc=7'
+    'Bs=3(1+α)Rb',
+    'Bs=2(1+α)Rb',
+    'Bs=(1+α)Rb',
+    'Bs=Rb',
+    'Bs=Rb/2'
     ]
 
 ber_files = [
-    './results/WH/raw_data/N_4_Lc_8_best.npy',
-    './results/Gold/raw_data/N_4_Lc_7_best.npy',
-    './results/ZC/raw_data/N_4_Lc_7_best.npy',
-
+    './results/WH/raw_data/N_2_Lc_8_bw_3b.npy',
+    './results/WH/raw_data/N_2_Lc_8_bw_2b.npy',
+    './results/WH/raw_data/N_2_Lc_8_bw_b.npy',
+    './results/WH/raw_data/N_2_Lc_8_bw_fb.npy',
+    './results/WH/raw_data/N_2_Lc_8_bw_fb_2.npy',
 ]
 
-lines = ['--', '-.', ':']
+#lines = ['--', '-.', ':']
 
 fileloc = "./results/WH/raw_data/plot"
 ebno_db = np.load(f"{fileloc}/ebno.npy")
@@ -57,7 +60,8 @@ print(f"Theoretical Eb/No @ BER={ber_target}: {ebno_ref:.2f} dB")
 
 plt.figure()
 plt.rcParams['font.size'] = 15
-
+deg = [] 
+bw = [3*45, 2*45, 45, 30, 15]
 for i in range(len(ber_titles)):
     ber_data = np.load(f"{ber_files[i]}")
     print(ber_titles[i])
@@ -69,6 +73,10 @@ for i in range(len(ber_titles)):
     )
     degradation = ebno_meas - ebno_ref
 
+    if np.isnan(degradation):
+        deg.append(1e6)
+    else:
+        deg.append(degradation)
     print(
         f"{ber_titles[i]}: "
         f"Eb/No={ebno_meas:.2f} dB, "
@@ -78,12 +86,14 @@ for i in range(len(ber_titles)):
     plt.semilogy(
         ebno_db[:len(ber_data)],
         ber_data,
-        linestyle=lines[i],
         linewidth=2,
         markersize=3,
         label=ber_titles[i]
     )
-plt.title('N=4 Antenna Elements')
+
+
+
+plt.title('N=2 using WH Lc=8')
 
 plt.semilogy(
     ebno_db,
@@ -107,6 +117,17 @@ plt.xlabel("Eb/No (dB)")
 plt.ylabel("Bit Error Rate")
 plt.grid(True, which='both', linestyle='-', alpha=0.6)
 plt.legend()
+
+plt.figure()
+plt.plot(bw, deg, '--o')
+plt.grid()
+plt.xticks(
+    bw,
+    ['3BW', '2BW', 'BW', 'Rb', 'Rb/2']
+)
+plt.ylabel("Eb/No Penalty")
+plt.xlabel( "Bandwidth (MHz)")
+plt.ylim(0,3)
 plt.show()
 
 
