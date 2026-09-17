@@ -49,7 +49,7 @@ class CodeSelector:
         #for both node and edge, large weight BAD, small weight GOOD, total algo minimises weight 
         self.codeids = [int(x) for x in self.codeids]
         self.node_weight = {
-            codeid: float(0.1*acf + 0.9*sf)
+            codeid: float(0.5*acf + 0.5*sf)
             for codeid, sf, acf in zip(self.codeids, self.sfs, self.acfs)
         }
 
@@ -61,9 +61,9 @@ class CodeSelector:
             )
             """
             self.edge_weight[f"{ci}-{cj}"] += (
-                1/2*csd_height+
-                1/4*ccf_width+
-                1/4*abs(ccf_peak)
+                1/3*csd_height+
+                1/3*ccf_width+
+                1/3*abs(ccf_peak)
             )
             
         """
@@ -142,7 +142,7 @@ class CodeSelector:
         self.acfplot = []
         acf_score = []
         for code in self.allcodes:
-            acf = correlate(code, code, mode='full')
+            acf = np.correlate(code, code, mode='full')
 
             zero_lag = len(acf) // 2
             prominence = peak_prominences(acf, [zero_lag])[0][0]
@@ -185,7 +185,7 @@ class CodeSelector:
 
         for i in range(len(self.allcodes)):
             for j in range(i + 1, len(self.allcodes)):
-                ccf = correlate(self.allcodes[i], self.allcodes[j], mode='full') #normalise ccf as peak height is considered
+                ccf = np.correlate(self.allcodes[i], self.allcodes[j], mode='full') #normalise ccf as peak height is considered
 
                 zero_lag = len(ccf)//2
                 prominence = peak_prominences(ccf, [zero_lag])[0][0]
@@ -234,7 +234,6 @@ class CodeSelector:
                         Sxy,
                     )
                 )
-
                 """
                 #sanitecheck
                 if self.codeids[i]==2 and self.codeids[j]==3:
@@ -250,7 +249,7 @@ class CodeSelector:
                     (
                         int(self.codeids[i]),
                         int(self.codeids[j]),
-                        float(widths[0]),      # CCF width
+                        float(widths[0]),       # CCF width
                         float(ccf[zero_lag]),   # zero-lag CCF peak as plotted
                         float(np.sum(np.abs(Sxy[1:3]))) # CSD amplitude at 1/Lc
                     )
@@ -275,7 +274,8 @@ class CodeSelector:
     def find_best_clique(self, weights, no_elem):
         cliques = []
         totals = []
-        for clique in itertools.combinations(self.codeids, no_elem):            
+        combinations = itertools.combinations(self.codeids, no_elem)
+        for clique in combinations:            
             node_mean =sum(weights.node[int(i)] for i in clique)/no_elem
             edge_mean = np.mean([
                 weights.edge[f"{i}-{j}"]
@@ -291,10 +291,9 @@ class CodeSelector:
             if clique == (15, 16):
                 print("(15,16)", node_mean, edge_mean, total)                
             """
-
         result = dict(zip(cliques,totals))
 
-        #self.best = sorted(result, key=result.get, reverse=False)[:5]
+        ranked = sorted(result, key=result.get, reverse=False)
         self.best = min(result, key=result.get)
         self.worst = max(result, key=result.get)
         
@@ -303,23 +302,23 @@ class CodeSelector:
         for key, value in sorted(result.items(), key=lambda x: x[1], reverse=False)[:n]:
             print(f"{key}: {value}")
         """
-        return self.best, self.worst 
+        return self.best, self.worst, ranked
           
 
     def plot(self, output, cliquetype="best"):
         if output == "SF":
             
             for j in range(len(self.allcodes)):
-                plt.rcParams['font.size'] = 15
+                plt.rcParams['font.size'] = 10
                 plt.figure()
                 plt.plot(self.sf_plot[j])
-                plt.title(f"Normalised PS Flatnesss of c={self.codeids[j]}")
-                plt.xlabel("Frequency bin")
-                plt.ylabel("Norm Power")
+                plt.title(f"c{self.codeids[j]} = {self.allcodes[self.codeids[j]]}")
+                plt.xlabel("Discrete bin number")
+                plt.ylabel("Normalised Power")
                 plt.grid()
                 plt.text(
                     0.02, 0.95,
-                    f"Est. Score={self.sfs[j]:.2f}",
+                    f"SF={self.sfs[j]:.2f}",
                     transform=plt.gca().transAxes,
                     ha='left',
                     va='top',
@@ -329,7 +328,7 @@ class CodeSelector:
                 plt.close()
         if output == "ACF":
             for j in range(len(self.allcodes)):
-                plt.rcParams['font.size'] = 15
+                plt.rcParams['font.size'] = 10
                 acf = self.acfplot[j][0]
                 height = self.acfplot[j][2]
                 lips = np.interp(self.acfplot[j][3], np.arange(len(acf)), self.lags) 
@@ -340,14 +339,14 @@ class CodeSelector:
                 plt.plot(self.lags, acf)
                 plt.xlabel("Lag")
                 plt.ylabel("ACF")
-                plt.title(f"ACF: code[{self.codeids[j]}]")
+                plt.title(f"Code Index {self.codeids[j]} = {self.allcodes[self.codeids[j]]}")
                 zerolag = len(acf)//2
                 plt.plot(self.lags[zerolag], acf[zerolag], "x")
                 plt.hlines(height, lips, rips, color="C2")  #yvalue, xmin, xmax 
 
                 plt.text(
                     0.02, 0.95,
-                    f"Score={self.acfs[j]:.2f}",
+                    f"ACF width={self.acfs[j]:.2f}",
                     transform=plt.gca().transAxes,
                     ha='left',
                     va='top',
@@ -371,7 +370,7 @@ class CodeSelector:
                     np.arange(len(ccf)),
                     self.lags
                 )
-                plt.rcParams['font.size'] = 15
+                plt.rcParams['font.size'] = 10
 
                 plt.figure()
                 plt.plot(self.lags, ccf)
@@ -395,7 +394,7 @@ class CodeSelector:
                 plt.xlabel("Lag")
 
                 plt.grid(True)
-                plt.title(f"CCF: code[{ci}] x code[{cj}]")
+                plt.title(f" code[{ci}] x code[{cj}] \n {self.allcodes[ci]} x {self.allcodes[cj]}")
 
                 ccf_width, ccf_peak, _ = self.ccs_lookup[(ci, cj)]
                 plt.text(
@@ -462,11 +461,13 @@ class CodeSelector:
             elif cliquetype == "worst":
                 clique = self.worst
 
+            plt.rcParams['font.size'] = 15
+
             G = nx.Graph()
             
             G.add_nodes_from(clique)
             G.add_edges_from(itertools.combinations(clique, 2))
-            pos = nx.spring_layout(G)
+            pos = nx.circular_layout(G)
 
             values = [self.node_weight[n] for n in G.nodes()]
 
@@ -482,21 +483,19 @@ class CodeSelector:
                 G,
                 pos,
                 width=[
-                    0.3+2*self.edge_weight.get(f"{i}-{j}", self.edge_weight.get(f"{j}-{i}", 1))
+                    1+10*self.edge_weight.get(f"{i}-{j}", self.edge_weight.get(f"{j}-{i}", 1))
                     for i, j in G.edges()
                 ]            )
 
-            nx.draw_networkx_labels(G, pos)
-            plt.rcParams['font.size'] = 20
-
-            plt.title("All Possible Code Pairs")
+            nx.draw_networkx_labels(G, pos, font_size=20)
+            plt.title("Complete Network | WH Lc=8")
             plt.show()
 
 
 if __name__ == "__main__":
     #initiate code config
     lc = 8
-    ids = np.arange(1,lc)
+    ids = np.arange(0,lc)
     WHcfg = CDMcfg(
         simtime = 1, 
         lc = lc,
@@ -507,11 +506,11 @@ if __name__ == "__main__":
 
     WHcodes = CodeSelector(WHcfg)
     weights = WHcodes.generate_weights()
-    best, worst = WHcodes.find_best_clique(weights, WHcfg.no_elem)
+    best, worst, ranked = WHcodes.find_best_clique(weights, WHcfg.no_elem)
     print("best =",best)
     print("worst = ", worst)
     WHcodes.plot("CSD")
-    WHcodes.plot("ACF")
-    WHcodes.plot("CCF")
+    #WHcodes.plot("ACF")
+    #WHcodes.plot("CCF")
     WHcodes.plot("SF")
     #WHcodes.plot("network", "best")

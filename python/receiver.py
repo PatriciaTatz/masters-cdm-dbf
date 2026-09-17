@@ -94,7 +94,7 @@ class Receiver():
             #Sampling Frequency = fs_rx
 
             if self.conf.SPREADING_STAGE=="IF":
-                flow = self.conf.fIF
+                flow = self.conf.fIF + self.conf.b/2
 
             elif self.conf.SPREADING_STAGE=="BB":
                 flow = self.conf.b
@@ -125,6 +125,7 @@ class Receiver():
             #Spread Sampling Frequency: spread_bb.fs, Fs_chip 
             #Signal Frequency = self.conf.fIF * self.conf.lc  , NOT returned 
 
+            BW = self.conf.fb/2
             if self.conf.SPREADING_STAGE=="IF":
                 
                 self.spread_bb = self.cdmx.spreader(
@@ -137,7 +138,7 @@ class Receiver():
                 self.spread_bb = self.cdmx.spreader(
                     signals=self.filtered_bb,
                     fs_signal = self.baseband.fs,
-                    f_signal = self.conf.b,
+                    f_signal = BW,
                     codes=self.codes
                 )
 
@@ -223,7 +224,7 @@ class Receiver():
                 self.recovered = self.cdmx.recover(
                     signal=summed_signal,
                     fs_signal = self.spread_bb.fs,
-                    f_signal = self.conf.b,
+                    f_signal = BW,
                     codes=self.codes
 
                 )
@@ -299,8 +300,8 @@ class Receiver():
             specan.Pxx_dB,
             '-b' 
         )
-        plt.axvline(x=self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
-        plt.axvline(x=-self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
+        plt.axvline(x=self.conf.fIF/1e6, color='red', linestyle='--', linewidth=1.5)
+        plt.axvline(x=50, color='red', linestyle='--', linewidth=1.5)
 
         
         plt.ylabel("Normalized Power (dB)")
@@ -343,11 +344,11 @@ class Receiver():
         plt.figure(figsize=(15,8))
         plt.plot(specan.f/1e6, specan.Pxx_dB, '-g')
         if self.conf.SPREADING_STAGE=="BB":
-            plt.axvline(x=self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
+            plt.axvline(x= self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
             plt.axvline(x=-self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
         elif self.conf.SPREADING_STAGE=="IF":
-            plt.axvline(x=0 , color='red', linestyle='--', linewidth=1.5)
-            plt.axvline(x=10 + self.conf.lc*self.conf.b/1e6, color='red', linestyle='--', linewidth=1.5)
+            plt.axvline(x=50, color='red', linestyle='--', linewidth=1.5)
+            plt.axvline(x=50 + self.conf.lc*self.conf.b/1e6, color='red', linestyle='--', linewidth=1.5)
 
         plt.xlabel("Frequency (MHz)")
         plt.ylabel("Normalised Power (dB)")
@@ -501,11 +502,11 @@ if __name__ == "__main__":
         sps_chip= 2,
         alpha = 0.5,
         simtime = totaltime,
-        no_elem = 2,
+        no_elem = 1,
         codefam="WH",
         modType="BPSK",
-        codeids=np.array([1,2]),
-        SPREADING_STAGE = "IF"           #Location of the spreading [IF or BB]
+        codeids=np.array([1]),
+        SPREADING_STAGE = "BB"           #Location of the spreading [IF or BB]
 
         )
     #create signal 
@@ -513,6 +514,6 @@ if __name__ == "__main__":
     #signal.show_signal_plot()
 
     #initiate and assemble receiver 
-    rx = Receiver(config, {PlotType.ddc, PlotType.recovered})
+    rx = Receiver(config, {PlotType.recovered})
     rx.setup(signal)
     rx.assemble()

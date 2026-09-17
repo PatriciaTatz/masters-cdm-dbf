@@ -59,20 +59,31 @@ class CDMx:
             #for length N=31
             #use preferred polynomial from Matlab
             #degree = 5 #2^5-1=31 
+
             #seq_a, _ = max_len_seq(degree, taps=[2]) 
-            #seq_b, _ = max_len_seq(degree, taps=[4,3,2])
+            #seq_b, _ = max_len_seq(degree, taps=[3])
+            #seq_c, _ = max_len_seq(degree, taps=[3,2,1]) 
+            #seq_d, _ = max_len_seq(degree, taps=[4,2,1]) 
+            #seq_e, _ = max_len_seq(degree, taps=[4,3,1]) 
+            #seq_f, _ = max_len_seq(degree, taps=[4,3,2]) 
 
             degree = 3 #2^3 - 1 = 7 
             seq_a, _ = max_len_seq(degree, taps=[1])
             seq_b, _ = max_len_seq(degree, taps=[2])
 
-            gold_codes = []
+            #degree = 4 #2^4 - 1 = 15 
+            #seq_a, _ = max_len_seq(degree, taps=[1])
+            #seq_b, _ = max_len_seq(degree, taps=[3])
+
+            gold_codes = [seq_a, seq_b]
+            
             for shift in range(len(seq_a)):
                 code = np.bitwise_xor(
                     seq_a,
                     np.roll(seq_b, shift)
                 )
                 gold_codes.append(code)
+            
             codes = [2*gold_codes[idx]-1 for idx in self.conf.codeids]    
         elif self.conf.codefam == "ZC":
             if self.conf.lc%2 == 0: 
@@ -82,7 +93,13 @@ class CDMx:
             for i in self.conf.codeids: 
                 s = np.exp(-1j*pi*i*n*(n+1)/self.conf.lc)
                 codes.append(s)
-            np.set_printoptions(precision=4, suppress=True)
+                """
+                plt.scatter(np.real(s), np.imag(s), alpha=0.4)
+                theta = np.linspace(0, 2*np.pi, 1000)
+                plt.plot(np.cos(theta),np.sin(theta),'k--', alpha=0.5)
+                plt.grid()
+                plt.show()
+                """
         elif self.conf.codefam == "DFT":
             codes = []
             n = np.arange(0, self.conf.lc)
@@ -153,10 +170,10 @@ class CDMx:
             code_t = np.arange(len(expanded_code))*1/fs_resampled
             sig_t = np.arange(len(resampled_signal))*1/fs_resampled
             orig_t = np.arange(len(signals[i]))*1/fs_signal
-            plt.plot(orig_t, signals[i])
-            plt.plot(sig_t, resampled_signal)
+            plt.plot(orig_t[:50], signals[i][:50])
+            plt.plot(sig_t[:50], resampled_signal[:50])
             plt.title(f"{codes[i]}")
-            plt.plot(code_t, expanded_code, '-o')
+            plt.plot(code_t[:50], expanded_code[:50], '-o')
             plt.axvline(x=1/self.conf.b, color='black', linestyle='--', linewidth=1.5, label="BW")
             plt.axvline(x=1/self.conf.fb, color='blue', linestyle='--', linewidth=1.5, label="Rb")
             plt.axvline(x=len(code_sequence)/fs_resampled, color='yellow', linestyle='--', linewidth=1.5, label="Code period")
@@ -177,7 +194,7 @@ class CDMx:
         plt.grid()
         plt.ylabel("Normalised Power (dB)")
         plt.xlabel("Frequency (MHz)")
-
+        
         specan = SpecAn().calculate_psd(
             fs_code,
             resampled_signal
@@ -191,15 +208,28 @@ class CDMx:
 
         specan = SpecAn().calculate_psd(
             fs_code,
-            resampled_signal*exp_codes[0]*exp_codes[1]
+            resampled_signal*exp_codes[0]
         )
         plt.plot(
             specan.f/1e6,
             specan.Pxx_dB,
-            '-r',
-            alpha=0.7,
-            label="s1(t)*(c1xc6)"
+            '-b',
+            alpha=0.3,
+            label="s1(t)*(c1)"
         )
+        
+        specan = SpecAn().calculate_psd(
+            fs_code,
+            exp_codes[0]
+        )
+        plt.plot(
+            specan.f/1e6,
+            specan.Pxx_dB,
+            'o',
+            label="(c1xc2)"
+        )
+        plt.axvline(x=f_signal/1e6, color='red', linestyle='--', linewidth=1.5, label=f"{f_signal/1e6}")
+
         plt.legend(loc="upper right")
         plt.show()
         

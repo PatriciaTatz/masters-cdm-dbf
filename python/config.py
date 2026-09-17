@@ -42,7 +42,7 @@ class CDMcfg():
         self.ts = 1/self.fb                         #Symbol period
         self.fs = self.sps_symbol * self.fb         #Sampling frequency after RRC upsampler
         self.b = self.fb * (1 + self.alpha)         #RRC limited bandwidth
-        self.fIF = self.b*self.lc + 10e6            #720Mhz default 
+        self.fIF = (self.b) + 50e6         
         #Receiver properties 
         if len(self.codeids) == 0:
             self.codeids = np.arange(0,self.lc)     #If no code ids given, go from to 0-Lc
