@@ -137,7 +137,7 @@ class CDMx:
 
     def spreader(self, signals, fs_signal, f_signal, codes):
         f_code = self.conf.lc * f_signal       #Transition xLc times over one period of signal
-        fs_code = self.conf.sps_chip*f_code  
+        fs_code = self.conf.sps_chip*f_code    #assums fs_code > fs_signal, true for BB adn IF   
         ss = []
         os = []
         exp_codes = []
@@ -187,13 +187,48 @@ class CDMx:
         if max(time)>max(time_before)*1.2:
             raise ValueError("Something went wrong with upsampling of the time series! Exceeds sim time")
 
-        """        
+        """
         #PLOT for code spectrum at the BW rate
+        plt.figure(figsize=(20,6))
         plt.rcParams['font.size'] = 15
         plt.grid()
         plt.ylabel("Normalised Power (dB)")
         plt.xlabel("Frequency (MHz)")
         
+        #plt.subplot(2,1,1)
+        specan = SpecAn().calculate_psd(
+            fs_code,
+            resampled_signal
+        )
+        
+        plt.plot(
+            specan.f/1e6,
+            specan.Pxx_dB,
+            '-b',
+            label="s1(t)"
+        )
+        
+        #how the signal spreads
+        specan = SpecAn().calculate_psd(
+            fs_code,
+            resampled_signal*exp_codes[0]*exp_codes[1]
+        )
+        plt.plot(
+            specan.f/1e6,
+            specan.Pxx_dB,
+            '-b',
+            alpha=0.3,
+            label="s1(t)x(c2xc3)"
+        )
+
+        plt.axvline(x=2*f_signal/1e6, color='red', linestyle='--', linewidth=1.5, label=f"B=Bs")
+
+        plt.ylim(-70,0)
+        plt.legend()
+        plt.show()
+
+
+        #plt.subplot(2,1,2)
         specan = SpecAn().calculate_psd(
             fs_code,
             resampled_signal
@@ -204,48 +239,26 @@ class CDMx:
             '-b',
             label="s1(t)"
         )
-
+        #how the signal is interfered 
         specan = SpecAn().calculate_psd(
             fs_code,
-            resampled_signal*exp_codes[0]
-        )
-        plt.plot(
-            specan.f/1e6,
-            specan.Pxx_dB,
-            '-b',
-            alpha=0.3,
-            label="s1(t)*(c1*c2)"
-        )
-        
-        specan = SpecAn().calculate_psd(
-            fs_code,
-            exp_codes[0]
+            resampled_signal*exp_codes[0]*exp_codes[0]
         )
         plt.plot(
             specan.f/1e6,
             specan.Pxx_dB,
             '-g',
+            alpha=0.3,
             linewidth=2,
-            label="(c1xc2)"
+            label="(c1*c2)"
         )
-        plt.axvline(x=f_signal/1e6, color='red', linestyle='--', linewidth=1.5, label=f"Bs")
+        plt.axvline(x=f_signal/1e6, color='red', linestyle='--', linewidth=1.5, label=f"B=")
 
         plt.legend(loc="upper right")
+        plt.ylim(-70, 0)
         plt.show()
-        
-        #PLOT FOR CODE SERIES ONLY
-        for i in range(len(exp_codes)):
-            print("code=", codes[i])
-            plt.rcParams['font.size'] = 15
-            plt.figure()
-            plt.title(f"Code sequence index={i+1}")
-            plt.plot(time, exp_codes[i], '-og', label="WH Code Sequence")
-            plt.legend(loc='upper right')
-            plt.grid()
-            plt.xlabel("Time (seconds)")
-            plt.ylabel("Amplitude")
-            plt.show()
         """
+
         return SpreadSignals(os, ss, time, exp_codes, fs_resampled)
 
     def recover(self, signal, codes, fs_signal, f_signal):
@@ -324,26 +337,23 @@ class CDMx:
         syms = []
         for i in range(self.conf.no_elem):
             if self.conf.SPREADING_STAGE=="IF":
+                #DDC TO BASEBAND FIRST 
                 ddc = Mixer(self.conf).quadrature(
                             despread_signal[i],
                             fs_signal=fs_signal,
                             flo=self.conf.fIF
                         )
-                plt.figure()
-                specan = SpecAn().calculate_psd(
-                    ddc.fs,
-                    ddc.signals,
-                    )
-                plt.plot(
-                    specan.f/1e6,
-                    specan.Pxx_dB,
-                    '-b' 
+                
+                flow = self.conf.b
+                ddc.signals = Filter(self.conf).butterworth(
+                    cutoff = flow,
+                    fs = ddc.fs,
+                    signals =  ddc.signals,
+                    filter_type="lowpass"
                 )
-                plt.title("after ddc")
-                plt.show()
-
                 despread_signal[i] = ddc.signals
                 fs_signal = ddc.fs
+
 
             decorrelated_signal, symbols = self.mf.rrcfilter(
                 despread_signal[i],
@@ -351,20 +361,6 @@ class CDMx:
                 mode="rxmode"
                 )
             
-            
-            plt.figure()
-            specan = SpecAn().calculate_psd(
-                ddc.fs,
-                decorrelated_signal,
-                )
-            plt.plot(
-                specan.f/1e6,
-                specan.Pxx_dB,
-                '-b' 
-                )
-            plt.title("after despread")
-            plt.show()
-
             decorr.append(decorrelated_signal)
             syms.append(symbols)
 
@@ -407,24 +403,24 @@ class Filter:
         #filter normalisation 
         h_rrc /= np.sqrt(np.sum(h_rrc**2))
 
+        #sample normalisation
+        if mode =="rxmode":
+            new_sps_symbol = int(fs_signal/self.conf.fb)
+            G =  np.sqrt(fs_signal/self.conf.fb/self.conf.sps_symbol)
+            h_rrc /= G
+
         #apply filter to the samples
         filtered = np.convolve(samples, h_rrc, mode='full')
+        filtered_no_delay = filtered[delay:-delay]
 
-        #remove delay caused by the filter
-        if mode == "txmode":
-            filtered_no_delay = filtered[delay:-delay]
-        else:
-            filtered_no_delay = filtered[delay:-delay]
 
         #sample at the symbol
         if mode == "txmode":
             symbols = filtered_no_delay[::sps_symbol][1:]
         elif mode == "rxmode":
-            new_sps_symbol = int((fs_signal/self.conf.fb))
             symbols = filtered_no_delay[::new_sps_symbol][1:]
-            print(len(symbols))
 
-                 
+        """
         #Plot for pulse-shaping and constellation
         if self.conf.modType=="BPSK":
 
@@ -465,12 +461,12 @@ class Filter:
                 )
                 plt.grid()
             else:
-
+                #TRANSMIT BPSK
                 #Figure 3.4
                 plt.figure(figsize=(15,6))
                 plt.rcParams['font.size'] = 15
                 time = np.arange(len(filtered_no_delay))/fs_signal
-                plt.plot(time[1:-1], filtered_no_delay[1:-1], '-o', c='orange', label="RRC filtered symbols w/o group delay")
+                plt.plot(time[1:-1], filtered_no_delay[1:-1], '--', c='orange', label="RRC filtered symbols w/o group delay")
                 plt.stem(time[::new_sps_symbol][1:], filtered_no_delay[::new_sps_symbol][1:], label="Upsampled Symbols")
                 
                 plt.grid()
@@ -480,7 +476,7 @@ class Filter:
                 plt.legend(loc='upper right')
 
 
-                #Figure 3.5, constellation 
+                #Figure 3.5, constellation BPSK TX  
                 plt.figure(figsize=(8,8))
                 theta = np.linspace(0, 2*np.pi, 1000)
                 plt.plot(np.cos(theta),np.sin(theta),'k--', alpha=0.5)
@@ -492,15 +488,15 @@ class Filter:
                 plt.ylabel("Quadrature (Q)")
                 plt.xlabel("In-Phase (I)")
                 plt.scatter(
-                    np.real(filtered_no_delay[::sps_symbol][1:-1]),
-                    np.imag(filtered_no_delay[::sps_symbol][1:-1]),
+                    np.real(symbols),
+                    np.imag(symbols),
                     color="blue",
                     alpha=0.5,
                     s=30,
                 )
                 plt.tight_layout()
                 plt.grid()
-
+            
 
         elif self.conf.modType == "QPSK":
             plt.figure(figsize=(15,10))
@@ -544,7 +540,7 @@ class Filter:
             plt.tight_layout()
             plt.grid()
         plt.show()
-        
+        """
         return filtered_no_delay, symbols
 
     def butterworth(self, cutoff, fs, signals, filter_type="low"):
@@ -620,7 +616,7 @@ class Mixer:
                 fs_resampled = fs_signal
 
             lo_time = np.arange(len(signal_resampled))*(1/fs_resampled)
-            lo_signal = np.cos(2*np.pi*flo_mixer*lo_time)
+            lo_signal = 2*np.cos(2*np.pi*flo_mixer*lo_time)
 
             #mix signal by multiplication 
             mixed_signal = signal_resampled * lo_signal 
@@ -672,29 +668,6 @@ class Mixer:
 
 class SpecAn: 
     def calculate_psd(self ,fs, signal):
-        """
-        #Most basic calculation for spectrum 
-        X = np.fft.fft(signal)
-        N = len(X)
-        f = np.fft.fftfreq(N,1/fs)
-        q
-        #Using scipy periodogram
-        f, X = periodogram(signal, fs)
-        
-        f, X = welch(
-                signal, 
-                fs=fs, detrend=False,
-                window='hann',              # Window function applied to each segment
-                nperseg=len(signal)/40,#4096,      #frequency bins averaged over segments
-                return_onesided=False,      #double sided to see rrc filtered effect
-                scaling='density',        # Returns V^2/Hz (use 'spectrum' for V^2)
-                noverlap=len(signal)/(40*2)   #overlap of frequency bins 
-            )
-        #this shifts a twosided spectrum from 0 +f -f into -f 0 +f 
-        f = np.fft.fftshift(f)
-        X = np.fft.fftshift(X)
-        
-        """
         x = signal
         X = 10*np.log10(np.fft.fftshift(np.abs(np.fft.fft(x))**2)/len(x))
         f = np.linspace(-fs/2, fs/2, len(X))

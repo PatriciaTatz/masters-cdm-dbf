@@ -66,15 +66,26 @@ class Receiver():
             if self.conf.SPREADING_STAGE=="IF":
                 #Carrier enabled implies spreading at IF 
                 flo = self.conf.fc - self.conf.fIF 
+                self.baseband = self.mixer.superhet(
+                    self.rxsignals,
+                    fs_signal = self.fs_rx, 
+                    flo = flo 
+                )
             elif self.conf.SPREADING_STAGE=="BB":
                 #No carrier implies spreading at BB
                 flo = self.conf.fc 
+                self.baseband = self.mixer.superhet(
+                    self.rxsignals,
+                    fs_signal = self.fs_rx, 
+                    flo = flo 
+                )
+            elif self.conf.SPREADING_STAGE=="RF":
+                self.baseband = ResampledSignals(
+                    self.rxsignals,
+                    self.rx_time,
+                    self.fs_rx
+                )
 
-            self.baseband = self.mixer.superhet(
-                self.rxsignals,
-                fs_signal = self.fs_rx, 
-                flo = flo 
-            )
 
             if PlotType.signal in self.plot:
                 self.signal_plot(
@@ -83,6 +94,7 @@ class Receiver():
                     self.baseband.fs
                 )
             
+ 
             #===============================
             #       LPF PER ELEMENT        |
             #   TO REMOVE SUPERHET IMAGE   |
@@ -95,23 +107,32 @@ class Receiver():
 
             if self.conf.SPREADING_STAGE=="IF":
                 flow = self.conf.fIF + self.conf.b/2
+                self.filtered_bb = self.filter.butterworth(
+                    cutoff = flow,
+                    fs = self.fs_rx,
+                    signals =  self.baseband.signals,
+                    filter_type="lowpass"
+                )
 
             elif self.conf.SPREADING_STAGE=="BB":
                 flow = self.conf.b
+                self.filtered_bb = self.filter.butterworth(
+                    cutoff = flow,
+                    fs = self.baseband.fs,
+                    signals =  self.baseband.signals,
+                    filter_type="lowpass"
+                )
 
+            elif self.conf.SPREADING_STAGE=="RF":
+                self.filtered_bb = self.baseband.signals
 
-            self.filtered_bb = self.filter.butterworth(
-                cutoff = flow,
-                fs = self.fs_rx,
-                signals =  self.baseband.signals,
-                filter_type="lowpass"
-            )
             if PlotType.signal in self.plot:
                 self.signal_plot(
                     "After LPF at Element=1",
                     self.baseband.time, self.filtered_bb[0],
                     self.baseband.fs
                 )
+            
 
             #============================
             #   SPREADER PER ELEMENT     |
@@ -125,21 +146,19 @@ class Receiver():
             #Spread Sampling Frequency: spread_bb.fs, Fs_chip 
             #Signal Frequency = self.conf.fIF * self.conf.lc  , NOT returned 
 
-            BW = self.conf.fIF + self.conf.b/2
             if self.conf.SPREADING_STAGE=="IF":
-                self.spread_bb = self.cdmx.spreader(
-                    signals=self.filtered_bb,
-                    fs_signal = self.baseband.fs,
-                    f_signal = BW,
-                    codes=self.codes
-                )
+                Bs = self.conf.fIF
             elif self.conf.SPREADING_STAGE=="BB":
-                self.spread_bb = self.cdmx.spreader(
-                    signals=self.filtered_bb,
-                    fs_signal = self.baseband.fs,
-                    f_signal =  self.conf.b,
-                    codes=self.codes
-                )
+                Bs = self.conf.b
+            elif self.conf.SPREADING_STAGE=="RF":
+                Bs = self.conf.b
+            
+            self.spread_bb = self.cdmx.spreader(
+                signals = self.filtered_bb,
+                fs_signal = self.baseband.fs,
+                f_signal =  Bs,
+                codes=self.codes
+            )
 
             if PlotType.spread in self.plot:
                 self.spread_plot(
@@ -161,77 +180,23 @@ class Receiver():
                     self.spread_bb.time, summed_signal
                     )
 
-            
-            #=====================================
-            #        DIGITAL DOWNCONVERTER        |
-            # RESAMPLING HAPPENS HERE             |
-            #=====================================
-
-            #DDC Resampled dataclass
-            #DDC Baseband: ddc.signals, but only ONE combined signal. 
-            #DDC Time: ddc.time, Timestep changed to match timestep of code sequence 
-            #DDC Sampling Frequency: ddc.fs = 3*flo   to match mixer 
-            #DDC Signal Frequency = spread bandwidth (self.conf.b * self.conf.lc) centered at 0Hz
-
-            if self.conf.SPREADING_STAGE=="XX":
-                ddc = self.mixer.quadrature(
-                            np.array(summed_signal),
-                            fs_signal=self.spread_bb.fs,
-                            flo=self.conf.fIF
-                        )
-                """
-                BPF after DDC 
-                ddc.signals = self.filter.butterworth(
-                    cutoff = np.array([1e6, self.conf.b*self.conf.lc/2]),
-                    fs = ddc.fs,
-                    signals =  ddc.signals,
-                    filter_type="bandpass"
-                )
-                """
-                if PlotType.ddc in self.plot:
-                    self.signal_plot(
-                        "After DDC at Element=1",
-                        ddc.time, ddc.signals,
-                        ddc.fs
-                    )
-            
+    
             #=====================q================
             #   DIGITAL DESPREAD  PER ELEMENT     |
             #   NOT RESAMPLED BUT MF DELAY TRUNC  |
             #=====================================
 
-            """
-            recovered = self.cdmx.recover(
-                ddc.signals,
-                self.spread_bb.codes,
-                ddc.fs
-                )
-            """
-            if self.conf.SPREADING_STAGE=="IF":
-                self.recovered = self.cdmx.recover(
-                    signal=summed_signal,
-                    fs_signal = self.spread_bb.fs,
-                    f_signal = BW,
-                    codes=self.codes
+            self.recovered = self.cdmx.recover(
+                signal=summed_signal,
+                fs_signal = self.spread_bb.fs,
+                f_signal = Bs,
+                codes=self.codes
+            )
 
-                )
-                if PlotType.recovered in self.plot:
-                    self.recover_plot(
-                        index=0
-                    )
-
-            elif self.conf.SPREADING_STAGE=="BB":
-                self.recovered = self.cdmx.recover(
-                    signal=summed_signal,
-                    fs_signal = self.spread_bb.fs,
-                    f_signal = self.conf.b,
-                    codes=self.codes
-
-                )
-                if PlotType.recovered in self.plot:
-                    self.recover_plot(
-                        index=0
-                    )        
+            if PlotType.recovered in self.plot:
+                self.recover_plot(
+                    index=0
+                )        
             
         else: 
             #WHEN CALIBRATING: ONLY PASSING THROUGH MATCHED FILTER
@@ -301,7 +266,7 @@ class Receiver():
             '-b' 
         )
         plt.axvline(x=self.conf.fIF/1e6, color='red', linestyle='--', linewidth=1.5)
-        plt.axvline(x=50, color='red', linestyle='--', linewidth=1.5)
+        plt.axvline(x=self.conf.offset/1e6, color='red', linestyle='--', linewidth=1.5)
 
         
         plt.ylabel("Normalized Power (dB)")
@@ -347,8 +312,8 @@ class Receiver():
             plt.axvline(x= self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
             plt.axvline(x=-self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
         elif self.conf.SPREADING_STAGE=="IF":
-            plt.axvline(x=50, color='red', linestyle='--', linewidth=1.5)
-            plt.axvline(x=50 + self.conf.lc*self.conf.b/1e6, color='red', linestyle='--', linewidth=1.5)
+            plt.axvline(x=self.conf.offset, color='red', linestyle='--', linewidth=1.5)
+            plt.axvline(x=self.conf.offset + self.conf.lc*self.conf.b/1e6, color='red', linestyle='--', linewidth=1.5)
 
         plt.xlabel("Frequency (MHz)")
         plt.ylabel("Normalised Power (dB)")
@@ -508,7 +473,7 @@ if __name__ == "__main__":
         codefam="WH",
         modType="BPSK",
         codeids=np.array([2,3]),
-        SPREADING_STAGE = "IF"           #Location of the spreading [IF or BB]
+        SPREADING_STAGE = "BB"           #Location of the spreading [IF or BB]
 
         )
     #create signal 
@@ -516,6 +481,6 @@ if __name__ == "__main__":
     #signal.show_signal_plot()
 
     #initiate and assemble receiver 
-    rx = Receiver(config, {PlotType.recovered})
+    rx = Receiver(config)
     rx.setup(signal)
     rx.assemble()
