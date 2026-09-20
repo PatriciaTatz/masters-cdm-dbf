@@ -64,6 +64,14 @@ class Receiver():
             #Signal Frequency =  self.conf.fIF
             #Sampling Frequency = fs_rx
             if self.conf.SPREADING_STAGE=="IF":
+                #Band-pass filter as Image reject filter
+                fband = np.array([self.conf.fc - self.conf.b/2, self.conf.fc + self.conf.b/2])
+                self.rxsignals = self.filter.butterworth(
+                    cutoff = fband,
+                    fs = self.fs_rx,
+                    signals =  self.rxsignals,
+                    filter_type="bandpass"
+                )
                 #Carrier enabled implies spreading at IF 
                 flo = self.conf.fc - self.conf.fIF 
                 self.baseband = self.mixer.superhet(
@@ -473,7 +481,7 @@ if __name__ == "__main__":
         codefam="WH",
         modType="BPSK",
         codeids=np.array([2,3]),
-        SPREADING_STAGE = "BB"           #Location of the spreading [IF or BB]
+        SPREADING_STAGE = "IF"           #Location of the spreading [IF or BB]
 
         )
     #create signal 
