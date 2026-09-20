@@ -190,7 +190,7 @@ class CDMx:
         """
         #PLOT for code spectrum at the BW rate
         plt.figure(figsize=(20,6))
-        plt.rcParams['font.size'] = 15
+        plt.rcParams['font.size'] = 20
         plt.grid()
         plt.ylabel("Normalised Power (dB)")
         plt.xlabel("Frequency (MHz)")
@@ -216,49 +216,29 @@ class CDMx:
         plt.plot(
             specan.f/1e6,
             specan.Pxx_dB,
-            '-b',
+            '-g',
             alpha=0.3,
             label="s1(t)x(c2xc3)"
         )
-
-        plt.axvline(x=2*f_signal/1e6, color='red', linestyle='--', linewidth=1.5, label=f"B=Bs")
-
-        plt.ylim(-70,0)
-        plt.legend()
-        plt.show()
-
-
-        #plt.subplot(2,1,2)
         specan = SpecAn().calculate_psd(
             fs_code,
-            resampled_signal
-        )
-        plt.plot(
-            specan.f/1e6,
-            specan.Pxx_dB,
-            '-b',
-            label="s1(t)"
-        )
-        #how the signal is interfered 
-        specan = SpecAn().calculate_psd(
-            fs_code,
-            resampled_signal*exp_codes[0]*exp_codes[0]
+            exp_codes[0]*exp_codes[1]
         )
         plt.plot(
             specan.f/1e6,
             specan.Pxx_dB,
             '-g',
-            alpha=0.3,
-            linewidth=2,
-            label="(c1*c2)"
+            label="c2xc3"
         )
-        plt.axvline(x=f_signal/1e6, color='red', linestyle='--', linewidth=1.5, label=f"B=")
 
-        plt.legend(loc="upper right")
-        plt.ylim(-70, 0)
+        plt.axvline(x=f_signal/1e6, color='red', linestyle='--', linewidth=1.5, label=r"B=$f_{IF}$")
+
+        plt.ylim(-70,0)
+        plt.legend(loc='lower left')
+        plt.tight_layout()
         plt.show()
         """
-
+    
         return SpreadSignals(os, ss, time, exp_codes, fs_resampled)
 
     def recover(self, signal, codes, fs_signal, f_signal):
@@ -345,12 +325,14 @@ class CDMx:
                         )
                 
                 flow = self.conf.b
+                
                 ddc.signals = Filter(self.conf).butterworth(
                     cutoff = flow,
                     fs = ddc.fs,
                     signals =  ddc.signals,
                     filter_type="lowpass"
                 )
+                
                 despread_signal[i] = ddc.signals
                 fs_signal = ddc.fs
 
@@ -657,7 +639,7 @@ class Mixer:
             lo_signal = np.exp(+1j*2*np.pi*flo_mixer*lo_time) 
         else:
             #quadrature downconversion
-            lo_signal = np.exp(-1j*2*np.pi*flo_mixer*lo_time) 
+            lo_signal = 2*np.exp(-1j*2*np.pi*flo_mixer*lo_time) 
 
         #mix signal by multiplication 
         mixer_output = signal_resampled * lo_signal
