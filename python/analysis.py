@@ -47,7 +47,11 @@ class BER:
         total_bits_tx = 0
         maxerrors = 1000
 
-        while total_bits_tx < maxbits and np.any(total_error < maxerrors):
+        while (
+                np.any((total_bits_tx < maxbits) &
+                    (total_error < maxerrors)
+                )
+            ):
             #generate signal
             signal = DiscreteSignal(conf)
             txsym = np.where(signal.txsymbols > 0, 1, -1)                              #Tx Symbols
@@ -75,9 +79,10 @@ class BER:
 
             #sample at symbol rate for arrpath only 
             rxsym = recoveredSignal.symbols
-            
+
             #hard decisions
             for k in range(conf.no_elem):
+                txsym = np.where(signal.symbols_elements[k] > 0, 1, -1)       #Tx Symbols
                 rsym =  np.where(rxsym[k] > 0, 1, -1)   
 
                 #calculate errors
@@ -93,71 +98,6 @@ class BER:
             "ber":total_error/total_bits_tx
         }
 
-    def sim(self, maxbits, maxSNR):
-        #Directly from the random generator in SigGen
-        arrpath = 0                                                                     #Element Number 
-        #Convert SNR from dB to linear ratio in prep for variance formula 
-        EbN0dBs = np.arange(0, maxSNR)
-        #Calculate enery per bit (Eb) of your signal 
-        maxerrors = 1000 
-        #BER simulation results
-        ber_curves = [] 
-
-        #initiate the Rx class 
-        rx = Receiver(self.conf)
-
-        for i, EbN0dB in enumerate(EbN0dBs):
-            print("snr=",EbN0dBs[i])
-
-            ber_k = np.zeros(self.conf.no_elem)
-            total_error = np.zeros(self.conf.no_elem)
-            total_bits_tx = np.zeros(self.conf.no_elem)
-
-            while (np.any(total_bits_tx < maxbits)):
-
-                #generate signal
-                signal = DiscreteSignal(self.conf)
-                txsym = np.where(signal.txsymbols > 0, 1, -1)                              #Tx Symbols
-
-                gamma = 10**(EbN0dB/10)    #SNR to linear scale
-                rx_noisy = []
-                for k in range(self.conf.no_elem):
-                    s = signal.elements[k]
-                    P = np.sum(np.abs(s)**2) / len(s) #Power in array size
-                    L = len(s)/len(txsym)
-                    Eb = P*L
-                    N0 = Eb / gamma #Noise spectral density 
-                    n = np.sqrt(N0/2)*np.random.standard_normal(s.shape) #noise array
-                    rx = s+n
-                    rx_noisy.append(rx)
-
-                #overwrite the elements in the signal object to noisy signal     
-                signal.elements = rx_noisy
-
-                #setup rx, note this simulates for all path 
-                rx.setup(signal)
-
-                #run cdm for all paths 
-                recoveredSignal = rx.assemble() 
-
-                #sample at symbol rate for arrpath only 
-                rxsym = recoveredSignal.symbols
-                
-                #hard decisions
-                for k in range(self.conf.no_elem):
-                    rsym =  np.where(rxsym[k] > 0, 1, -1)   
-
-                    #calculate errors
-                    errors = np.sum(rsym!=txsym)
-
-                    #update counters - this doesnt allow for rotations 
-                    total_error[k] += errors
-                    total_bits_tx[k] += len(txsym)
-            
-            ber_k = total_error / total_bits_tx
-            ber_curves.append(ber_k)
-        ber_avg = [sum(ber_k) / len(ber_k) for ber_k in ber_curves]
-        return ber_curves, ber_avg
 
 def plot_curve(ebno_db, ber_array, ber_titles):
     fileloc = f"./results/{fam}/raw_data/"
@@ -201,7 +141,7 @@ def plot_curve(ebno_db, ber_array, ber_titles):
 
     plt.xlabel("Eb/No (dB)")
     plt.ylabel("Bit Error Rate")
-    plt.title(f"Avg BER | B = fb/2")
+    plt.title(f"Avg BER | WH N=2 Lc=8")
     plt.grid(True, which='both', linestyle='--', alpha=0.6)
     plt.legend()
 
@@ -214,7 +154,7 @@ if __name__ == "__main__":
     totaltime = symbols*Tb
     
     lc  = 8
-    Nelem = np.array([1])
+    Nelem = np.array([2])
     fam="WH"
     print("running=", fam)
     mod = "BPSK"
@@ -236,7 +176,7 @@ if __name__ == "__main__":
             simtime=totaltime,
             no_elem=int(nelem),
             lc=lc,
-            codeids=np.arange(1,6),
+            codeids=np.arange(1,lc),
             CALIBRATE=False,
             CARRIER=True,
             SPREADING_STAGE=stage,
@@ -251,31 +191,29 @@ if __name__ == "__main__":
                     )
         """
         i=1
-        for clique in ranked:
+        for clique in ranked[2]:
             config_pair = replace(baseconfig, codeids=np.array(clique))
             signal = DiscreteSignal(config_pair)
             print("clique=",clique)
             ber = BER(config_pair)
-            ber_curves, ber_avg = ber.sim(1e3,SNR)
-            ber_title.append(f"Clique = {clique} | Rank = {i}")
+            ber_curves, ber_avg = ber.sim_parallel(1e6,SNR)
+            ber_title.append(f"No = {clique} | Rank = {i}")
             ber_data.append(ber_avg)
             i+=1
+         """
         
-        """
-        if nelem == 2:
-            best = np.array((2,3))
-        config_best = replace(baseconfig, codeids=best)
+
+        config_best = replace(baseconfig, codeids=np.array([2,3]))
         config_worst = replace(baseconfig, codeids=worst)
 
         ber_best = BER(config_best)
         #ber_worst = BER(config_worst)
 
         print(f"N={nelem} with best code pairs={best}")
-        #ber_curves, ber_avg  = ber_best.sim(1e5, SNR)                       #BER SIMULATION
-        ber_curves, ber_avg = ber_best.sim_parallel(1e3,SNR)
+        ber_curves, ber_avg = ber_best.sim_parallel(1e6,SNR)
         ber_k_0  = [ber_curve[0] for ber_curve in ber_curves]
 
-        ber_title.append(f"N_{nelem}_Lc_{lc}_bw_b")
+        ber_title.append(f"N_{nelem}_Lc_{lc}_low_if_spread_fif=b_badpair")
         ber_data.append(ber_avg)
         
         #ber_title.append(f"N={nelem}")
@@ -284,7 +222,7 @@ if __name__ == "__main__":
         #ber_curves, ber_avg = ber_worst.sim(10, SNR)
         #ber_title.append(f"N_{nelem}, worst")
         #ber_data.append(ber_avg)
-        
+       
     plot_curve(ebno_db, ber_data, ber_title)
     plt.show()
     

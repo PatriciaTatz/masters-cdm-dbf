@@ -207,7 +207,7 @@ class CDMx:
             '-b',
             label="s1(t)"
         )
-        
+    
         #how the signal spreads
         specan = SpecAn().calculate_psd(
             fs_code,
@@ -237,8 +237,8 @@ class CDMx:
         plt.legend(loc='lower left')
         plt.tight_layout()
         plt.show()
+        
         """
-    
         return SpreadSignals(os, ss, time, exp_codes, fs_resampled)
 
     def recover(self, signal, codes, fs_signal, f_signal):
@@ -316,6 +316,7 @@ class CDMx:
         decorr = [] 
         syms = []
         for i in range(self.conf.no_elem):
+            fs_despread = fs_signal
             if self.conf.SPREADING_STAGE=="IF":
                 #DDC TO BASEBAND FIRST 
                 ddc = Mixer(self.conf).quadrature(
@@ -334,19 +335,19 @@ class CDMx:
                 )
                 
                 despread_signal[i] = ddc.signals
-                fs_signal = ddc.fs
+                fs_despread = ddc.fs
 
 
             decorrelated_signal, symbols = self.mf.rrcfilter(
                 despread_signal[i],
-                fs_signal=fs_signal,
+                fs_signal=fs_despread,
                 mode="rxmode"
                 )
             
             decorr.append(decorrelated_signal)
             syms.append(symbols)
 
-        return decorr, syms, fs_signal
+        return decorr, syms, fs_despread
 
 
 class Filter:

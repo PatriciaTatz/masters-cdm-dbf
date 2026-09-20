@@ -32,20 +32,22 @@ def get_rank(title):
 #############
 
 
-fileloc = Path("./results/WH/raw_data/thesis_data/code_optimiser")
+fileloc = Path("./results/WH/raw_data/thesis_data/low_IF_arch_badpair")
 ber_data = {}
 
-for file_path in fileloc.iterdir():
+for file_path in fileloc.glob("*.npy"):
     title = file_path.stem
     if title == "theory" or title == "ebno":
         continue
     ber_data[title] = np.load(file_path)
 
+
+"""
 sorted_data = sorted(
     ber_data.items(),
     key=lambda item: get_rank(item[0])
 )
-
+"""
 
 ebno_db = np.load(f"{fileloc}/ebno.npy")
 ber_theory = np.load(f"{fileloc}/theory.npy")
@@ -63,11 +65,13 @@ print(f"Theoretical Eb/No @ BER={ber_target}: {ebno_ref:.2f} dB")
 plt.figure()
 plt.rcParams['font.size'] = 10
 deg = [] 
-cmap = plt.get_cmap('turbo')
-max_rank = len(ber_data)
-for title, ber in sorted_data:
-    rank = get_rank(title)
-    color = cmap((rank - 1) / (max_rank - 1))
+#cmap = plt.get_cmap('turbo')
+#max_rank = len(ber_data)
+
+for title, ber in ber_data.items():
+    #rank = get_rank(title)
+    #color = cmap((rank - 1) / (max_rank - 1))
+    print(title)
 
     #Calculate degradation
     ebno_meas = ebno_at_ber(
@@ -88,15 +92,14 @@ for title, ber in sorted_data:
     )
 
     #Plot data
-    rank =int(title.split("Rank = ")[-1]) 
-    color = cmap((rank - 1) / (len(ber_data) - 1))
+    #rank =int(title.split("Rank = ")[-1]) 
+    #color = cmap((rank - 1) / (len(ber_data) - 1))
     plt.semilogy(
         ebno_db[:len(ber)],
         ber,
         linewidth=1,
         markersize=3,
-        color=color,
-        label=title
+        label=rf"{title}"
     )
 
 #ADD THEORY
@@ -118,13 +121,13 @@ ax.yaxis.set_major_locator(LogLocator(base=10))
 ax.yaxis.set_major_formatter(LogFormatterMathtext(base=10))
 ax.yaxis.set_minor_formatter(NullFormatter())
 
-plt.title("Code Optimiser Result for N=2 WH Lc=8")
+plt.title("Low-IF Spreading with N=2 WH Lc=8", fontsize=15)
 plt.xlabel("Eb/No (dB)", fontsize=20)
 plt.ylabel("Bit Error Rate", fontsize=20)
 plt.xticks(fontsize=12)
 plt.yticks(fontsize=12)
 plt.grid(True, which='both', linestyle='-', alpha=0.6)
-plt.legend(loc='lower left')
+plt.legend(loc='lower left', fontsize=20)
 
 plt.show()
 

@@ -155,7 +155,7 @@ class Receiver():
             #Signal Frequency = self.conf.fIF * self.conf.lc  , NOT returned 
 
             if self.conf.SPREADING_STAGE=="IF":
-                Bs = self.conf.fIF
+                Bs = self.conf.b
             elif self.conf.SPREADING_STAGE=="BB":
                 Bs = self.conf.b
             elif self.conf.SPREADING_STAGE=="RF":
@@ -477,7 +477,7 @@ if __name__ == "__main__":
         sps_chip= 2,
         alpha = 0.5,
         simtime = totaltime,
-        no_elem = 1,
+        no_elem = 2,
         codefam="WH",
         modType="BPSK",
         codeids=np.array([2,3]),

@@ -43,7 +43,7 @@ class DiscreteSignal:
 
         if self.conf.CARRIER:
             self.mixer = Mixer(conf)
-            #modulation will change time array anfs_mixer, carrier_time, carrier_signald sampling frequency
+            #modulation will change time array, fs_mixer, carrier_time, carrier_signald sampling frequency
             #and over txsignal which now represents a QPSK modded carrier 
             modulated = self.modulate_to_carrier(txsignal)
             self.fs = modulated.fs
@@ -109,14 +109,18 @@ class DiscreteSignal:
         #psi = pi 
         #applying d <= lambda/2 and lambda is for 10GHz (lambda=30mm) for Xband operations
         c = 3*10**8
-        theta = 0
+        theta = pi/2
         fd = 0
         #each time this is recreated
         self.elements = [signal]
         self.psi = [0]
+        self.symbols_elements = [self.symbols]
         for i in range(1,self.conf.no_elem):
             psi_i = i*pi*sin(theta)
             signalNs = signal*np.exp(-1j*psi_i)*np.exp(+1j*2*pi*fd*self.time) 
+            symbolNs = self.symbol_waveform*np.exp(-1j*psi_i)
+            symbolNs = symbolNs[::self.conf.sps_symbol][1:]
+            self.symbols_elements.append(symbolNs)
             self.elements.append(signalNs)
             self.psi.append(psi_i)
 
