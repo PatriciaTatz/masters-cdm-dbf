@@ -217,7 +217,7 @@ class CDMx:
             specan.f/1e6,
             specan.Pxx_dB,
             '-g',
-            alpha=0.3,
+            alpha=0.8,
             label="s1(t)x(c2xc3)"
         )
         specan = SpecAn().calculate_psd(
@@ -228,17 +228,17 @@ class CDMx:
             specan.f/1e6,
             specan.Pxx_dB,
             '-g',
-            label="c2xc3"
+            label=f"c2={codes[0]}xc3={codes[1]}"
         )
 
-        plt.axvline(x=f_signal/1e6, color='red', linestyle='--', linewidth=1.5, label=r"B=$f_{IF}$")
+        plt.axvline(x=f_signal/1e6, color='red', linestyle='--', linewidth=1.5, label=r"B=Bs")
 
         plt.ylim(-70,0)
         plt.legend(loc='lower left')
         plt.tight_layout()
         plt.show()
-        
         """
+        
         return SpreadSignals(os, ss, time, exp_codes, fs_resampled)
 
     def recover(self, signal, codes, fs_signal, f_signal):
@@ -403,7 +403,7 @@ class Filter:
         elif mode == "rxmode":
             symbols = filtered_no_delay[::new_sps_symbol][1:]
 
-        """
+        
         #Plot for pulse-shaping and constellation
         if self.conf.modType=="BPSK":
 
@@ -523,7 +523,7 @@ class Filter:
             plt.tight_layout()
             plt.grid()
         plt.show()
-        """
+        
         return filtered_no_delay, symbols
 
     def butterworth(self, cutoff, fs, signals, filter_type="low"):

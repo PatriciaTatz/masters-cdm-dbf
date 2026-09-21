@@ -153,12 +153,12 @@ if __name__ == "__main__":
     symbols = 1000
     totaltime = symbols*Tb
     
-    lc  = 8
-    Nelem = np.array([2])
+    lc  = 16
+    Nelem = np.array([8])
     fam="WH"
     print("running=", fam)
     mod = "BPSK"
-    stage="IF"
+    stage="BB"
 
     ber_title = ['Theoretical'] 
     SNR =  11
@@ -191,29 +191,28 @@ if __name__ == "__main__":
                     )
         """
         i=1
-        for clique in ranked[2]:
+        for clique in ranked[:3]:
             config_pair = replace(baseconfig, codeids=np.array(clique))
             signal = DiscreteSignal(config_pair)
             print("clique=",clique)
             ber = BER(config_pair)
-            ber_curves, ber_avg = ber.sim_parallel(1e6,SNR)
+            ber_curves, ber_avg = ber.sim_parallel(1e4,SNR)
             ber_title.append(f"No = {clique} | Rank = {i}")
             ber_data.append(ber_avg)
             i+=1
-         """
-        
 
-        config_best = replace(baseconfig, codeids=np.array([2,3]))
-        config_worst = replace(baseconfig, codeids=worst)
+        """
+        config_best = replace(baseconfig, codeids=best)
+        #config_worst = replace(baseconfig, codeids=worst)
 
         ber_best = BER(config_best)
         #ber_worst = BER(config_worst)
 
         print(f"N={nelem} with best code pairs={best}")
-        ber_curves, ber_avg = ber_best.sim_parallel(1e6,SNR)
+        ber_curves, ber_avg = ber_best.sim_parallel(1e4,SNR)
         ber_k_0  = [ber_curve[0] for ber_curve in ber_curves]
 
-        ber_title.append(f"N_{nelem}_Lc_{lc}_low_if_spread_fif=b_badpair")
+        ber_title.append(f"N_{nelem}_Lc_{lc}")
         ber_data.append(ber_avg)
         
         #ber_title.append(f"N={nelem}")
@@ -222,7 +221,7 @@ if __name__ == "__main__":
         #ber_curves, ber_avg = ber_worst.sim(10, SNR)
         #ber_title.append(f"N_{nelem}, worst")
         #ber_data.append(ber_avg)
-       
+        
     plot_curve(ebno_db, ber_data, ber_title)
     plt.show()
     

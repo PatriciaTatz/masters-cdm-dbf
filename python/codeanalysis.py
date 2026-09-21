@@ -24,6 +24,7 @@ class CodeSelector:
         self.Lc = conf.lc
         self.codefam = conf.codefam
         self.codeids = conf.codeids
+        self.arch = conf.SPREADING_STAGE
 
         cdm = CDMx(conf)
         self.allcodes = cdm.generate_codes()
@@ -195,7 +196,14 @@ class CodeSelector:
                 Sxy = np.fft.fft(codes_mixed)
 
                 total_energy = np.sum(np.abs(Sxy[1:self.Lc//2+1])**2)
-                lower_half_energy =  np.sum(np.abs(Sxy[1])**2)
+                if self.arch == "BB":
+                    #do not want spectral tone at m = 1
+                    lower_half_energy =  np.sum(np.abs(Sxy[1])**2)
+                elif self.arch == "IF":
+                    #do not want at m=2 
+                    lower_half_energy =  np.sum(np.abs(Sxy[2])**2)
+
+
 
                 if lower_half_energy == 0:
                     csd = 0 
@@ -462,8 +470,9 @@ if __name__ == "__main__":
         simtime = 1, 
         lc = lc,
         codefam="WH",
-        no_elem= 2,
-        codeids=ids)
+        no_elem= 4,
+        codeids=ids,
+        SPREADING_STAGE="IF")
 
 
     WHcodes = CodeSelector(WHcfg)

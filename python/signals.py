@@ -109,7 +109,7 @@ class DiscreteSignal:
         #psi = pi 
         #applying d <= lambda/2 and lambda is for 10GHz (lambda=30mm) for Xband operations
         c = 3*10**8
-        theta = pi/2
+        theta = 0
         fd = 0
         #each time this is recreated
         self.elements = [signal]

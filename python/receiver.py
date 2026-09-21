@@ -155,7 +155,7 @@ class Receiver():
             #Signal Frequency = self.conf.fIF * self.conf.lc  , NOT returned 
 
             if self.conf.SPREADING_STAGE=="IF":
-                Bs = self.conf.b
+                Bs = self.conf.fIF
             elif self.conf.SPREADING_STAGE=="BB":
                 Bs = self.conf.b
             elif self.conf.SPREADING_STAGE=="RF":
@@ -320,8 +320,8 @@ class Receiver():
             plt.axvline(x= self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
             plt.axvline(x=-self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
         elif self.conf.SPREADING_STAGE=="IF":
-            plt.axvline(x=self.conf.offset, color='red', linestyle='--', linewidth=1.5)
-            plt.axvline(x=self.conf.offset + self.conf.lc*self.conf.b/1e6, color='red', linestyle='--', linewidth=1.5)
+            plt.axvline(x=-self.conf.lc*self.conf.fIF/1e6, color='red', linestyle='--', linewidth=1.5)
+            plt.axvline(x=self.conf.lc*self.conf.fIF/1e6, color='red', linestyle='--', linewidth=1.5)
 
         plt.xlabel("Frequency (MHz)")
         plt.ylabel("Normalised Power (dB)")
@@ -357,8 +357,8 @@ class Receiver():
             specan.Pxx_dB,
             '-b' 
         )
-        plt.axvline(x=self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
-        plt.axvline(x=-self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
+        plt.axvline(x=self.conf.lc*self.conf.fIF/1e6/2, color='red', linestyle='--', linewidth=1.5)
+        plt.axvline(x=-self.conf.lc*self.conf.fIF/1e6/2, color='red', linestyle='--', linewidth=1.5)
 
         plt.ylabel("Normalised Power (dB)")
         plt.xlabel("Frequency (MHz)")
@@ -477,11 +477,11 @@ if __name__ == "__main__":
         sps_chip= 2,
         alpha = 0.5,
         simtime = totaltime,
-        no_elem = 2,
+        no_elem = 1,
         codefam="WH",
         modType="BPSK",
         codeids=np.array([2,3]),
-        SPREADING_STAGE = "IF"           #Location of the spreading [IF or BB]
+        SPREADING_STAGE = "BB"           #Location of the spreading [IF or BB]
 
         )
     #create signal 
@@ -489,6 +489,6 @@ if __name__ == "__main__":
     #signal.show_signal_plot()
 
     #initiate and assemble receiver 
-    rx = Receiver(config)
+    rx = Receiver(config, {PlotType.recovered})
     rx.setup(signal)
     rx.assemble()

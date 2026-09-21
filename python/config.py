@@ -42,7 +42,7 @@ class CDMcfg():
         self.ts = 1/self.fb                         #Symbol period
         self.fs = self.sps_symbol * self.fb         #Sampling frequency after RRC upsampler
         self.b = self.fb * (1 + self.alpha)         #RRC limited bandwidth
-        self.offset = 0
+        self.offset = 5e6
         self.fIF = (self.b) + self.offset         
         #Receiver properties 
         if len(self.codeids) == 0:
