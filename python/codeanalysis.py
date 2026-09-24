@@ -228,7 +228,7 @@ class CodeSelector:
                         int(self.codeids[i]),
                         int(self.codeids[j]),
                         float(widths[0]),       # CCF width
-                        float(ccf[zero_lag]),   # zero-lag CCF peak as plotted
+                        float(abs(ccf[zero_lag])),   # zero-lag CCF peak as plotted
                         float(csd) # CSD amplitude at 1/Lc
                     )
                 )
@@ -250,43 +250,101 @@ class CodeSelector:
         return metrics_norm
         
     def find_best_clique(self, weights, no_elem):
-        #cliques = []
-        #totals = []
-        
-        best = None
-        worst = None
-        best_total = np.inf
-        worst_total = -np.inf 
-        combinations = itertools.combinations(self.codeids, no_elem)
-        for clique in combinations:            
-            node_mean =sum(weights.node[int(i)] for i in clique)/no_elem
-            edge_mean = np.mean([
-                weights.edge[f"{i}-{j}"]
-                for i, j in itertools.combinations(clique, 2)
-            ])
-            total = float(edge_mean + node_mean)
-            
-            if total < best_total:
-                best_total = total
-                best = clique
-            
-            if total > worst_total:
-                worst_total = total
-                worst = clique
 
-            #cliques.append(clique)
-            #totals.append(total)
+        self.best = None
+        self.worst = None
+        self.best_total = np.inf
+        self.worst_total = -np.inf 
 
-        #result = dict(zip(cliques,totals))
-        #ranked = sorted(result, key=result.get, reverse=False)
-        #self.best = min(result, key=result.get)
-        #self.worst = max(result, key=result.get)
-
-        self.best = best
-        self.worst = worst 
-
+        avg_node = np.mean(list(weights.node.values()))
+        avg_edge = np.mean(list(weights.edge.values()))
+        threshold = 0.60*(avg_node + avg_edge)
+        self.dfs_recursive(
+            weights,
+            no_elem,
+            [],
+            0,
+            threshold,
+            0,0
+        )
         return self.best, self.worst
           
+    def dfs_recursive(
+        self, 
+        weights,
+        no_elem,
+        clique,
+        start,
+        threshold,
+        node_sum,
+        edge_sum
+        ):
+
+        # Not enough codes left to complete this clique
+        if len(clique) + (len(self.codeids) - start) < no_elem:
+            return False
+        no_edges = no_elem * (no_elem - 1) / 2
+        #Evaluate a branch if its full 
+        if len(clique) == no_elem:
+            node_mean = node_sum / no_elem
+            edge_mean = edge_sum / no_edges
+            total = float(node_mean + edge_mean)
+
+            if total > self.worst_total:
+                self.worst_total = total
+                self.worst = clique
+                
+            if total < self.best_total:
+                self.best_total = total
+                self.best = clique
+
+            # Stop if threshold reached
+            if threshold is not None and total < threshold:
+                return True
+            return False
+
+        #Evaluate a partial branch, prune if above threshold
+
+        # Use sums passed from previous recursion
+        lower_bound = (
+            node_sum / no_elem
+            + edge_sum / no_edges
+        )
+        # Prune this branch if it can no longer meet the threshold
+        if threshold is not None and lower_bound >= threshold:
+            return False
+            
+        #Depth-first, check one branch until the end before going to next
+        for i in range(start, len(self.codeids)):
+            code = int(self.codeids[i])
+
+            # Add only the NEW node
+            new_node_sum = node_sum + weights.node[code]
+        
+            # Add only the NEW edges
+            new_edge_sum = edge_sum
+    
+            for other in clique:
+                new_edge_sum += weights.edge[f"{other}-{code}"]
+
+            found = self.dfs_recursive(
+                weights, 
+                no_elem,
+                clique + [code],
+                i+1,
+                threshold,
+                new_node_sum,
+                new_edge_sum
+            )
+            if found: return True
+        return False
+
+
+
+
+
+
+#PLOTTER!
 
     def plot(self, output, cliquetype="best"):
         if output == "SF":
@@ -483,7 +541,7 @@ if __name__ == "__main__":
         simtime = 1, 
         lc = lc,
         codefam="Gold",
-        no_elem= 5,
+        no_elem= 17,
         codeids=ids,
         SPREADING_STAGE="BB")
 
