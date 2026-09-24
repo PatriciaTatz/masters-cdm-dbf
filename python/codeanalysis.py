@@ -12,6 +12,9 @@ import networkx as nx
 import numpy as np
 from scipy.signal import (correlate, correlation_lags, find_peaks,
                           peak_widths, peak_prominences)
+import cProfile
+import pstats
+
 
 from components import CDMx
 from config import CDMcfg
@@ -247,8 +250,13 @@ class CodeSelector:
         return metrics_norm
         
     def find_best_clique(self, weights, no_elem):
-        cliques = []
-        totals = []
+        #cliques = []
+        #totals = []
+        
+        best = None
+        worst = None
+        best_total = np.inf
+        worst_total = -np.inf 
         combinations = itertools.combinations(self.codeids, no_elem)
         for clique in combinations:            
             node_mean =sum(weights.node[int(i)] for i in clique)/no_elem
@@ -257,22 +265,27 @@ class CodeSelector:
                 for i, j in itertools.combinations(clique, 2)
             ])
             total = float(edge_mean + node_mean)
-            cliques.append(clique)
-            totals.append(total)
+            
+            if total < best_total:
+                best_total = total
+                best = clique
+            
+            if total > worst_total:
+                worst_total = total
+                worst = clique
 
-        result = dict(zip(cliques,totals))
-        print("result=",result)
+            #cliques.append(clique)
+            #totals.append(total)
 
-        ranked = sorted(result, key=result.get, reverse=False)
-        self.best = min(result, key=result.get)
-        self.worst = max(result, key=result.get)
-        
-        """
-        n = 10
-        for key, value in sorted(result.items(), key=lambda x: x[1], reverse=False)[:n]:
-            print(f"{key}: {value}")
-        """
-        return self.best, self.worst, ranked
+        #result = dict(zip(cliques,totals))
+        #ranked = sorted(result, key=result.get, reverse=False)
+        #self.best = min(result, key=result.get)
+        #self.worst = max(result, key=result.get)
+
+        self.best = best
+        self.worst = worst 
+
+        return self.best, self.worst
           
 
     def plot(self, output, cliquetype="best"):
@@ -464,23 +477,42 @@ class CodeSelector:
 
 if __name__ == "__main__":
     #initiate code config
-    lc = 8
-    ids = np.arange(1,lc)
+    lc = 31
+    ids = np.arange(0,lc+1)
     WHcfg = CDMcfg(
         simtime = 1, 
         lc = lc,
-        codefam="WH",
-        no_elem= 4,
+        codefam="Gold",
+        no_elem= 5,
         codeids=ids,
-        SPREADING_STAGE="IF")
+        SPREADING_STAGE="BB")
 
 
     WHcodes = CodeSelector(WHcfg)
+    
+    #PROFILE GENERATE WEIGHTS
+    profiler_weights = cProfile.Profile()
+    profiler_weights.enable()
+
     weights = WHcodes.generate_weights()
-    best, worst, ranked = WHcodes.find_best_clique(weights, WHcfg.no_elem)
+    profiler_weights.disable()
+    stats = pstats.Stats(profiler_weights)
+    stats.strip_dirs()
+    stats.sort_stats("cumulative")
+    stats.print_stats(20)
+
+    #PROFILE 
+    profiler_ranker = cProfile.Profile()
+    profiler_ranker.enable()
+    best, worst = WHcodes.find_best_clique(weights, WHcfg.no_elem)
+    profiler_ranker.disable()
+    stats = pstats.Stats(profiler_ranker)
+    stats.strip_dirs()
+    stats.sort_stats("cumulative")
+    stats.print_stats(20)
+    
     print("best =",best)
     print("worst = ", worst)
-    print(ranked)
     #WHcodes.plot("CSD")
     #WHcodes.plot("ACF")
     #WHcodes.plot("CCF")
