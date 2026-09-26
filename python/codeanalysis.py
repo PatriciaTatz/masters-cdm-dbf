@@ -60,9 +60,9 @@ class CodeSelector:
         for ci, cj, ccf_width, ccf_peak, csd_height in ccs:
   
             self.edge_weight[f"{ci}-{cj}"] += (
-                1/3*csd_height+
-                1/3*ccf_width+
-                1/3*abs(ccf_peak)
+                0.1*csd_height+
+                0*ccf_width+
+                0.9*abs(ccf_peak)
             )
 
         return CodeWeights(self.node_weight, self.edge_weight)
@@ -163,11 +163,10 @@ class CodeSelector:
         self.ccf_data = []
         self.csd_data = []
         metrics = []
-
+    
         for i in range(len(self.allcodes)):
             for j in range(i + 1, len(self.allcodes)):
                 ccf = np.correlate(self.allcodes[i], self.allcodes[j], mode='full') #normalise ccf as peak height is considered
-
                 zero_lag = len(ccf)//2
                 prominence = peak_prominences(ccf, [zero_lag])[0][0]
                 if ccf[zero_lag] == 0:
@@ -198,9 +197,10 @@ class CodeSelector:
                 codes_mixed = self.allcodes[i]*np.conj(self.allcodes[j])
                 Sxy = np.fft.fft(codes_mixed)
 
-                total_energy = np.sum(np.abs(Sxy[1:self.Lc//2+1])**2)
+                total_energy = np.sum(np.abs(Sxy[0:self.Lc//2+1])**2)
                 if self.arch == "BB":
                     #do not want spectral tone at m = 1
+                    
                     lower_half_energy =  np.sum(np.abs(Sxy[1])**2)
                 elif self.arch == "IF":
                     #do not want at m=2 
@@ -212,6 +212,7 @@ class CodeSelector:
                     csd = 0 
                 else:
                     csd = lower_half_energy/total_energy
+                    
                 fbins = np.fft.fftfreq(self.Lc, d=1)
 
                 self.csd_data.append(
@@ -248,17 +249,92 @@ class CodeSelector:
             for ci, cj, width, peak, csd in metrics
         ]
         return metrics_norm
-        
+
+
+    def find_best_clique_greedy(self, weights, no_elem):
+
+        # Start with the code having the lowest node weight
+        first = min(
+            self.codeids,
+            key=lambda i: weights.node[int(i)]
+        )
+
+        clique = [int(first)]
+
+        node_sum = weights.node[int(first)]
+        edge_sum = 0.0
+
+        # Keep adding codes until required clique size is reached
+        while len(clique) < no_elem:
+
+            best_code = None
+            best_total = np.inf
+
+            # Try each remaining code
+            for code in self.codeids:
+
+                code = int(code)
+
+                if code in clique:
+                    continue
+
+                # Add candidate node weight
+                new_node_sum = node_sum + weights.node[code]
+
+                # Add candidate edge weights
+                new_edge_sum = edge_sum
+
+                for existing_code in clique:
+                    i, j = sorted((existing_code, code))
+                    new_edge_sum += weights.edge[f"{i}-{j}"]
+
+                # Calculate score if this code was added
+                new_size = len(clique) + 1
+                no_edges = new_size * (new_size - 1) / 2
+
+                node_mean = new_node_sum / new_size
+                edge_mean = new_edge_sum / no_edges
+
+                total = float(node_mean + edge_mean)
+
+                # Keep the best candidate
+                if total < best_total:
+                    best_total = total
+                    best_code = code
+
+            # Add the chosen code permanently
+            for existing_code in clique:
+                i, j = sorted((existing_code, best_code))
+                edge_sum += weights.edge[f"{i}-{j}"]
+
+            node_sum += weights.node[best_code]
+
+            clique.append(best_code)
+
+        # Final clique score
+        no_edges = no_elem * (no_elem - 1) / 2
+
+        self.best_total = float(
+            node_sum / no_elem
+            + edge_sum / no_edges
+        )
+
+        self.best = clique
+
+        return self.best
+
     def find_best_clique(self, weights, no_elem):
+
 
         self.best = None
         self.worst = None
         self.best_total = np.inf
         self.worst_total = -np.inf 
+        self.ranked = []
 
         avg_node = np.mean(list(weights.node.values()))
         avg_edge = np.mean(list(weights.edge.values()))
-        threshold = 0.60*(avg_node + avg_edge)
+        threshold = None # 0.75*(avg_node + avg_edge)
         self.dfs_recursive(
             weights,
             no_elem,
@@ -267,7 +343,14 @@ class CodeSelector:
             threshold,
             0,0
         )
-        return self.best, self.worst
+        self.ranked.sort(key=lambda x: x[0])
+
+        self.ranked = [
+        (rank, *entry[1:])
+        for rank, entry in enumerate(self.ranked, start=1)
+        ]
+
+        return self.best, self.worst  , self.ranked
           
     def dfs_recursive(
         self, 
@@ -283,11 +366,15 @@ class CodeSelector:
         # Not enough codes left to complete this clique
         if len(clique) + (len(self.codeids) - start) < no_elem:
             return False
+
         no_edges = no_elem * (no_elem - 1) / 2
         #Evaluate a branch if its full 
         if len(clique) == no_elem:
             node_mean = node_sum / no_elem
-            edge_mean = edge_sum / no_edges
+            if no_edges == 0:
+                edge_mean = 0 
+            else:
+                edge_mean = edge_sum / no_edges
             total = float(node_mean + edge_mean)
 
             if total > self.worst_total:
@@ -301,15 +388,20 @@ class CodeSelector:
             # Stop if threshold reached
             if threshold is not None and total < threshold:
                 return True
+
+            self.ranked.append((total, clique))
             return False
 
         #Evaluate a partial branch, prune if above threshold
 
         # Use sums passed from previous recursion
-        lower_bound = (
-            node_sum / no_elem
-            + edge_sum / no_edges
-        )
+        if no_edges==0:
+            lower_bound = node_sum/no_elem
+        else:
+            lower_bound = (
+                node_sum / no_elem
+                + edge_sum / no_edges
+            )
         # Prune this branch if it can no longer meet the threshold
         if threshold is not None and lower_bound >= threshold:
             return False
@@ -535,44 +627,28 @@ class CodeSelector:
 
 if __name__ == "__main__":
     #initiate code config
-    lc = 31
-    ids = np.arange(0,lc+1)
+    lc = 7
+    ids = np.arange(0,lc)
     WHcfg = CDMcfg(
         simtime = 1, 
         lc = lc,
-        codefam="Gold",
-        no_elem= 17,
+        codefam="ZC",
+        no_elem= 2,
         codeids=ids,
         SPREADING_STAGE="BB")
 
 
     WHcodes = CodeSelector(WHcfg)
-    
-    #PROFILE GENERATE WEIGHTS
-    profiler_weights = cProfile.Profile()
-    profiler_weights.enable()
 
     weights = WHcodes.generate_weights()
-    profiler_weights.disable()
-    stats = pstats.Stats(profiler_weights)
-    stats.strip_dirs()
-    stats.sort_stats("cumulative")
-    stats.print_stats(20)
+    best, worst, ranked = WHcodes.find_best_clique(weights, WHcfg.no_elem)
 
-    #PROFILE 
-    profiler_ranker = cProfile.Profile()
-    profiler_ranker.enable()
-    best, worst = WHcodes.find_best_clique(weights, WHcfg.no_elem)
-    profiler_ranker.disable()
-    stats = pstats.Stats(profiler_ranker)
-    stats.strip_dirs()
-    stats.sort_stats("cumulative")
-    stats.print_stats(20)
     
     print("best =",best)
     print("worst = ", worst)
-    #WHcodes.plot("CSD")
-    #WHcodes.plot("ACF")
-    #WHcodes.plot("CCF")
-    #WHcodes.plot("SF")
+    print("ranked=", ranked)
+    WHcodes.plot("CSD")
+    WHcodes.plot("ACF")
+    WHcodes.plot("CCF")
+    WHcodes.plot("SF")
     #WHcodes.plot("network", "best")
