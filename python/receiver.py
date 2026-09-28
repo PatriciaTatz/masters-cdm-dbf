@@ -36,7 +36,7 @@ class Receiver():
         self.mixer = Mixer(self.conf)                   #generate mixers, superheterodyne and quadrature
         self.filter = Filter(self.conf)                 #generate filter, butterworth bandpass filter 
 
-        self.codes = self.cdmx.generate_codes()         #spr4eading codes
+        self.codes = self.cdmx.generate_codes()         #spreading codes
 
         #recieve the signal
         self.rxsignals = copy.deepcopy(signal.elements) #element signals
@@ -46,7 +46,7 @@ class Receiver():
         
         if PlotType.signal in self.plot:
             self.signal_plot(
-                "Rx Signal at Element 1",
+                "Received signal waveform",
                 self.rx_time,
                 self.rxsignals[0],
                 self.fs_rx
@@ -227,20 +227,38 @@ class Receiver():
         #     DIGITAL BEAMFORMING    |
         #=============================
         if self.conf.BEAMFORM:
-            bf = self.bf.align_combine_signals(
-                self.element_delays,
-                self.recovered.signals
-            )
+            angles = self.estimate_angles(self.recovered.signals)
+            psi = [
+            i * np.pi * np.sin(angles[i])
+            for i in range(len(self.recovered.signals))
+            ]
 
             if PlotType.bf in self.plot:
-                self.bf_plot(
-                    self.rx_time, filtered_bb, 
-                    self.recovered.time, bf,
-                    0
-                )  
-            return bf
+                self.plot_beampattern(psi)    
+            return self.recovered
         else:
             return self.recovered
+
+
+    def estimate_angles(self, elements):
+
+        reference = elements[0]
+
+        angles  = [0]
+
+        for i in range(1, len(elements)):
+
+            # Phase of element i relative to element 0
+            phase_difference = np.angle(
+             np.vdot(reference, elements[i])
+            )
+
+            # Convert spa*ial phase difference to arrival an*le
+            theta = np.arcsin(
+              -phase_difference / (i * np.pi)
+            )
+            angles.append(theta)
+        return angles
 
     def signal_plot(self, 
         title,
@@ -248,22 +266,26 @@ class Receiver():
         asignal,
         fsample
         ):
-        plt.rcParams['font.size'] = 15
-        plt.figure(figsize=(12,7))
-        plt.plot(time[:1000], asignal[:1000], '-o', label="RRC Filtered Signal")
-        #plt.axvline(x=1/self.conf.fb, color='red', linestyle='--', linewidth=1.5)
-        #plt.axvline(x=2/self.conf.fb, color='red', linestyle='--', linewidth=1.5)
-        #plt.axvline(x=3/self.conf.fb, color='red', linestyle='--', linewidth=1.5)
 
+        #WAVEFORM
+        plt.rcParams['font.size'] = 20
+        plt.figure(figsize=(18,6))
+        plt.style.use("classic")
         plt.title(f"{title}")
-
+        plt.plot(time[:1000], asignal[:1000], '-o', label="Element=1")
         plt.legend(loc='upper right')
         plt.grid()
-        plt.xlabel("Time (seconds)")
-        plt.ylabel("Amplitude")
+        plt.xlabel("Time (seconds)",fontsize=18)
+        plt.ylabel("Amplitude",fontsize=18)
+        plt.tight_layout()
+
     
-        plt.figure(figsize=(15,6))
-        plt.title(f"{title}")
+        #SPECTRUM
+        plt.figure(figsize=(20,6))
+        plt.rcParams['font.size'] = 20
+        plt.style.use("classic")
+
+        plt.title(f"{title}", fontsize=21)
         specan = SpecAn().calculate_psd(
             fsample,
             asignal,
@@ -271,26 +293,30 @@ class Receiver():
         plt.plot(
             specan.f/1e6,
             specan.Pxx_dB,
-            '-b' 
+            '-b',
+            label="Element=1"
         )
-        plt.axvline(x=self.conf.fIF/1e6, color='red', linestyle='--', linewidth=1.5)
-        plt.axvline(x=self.conf.offset/1e6, color='red', linestyle='--', linewidth=1.5)
+        #plt.axvline(x=self.conf.fc/1e6, color='red', linestyle='--', linewidth=1.5, label="Carrier Frequency")
 
         
-        plt.ylabel("Normalized Power (dB)")
-        plt.xlabel("Frequency (MHz)")
+        plt.ylabel("Normalized Power (dB)",fontsize=18)
+        plt.xlabel("Frequency (MHz)",fontsize=18)
+        plt.tight_layout()
+        plt.legend()
         plt.grid()
         plt.show()
 
     def spread_plot(self, 
         index=0
         ):
-        plt.rcParams['font.size'] = 15
-        plt.figure(figsize=(15,7))
+        #WAVEFORM
+        plt.rcParams['font.size'] = 21
+        plt.figure(figsize=(20,6))
+        plt.style.use("classic")
+
         if not self.conf.codefam == "ZC":
-            plt.title(f"Spread Signals of Element={index+1}")
-            plt.plot(self.spread_bb.time, self.spread_bb.original[index], '-ob', label=f"Rx signal")
-            plt.plot(self.spread_bb.time, self.spread_bb.signals[index], '-og', label=f"c1={self.codes[index]}")
+            plt.plot(self.spread_bb.time[:1000], self.spread_bb.original[index][:1000], '-ob', label=f"Rx signal")
+            plt.plot(self.spread_bb.time[:1000], self.spread_bb.signals[index][:1000], '-og', label=f"c1={self.codes[index]}")
         else:
             plt.subplot(2, 1, 1)
             plt.plot(self.spread_bb.time, self.spread_bb.original[index], '-ob', label=f"Rx signal")
@@ -303,128 +329,127 @@ class Receiver():
             plt.plot(self.spread_bb.time, np.imag(self.spread_bb.signals[index]), '-og', label=f"Imag c1")
             plt.title("Imaginary Part (Quadrature / Q)")
     
-
-        plt.xlabel("Time (seconds)")
-        plt.ylabel("Amplitude")
+        plt.title(f"Spread Signal of Element={index+1}", fontsize=20)
+        plt.xlabel("Time (seconds)",fontsize=18)
+        plt.ylabel("Amplitude",fontsize=18)
         plt.legend(loc='upper right')
+        plt.tight_layout()
         plt.grid()
 
+        #SPECTRUM
         specan = SpecAn().calculate_psd(
             self.spread_bb.fs,
             self.spread_bb.signals[index]
             )
 
-        plt.figure(figsize=(15,8))
-        plt.plot(specan.f/1e6, specan.Pxx_dB, '-g')
+        plt.figure(figsize=(20,6))
+        plt.plot(specan.f/1e6, specan.Pxx_dB, '-g', label="Spread Spectrum of Element 1")
         if self.conf.SPREADING_STAGE=="BB":
             plt.axvline(x= self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
-            plt.axvline(x=-self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
+            plt.axvline(x=-self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5, label="Bss=LsxBs")
         elif self.conf.SPREADING_STAGE=="IF":
             plt.axvline(x=-self.conf.lc*self.conf.fIF/1e6, color='red', linestyle='--', linewidth=1.5)
             plt.axvline(x=self.conf.lc*self.conf.fIF/1e6, color='red', linestyle='--', linewidth=1.5)
 
-        plt.xlabel("Frequency (MHz)")
-        plt.ylabel("Normalised Power (dB)")
-        plt.title(f"Spread Signals of Element={index}")
+        plt.xlabel("Frequency (MHz)",fontsize=18)
+        plt.ylabel("Normalised Power (dB)",fontsize=18)
+        plt.title(f"Spectrum of Element={index+1}", fontsize=20)
         plt.grid()
+        plt.legend()
+        plt.tight_layout()
         plt.show()
 
     def sum_plot(self, time, signal):
-        plt.rcParams['font.size'] = 15
-        plt.figure(figsize=(15,7))
-        plt.plot(time, signal, '-ob')
-        plt.title(f"Combined Signal from {self.conf.no_elem} Elements")
-        plt.xlabel("Time (seconds)")
-        plt.ylabel("Amplitude")
+
+        #WAVEFORM
+        plt.rcParams['font.size'] = 21
+        plt.figure(figsize=(20,6))
+        plt.style.use("classic")
+
+        plt.plot(time[:1000], signal[:1000], '-ob')
+        plt.title(f"Combined signals from {self.conf.no_elem} Elements", fontsize=21)
+        plt.xlabel("Time (seconds)",fontsize=18)
+        plt.ylabel("Amplitude",fontsize=18)
+        plt.tight_layout()
         plt.grid()
 
-        plt.figure(figsize=(15,8))
-        plt.title(f"The Combined Signal")
+        
+        #SPECTRUM
+        plt.figure(figsize=(20,6))
+        plt.title(f"Spectrum of the combined signals", fontsize=21)
         specan = SpecAn().calculate_psd(
             self.spread_bb.fs,
             np.array(signal),
             )
         
-        """
-        plt.semilogy(
-            specan.f,
-            specan.Pxx_dB,
-            color="blue",
-            label="PSD")
-        """
         plt.plot(
             specan.f/1e6,
             specan.Pxx_dB,
-            '-b' 
+            '-b',
+            label="Combined signals"
         )
-        plt.axvline(x=self.conf.lc*self.conf.fIF/1e6/2, color='red', linestyle='--', linewidth=1.5)
-        plt.axvline(x=-self.conf.lc*self.conf.fIF/1e6/2, color='red', linestyle='--', linewidth=1.5)
+        plt.axvline(x=self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
+        plt.axvline(x=-self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5,label="Bss=LsxBs")
 
-        plt.ylabel("Normalised Power (dB)")
-        plt.xlabel("Frequency (MHz)")
+        plt.ylabel("Normalised Power (dB)",fontsize=18)
+        plt.xlabel("Frequency (MHz)",fontsize=18)
         plt.grid()
-
+        plt.legend()
+        plt.tight_layout()
         plt.show()
 
     def recover_plot(self,
         index=0
         ):
-        plt.rcParams['font.size'] = 15
-        plt.figure(figsize=(15,7))
-        #plt.title(f"Recovered Signal at Element Path={index+1}")
+        plt.rcParams['font.size'] = 20
+        plt.figure(figsize=(20,10))
+        #lt.title(f"Recovered Signal of Element={index+1}",fontsize=21)
+
         if self.conf.modType=="BPSK":
-            plt.title(f"Despread Signal of Element={index+1}")
-            plt.plot(signal.symbol_wf_time, signal.symbol_waveform, '--b', label=f"Tx symbol waveform")
-            plt.plot(self.recovered.time, self.recovered.signals[index], '-g', linewidth='2', label="Recovered signal")
+            plt.plot(signal.symbol_wf_time, signal.symbol_waveform, '-b', label=f"Tx symbol waveform")
+            plt.plot(self.recovered.time, np.imag(self.recovered.signals[index]), '-g', linewidth='2', label="Recovered signal")
             #plt.stem(self.recovered.time[::self.conf.sps_symbol][1:], self.recovered.signals[0][::self.conf.sps_symbol][1:], label="symbols")
         
         elif self.conf.modType=="QPSK":
+            plt.style.use("classic")
+            print(index)
             plt.subplot(2, 1, 1)
-            plt.plot(self.recovered.time, np.real(self.recovered.signals[index]), '-g', linewidth='3', label="Recovered signal")
+            plt.plot(self.recovered.time, np.real(self.recovered.signals[index]), '-g', linewidth='3', label="Recovered waveform")
             plt.plot(signal.symbol_wf_time, np.real(signal.symbol_waveform), '-b', label="Tx symbol waveform")
-
-            plt.title("Real Part (In-Phase / I)")
+            plt.ylabel("Amplitude",fontsize=18)
+            plt.legend(loc='upper right')
+            plt.title("Real Part (In-Phase / I)", fontsize=20)
             plt.grid()
 
             plt.subplot(2, 1, 2)
-            plt.plot(self.recovered.time, np.imag(self.recovered.signals[index]), '-g', linewidth='3', label="Recovered signal")
+            plt.plot(self.recovered.time, np.imag(self.recovered.signals[index]), '-g', linewidth='3', label="Recovered waveform")
             plt.plot(signal.symbol_wf_time, np.imag(signal.symbol_waveform), '-b', label="Tx symbol waveform ")
+            plt.ylabel("Amplitude",fontsize=18)
+            plt.title("Imaginary Part (Quadrature / Q)", fontsize=20)
+            plt.legend(loc='upper right')
 
-            plt.title("Imaginary Part (Quadrature / Q)")
-            plt.xlabel("Sample Index")
-        
-        plt.legend(loc='upper right')
         plt.grid()
-        plt.xlabel("Time (seconds)")
-        plt.ylabel("Amplitude")
+        plt.xlabel("Time (seconds)", fontsize=18)
+        plt.tight_layout()
 
+        #SPECTRUM
+        plt.figure(figsize=(20,6))
+        specan = SpecAn().calculate_psd(
+            self.conf.fs,
+            signal.symbol_waveform
+                        )
+        plt.plot(specan.f/1e6, specan.Pxx_dB, '-r', label="Original spectrum")
         specan = SpecAn().calculate_psd(
             self.recovered.fs,
             self.recovered.signals[index]
                         )
-
-
-        plt.figure(figsize=(15,6))
-        plt.plot(specan.f/1e6, specan.Pxx_dB, '-b', label="PSD")
+        plt.plot(specan.f/1e6, specan.Pxx_dB, '-b', label="Recovered spectrum")
         plt.axvline(x=self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
-        plt.axvline(x=-self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5, label="Original bandwidth before spreading")
+        plt.axvline(x=-self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5, label="Original Rx bandwidth")
         plt.legend()
-        plt.xlabel("Frequency (MHz)")
-        plt.ylabel("Normalised Power (dB)")
-        plt.title(f"Recovered Signal at Element Path={index+1}")
-        
-        """
-        plt.text(
-            0.02, 0.95,
-            f"Est. BW={specan.bw/1e6:.2f}MHz",
-            transform=plt.gca().transAxes,
-            ha='left',
-            va='top',
-            bbox=dict(facecolor='white', edgecolor='black')
-        )
-        """
-        plt.ylabel("Power (1/Hz)")
-        plt.xlabel("Frequency (MHz)")
+        plt.xlabel("Frequency (MHz)", fontsize=18)
+        plt.ylabel("Normalised Power (dB)",fontsize=18)
+        plt.title(f"Spectrum of Recovered Element{index+1}",fontsize=21)
         plt.grid()
         plt.show()
 
@@ -453,6 +478,37 @@ class Receiver():
         plt.ylabel("Amplitude")
         plt.show()
 
+    def plot_beampattern(self,psi_angles, N_fft=4096):
+        Nr = self.conf.no_elem
+
+        w = np.exp(1j*np.array(psi_angles)) # conventional beamformer
+
+        w_padded = np.concatenate((w, np.zeros(N_fft - Nr))) # zero pad to N_fft elements to get more resolution in the FFT
+        w_fft_dB = 10*np.log10(np.abs(np.fft.fftshift(np.fft.fft(w_padded)))**2) # magnitude of fft in dB
+        w_fft_dB -= np.max(w_fft_dB) # normalize to 0 dB at peak
+
+        # Map the FFT bins to angles in radians
+        theta_bins = np.arcsin(np.linspace(-1, 1, N_fft)) # in radians
+
+        # find max so we can add it to plot
+        theta_max = theta_bins[np.argmax(w_fft_dB)]
+
+        plt.rcParams['font.size'] = 20
+        plt.style.use("classic")
+
+        fig, ax = plt.subplots(subplot_kw={'projection': 'polar'})
+        ax.plot(theta_bins, w_fft_dB) # MAKE SURE TO USE RADIAN FOR POLAR
+        ax.plot([theta_max], [np.max(w_fft_dB)],'ro')
+        ax.text(theta_max - 0.1, np.max(w_fft_dB) - 4, np.round(theta_max * 180 / np.pi))
+        ax.set_theta_zero_location('N') # make 0 degrees point up
+        ax.set_theta_direction(-1) # increase clockwise
+        ax.set_rlabel_position(55)  # Move grid labels away from other labels
+        ax.set_thetamin(-90) # only show top half
+        ax.set_thetamax(90)
+        ax.set_ylim([-30, 1]) # because there's no noise, only go down 30 dB
+        plt.tight_layout()
+        plt.show()
+   
 
 if __name__ == "__main__":
     """
@@ -479,10 +535,9 @@ if __name__ == "__main__":
         simtime = totaltime,
         no_elem = 1,
         codefam="WH",
-        modType="BPSK",
+        modType="QPSK",
         codeids=np.array([2,3]),
-        SPREADING_STAGE = "BB"           #Location of the spreading [IF or BB]
-
+        SPREADING_STAGE = "IF"           #Location of the spreading [IF or BB]
         )
     #create signal 
     signal = DiscreteSignal(config)
