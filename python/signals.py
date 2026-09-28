@@ -82,7 +82,7 @@ class DiscreteSignal:
         #np.save("input_thesis_QPSK_pulse_shaping", self.txsymbols)
 
         #FOR REPEATABLE RESULTS LOAD DATA
-        #self.txsymbols = np.load("input_thesis_QPSK_pulse_shaping.npy")
+        #self.txsymbols = np.load("input_thesis_pulse_shaping.npy")
 
         #add rrcfilter
         self.symbol_waveform, self.symbols = self.filters.rrcfilter(
@@ -98,7 +98,7 @@ class DiscreteSignal:
         self.time =  np.arange(len(signal))/ self.conf.fs 
 
         #time of symbol sampler [+/-1]
-        self.symbol_time = self.time[::self.conf.sps_symbol] 
+        self.symbol_time = self.time[::self.conf.sps_symbol][1:]
 
         #time of full symbol pulses
         self.symbol_wf_time = np.arange(len(self.symbol_waveform))/self.conf.fs
@@ -109,7 +109,7 @@ class DiscreteSignal:
         #psi = pi 
         #applying d <= lambda/2 and lambda is for 10GHz (lambda=30mm) for Xband operations
         c = 3*10**8
-        theta = 0
+        theta = np.deg2rad(0)
         fd = 0
         #each time this is recreated
         self.elements = [signal]
@@ -123,7 +123,6 @@ class DiscreteSignal:
             self.symbols_elements.append(symbolNs)
             self.elements.append(signalNs)
             self.psi.append(psi_i)
-
         return self.elements 
 
     def modulate_to_carrier(self, signal):
@@ -200,37 +199,34 @@ class DiscreteSignal:
         return modsignal
 
     def show_signal_plot(self):
-        plt.figure(figsize=(15,6))
+        plt.figure(figsize=(15,10))
+        plt.style.use("classic")
         elements_to_plot = range(len(self.elements))
         plt.rcParams['font.size'] = 15
         for i in elements_to_plot:
             if self.conf.modType=="BPSK":
-                plt.plot(self.time, self.elements[i], '-', label=f"Element {i+1} Signal")
-                plt.axvline(x=1/self.conf.b, color='red', linestyle='--', linewidth=1.5)
-                plt.axvline(x=2/self.conf.b, color='red', linestyle='--', linewidth=1.5)
-                plt.axvline(x=3/self.conf.b, color='red', linestyle='--', linewidth=1.5)
+                plt.plot(self.time[:1000], self.elements[i][:1000], '-o', label=f"Element {i+1}")
 
             elif self.conf.modType=="QPSK":
                 plt.subplot(2, 1, 1)
-                plt.stem(self.symbol_time, np.real(self.symbols), 'orange')
-                plt.plot(self.time, np.real(self.elements[i]), '-b')
-                plt.title("Real Part (In-Phase / I)")
+                plt.stem(self.symbol_time[:11], np.real(self.symbols)[:11], 'orange', label="Sampled Symbols")
+                plt.plot(self.time[:11*8], np.real(self.elements[i])[:11*8], '-b', label="RRC filtered symbols w/o group delay")
                 plt.grid()
+                plt.legend()
+                plt.ylabel("Amplitude", fontsize=18)
+                plt.title("Real Part (In-Phase / I)")
 
                 plt.subplot(2, 1, 2)
-                plt.stem(self.symbol_time, np.imag(self.symbols), 'orange')
-                plt.plot(self.time, np.imag(self.elements[i]), '-g')
+                plt.stem(self.symbol_time[:11], np.imag(self.symbols)[:11], 'orange', label="Sampled Symbols")
+                plt.plot(self.time[:11*8], np.imag(self.elements[i])[:11*8], '-g', label="RRC filtered symbols w/o group delay")
                 plt.title("Imaginary Part (Quadrature / Q)")
-                plt.xlabel("Sample Index")
-                plt.tight_layout()
-                plt.grid()
-
             else:
                 raise ValueError("Unknown modulation scheme. Cannot plot!")
         
-        plt.title(f"Received Signals by N=2 Elements")
-        plt.xlabel("Time (seconds)")
-        plt.ylabel("Amplitude")
+        #plt.title(f"N=2 Element Received Signal Waveform")
+        plt.xlabel("Time (seconds)", fontsize=18)
+        plt.ylabel("Amplitude", fontsize=18)
+        plt.tight_layout()
         plt.legend(loc="upper right")
         plt.grid()
 
@@ -238,33 +234,30 @@ class DiscreteSignal:
         #Symbol Plot
 
         #Spectum plot
-        plt.figure(figsize=(15,6))
+        plt.figure(figsize=(20,6))
+        plt.rcParams['font.size'] = 15
+        plt.style.use("classic")
+
         plt.title(f"{self.conf.modType} with RRC Pulse Shaping")
         specan = SpecAn().calculate_psd(
             self.conf.fs,
             self.symbol_waveform,
             )
     
-        plt.plot(specan.f/1e6, specan.Pxx_dB, label="PSD")
-        #plt.ylim(-7,1)
-        """
-        plt.text(
-            0.02, 0.95,
-            f"99.9% BW={specan.bw/1e6:.2f}MHz",
-            transform=plt.gca().transAxes,
-            ha='left',
-            va='top',
-            bbox=dict(facecolor='white', edgecolor='black')
-        )
-        """
-        plt.ylabel("Normalised Power (dB)")
-        plt.xlabel("Frequency (MHz)")
-        plt.axvline(x=-(1+self.conf.alpha)*self.conf.fb/1e6/2, color='red', linestyle='--', linewidth=1.5)
+        plt.plot(specan.f/1e6, specan.Pxx_dB, label="Spectrum of BPSK waveform")
+        plt.xticks(fontsize=15)
+        plt.yticks(fontsize=15)
+        plt.ylabel("Normalised Power (dB)",fontsize=18)
+        plt.xlabel("Frequency (MHz)",fontsize=18)
+        plt.axvline(x=-(1+self.conf.alpha)*self.conf.fb/1e6/2, color='red', linestyle='--', linewidth=1.5, label="Bs=(1+α)Rb")
         plt.axvline(x=(1+self.conf.alpha)*self.conf.fb/1e6/2, color='red', linestyle='--', linewidth=1.5)
+        plt.legend()
+        plt.tight_layout()
         plt.grid()
         
         #constellation diagram
-        plt.figure()
+        plt.figure(figsize=(10,8))
+        plt.style.use("classic")
         plt.title(f"Constellation Diagram of Tx Signal on Element=1")
         plt.scatter(
             np.real(self.symbols),
@@ -274,9 +267,36 @@ class DiscreteSignal:
             s=30,
         )
         plt.grid()
-    
         plt.show()  
 
+
+    def plot_beampattern(self, N_fft=4096):
+        Nr = self.conf.no_elem
+        w = np.exp(1j*np.array(self.psi)) # conventional beamformer
+
+        w_padded = np.concatenate((w, np.zeros(N_fft - Nr))) # zero pad to N_fft elements to get more resolution in the FFT
+        w_fft_dB = 10*np.log10(np.abs(np.fft.fftshift(np.fft.fft(w_padded)))**2) # magnitude of fft in dB
+        w_fft_dB -= np.max(w_fft_dB) # normalize to 0 dB at peak
+
+        # Map the FFT bins to angles in radians
+        theta_bins = np.arcsin(np.linspace(-1, 1, N_fft)) # in radians
+
+        # find max so we can add it to plot
+        theta_max = theta_bins[np.argmax(w_fft_dB)]
+
+        fig, ax = plt.subplots(subplot_kw={'projection': 'polar'})
+        ax.plot(theta_bins, w_fft_dB) # MAKE SURE TO USE RADIAN FOR POLAR
+        ax.plot([theta_max], [np.max(w_fft_dB)],'ro')
+        ax.text(theta_max - 0.1, np.max(w_fft_dB) - 4, np.round(theta_max * 180 / np.pi))
+        ax.set_theta_zero_location('N') # make 0 degrees point up
+        ax.set_theta_direction(-1) # increase clockwise
+        ax.set_rlabel_position(55)  # Move grid labels away from other labels
+        ax.set_thetamin(-90) # only show top half
+        ax.set_thetamax(90)
+        ax.set_ylim([-30, 1]) # because there's no noise, only go down 30 dB
+        plt.show()
+
+   
 
 if __name__ == "__main__":
     #show how to initiate the signal for whatever use 
@@ -292,18 +312,17 @@ if __name__ == "__main__":
     #==================================
     Rb = 30e6
     Tb = 1/Rb
-    symbols = 2000
+    symbols = 1000
     totaltime = symbols*Tb
 
     config = CDMcfg(
         fb = Rb,
-        fc = 200e6,
         lc = 4,
         sps_chip= 2,
         alpha = 0.5,
         simtime = totaltime,
-        no_elem = 2,
-        modType="BPSK"
+        no_elem = 4,
+        modType="QPSK"
     )
     
     signal = DiscreteSignal(config)
@@ -311,4 +330,5 @@ if __name__ == "__main__":
     #==================================
     #PLOTRESULTS
     #=================================
-    signal.show_signal_plot()
+    #signal.show_signal_plot()
+    signal.plot_beampattern()
