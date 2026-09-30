@@ -109,15 +109,14 @@ class DiscreteSignal:
         #psi = pi 
         #applying d <= lambda/2 and lambda is for 10GHz (lambda=30mm) for Xband operations
         c = 3*10**8
-        theta = np.deg2rad(0)
-        fd = 0
+        theta = np.deg2rad(90-self.conf.elevation)
         #each time this is recreated
-        self.elements = [signal]
-        self.psi = [0]
+        self.elements = []
+        self.psi = []
         self.symbols_elements = [self.symbols]
-        for i in range(1,self.conf.no_elem):
+        for i in range(0,self.conf.no_elem):
             psi_i = i*pi*sin(theta)
-            signalNs = signal*np.exp(-1j*psi_i)*np.exp(+1j*2*pi*fd*self.time) 
+            signalNs = signal*np.exp(-1j*psi_i)
             symbolNs = self.symbol_waveform*np.exp(-1j*psi_i)
             symbolNs = symbolNs[::self.conf.sps_symbol][1:]
             self.symbols_elements.append(symbolNs)
@@ -145,7 +144,7 @@ class DiscreteSignal:
         modsignal = self.mixer.quadrature(
             signal,
             fs_signal = self.conf.fs,
-            flo = self.conf.fc
+            flo = self.conf.fc + self.conf.fd
         )
         """
         #bandpass filter to remove harmonics caused by resampling 
