@@ -11,8 +11,7 @@ RF components
 from enum import Enum
 from math import ceil, log2, gcd, pi
 
-from skyfield.api import load, wgs84
-from skyfield.iokit import parse_tle_file
+
 import commpy.filters as filter  # type:ignore[import-untyped]
 import komm as km  # type:ignore[import-untyped]
 import matplotlib.pyplot as plt
@@ -21,6 +20,8 @@ from commpy.sequences import pnsequence  # type:ignore[import-untyped]
 from scipy.signal import periodogram, max_len_seq, resample_poly, welch, butter, freqz, filtfilt
 import matplotlib.pyplot as plt 
 from fractions import Fraction
+from skyfield.api import load, wgs84 # type:ignore[import-untyped]
+from skyfield.iokit import parse_tle_file # type:ignore[import-untyped]
 
 from models import Signals_Time, ResampledSignals, Specan, SpreadSignals, RecoveredSignals
 
@@ -653,7 +654,7 @@ class Mixer:
                 if fs_resampled != fs_mixer:
                     raise ValueError("Resampling did not work!")
             else:
-                signal_resampled = signal
+                signal_resampled = signal[i]
                 fs_resampled = fs_signal
 
             lo_time = np.arange(len(signal_resampled))*(1/fs_resampled)
@@ -713,6 +714,7 @@ class SpecAn:
         x = signal
         X = 10*np.log10(np.fft.fftshift(np.abs(np.fft.fft(x))**2)/len(x))
         f = np.linspace(-fs/2, fs/2, len(X))
+        
         #Xnorm
         if normalise:
             X -= np.max(X)
@@ -727,8 +729,6 @@ class Doppler:
         base = 'https://celestrak.org/NORAD/elements/gp.php'
         url = base + f'?CATNR={self.norad_id}&FORMAT=TLE'
         filename = f'tle{self.norad_id}.txt'
-        satellite_file = load.download(url, filename=filename)
-
 
     def calculate_shifts(self):
 
@@ -764,7 +764,7 @@ class Doppler:
 
         # Create samples across THIS pass
         duration_s = (t_set.tt - t_rise.tt) * 86400
-        seconds = np.linspace(0, duration_s, 1000)
+        seconds = np.linspace(0, duration_s, 10)
         passtime = ts.tt_jd(
         t_rise.tt + seconds / 86400
         )
@@ -773,7 +773,7 @@ class Doppler:
         alt, az, sat_range, alt_rate, az_rate, sat_range_rate = pos.frame_latlon_and_rates(ssc)
 
         # Doppler
-        freq_tx = 40e9
+        freq_tx = 1e9
         c = 299792.458 # km/s
         doppler = -(sat_range_rate.km_per_s / c) * freq_tx
 
