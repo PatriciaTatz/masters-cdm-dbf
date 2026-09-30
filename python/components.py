@@ -11,6 +11,8 @@ RF components
 from enum import Enum
 from math import ceil, log2, gcd, pi
 
+from skyfield.api import load, wgs84
+from skyfield.iokit import parse_tle_file
 import commpy.filters as filter  # type:ignore[import-untyped]
 import komm as km  # type:ignore[import-untyped]
 import matplotlib.pyplot as plt
@@ -59,13 +61,14 @@ class CDMx:
             #for length N=31
             #use preferred polynomial from Matlab
             #degree = 5 #2^5-1=31 
-
             #seq_a, _ = max_len_seq(degree, taps=[2]) 
             #seq_b, _ = max_len_seq(degree, taps=[3])
             #seq_c, _ = max_len_seq(degree, taps=[3,2,1]) 
             #seq_d, _ = max_len_seq(degree, taps=[4,2,1]) 
             #seq_e, _ = max_len_seq(degree, taps=[4,3,1]) 
             #seq_f, _ = max_len_seq(degree, taps=[4,3,2]) 
+            #seq_a, _ =max_len_seq(degree, taps=[4,3,2]) 
+            #seq_b, _ =max_len_seq(degree, taps=[3]) 
 
             degree = 3 #2^3 - 1 = 7 
             seq_a, _ = max_len_seq(degree, taps=[1])
@@ -75,16 +78,18 @@ class CDMx:
             #seq_a, _ = max_len_seq(degree, taps=[1])
             #seq_b, _ = max_len_seq(degree, taps=[3])
 
-            gold_codes = [seq_a, seq_b]
+            #gold_codes = [seq_a, seq_b, seq_c, seq_d, seq_e, seq_f]
             
+            gold_codes = [seq_a, seq_b]
             for shift in range(len(seq_a)):
                 code = np.bitwise_xor(
                     seq_a,
                     np.roll(seq_b, shift)
                 )
                 gold_codes.append(code)
-            
+        
             codes = [2*gold_codes[idx]-1 for idx in self.conf.codeids]    
+
         elif self.conf.codefam == "ZC":
             if self.conf.lc%2 == 0: 
                 raise ValueError("Code length must be odd for ZC")
@@ -186,55 +191,60 @@ class CDMx:
         time = np.arange(len(ss[0]))/fs_resampled
         if max(time)>max(time_before)*1.2:
             raise ValueError("Something went wrong with upsampling of the time series! Exceeds sim time")
-
+        
         """
         #PLOT for code spectrum at the BW rate
         plt.figure(figsize=(20,6))
-        plt.rcParams['font.size'] = 20
+        plt.style.use("classic")
+
         plt.grid()
-        plt.ylabel("Normalised Power (dB)")
-        plt.xlabel("Frequency (MHz)")
+        plt.ylabel("Normalised Power (dB)", fontsize=20)
+        plt.xlabel("Frequency (MHz)",fontsize=20)
         
         #plt.subplot(2,1,1)
         specan = SpecAn().calculate_psd(
             fs_code,
-            resampled_signal
+            os[0]*exp_codes[0]*exp_codes[0]
         )
         
         plt.plot(
             specan.f/1e6,
             specan.Pxx_dB,
-            '-b',
-            label="s1(t)"
+            label="Element of Interest"
         )
-    
-        #how the signal spreads
+        
+        #how the signal is corrupted
         specan = SpecAn().calculate_psd(
             fs_code,
-            resampled_signal*exp_codes[0]*exp_codes[1]
+            os[1]*exp_codes[1]*exp_codes[0]+\
+            os[2]*exp_codes[2]*exp_codes[0]+\
+            os[3]*exp_codes[3]*exp_codes[0]
         )
+          
         plt.plot(
             specan.f/1e6,
             specan.Pxx_dB,
-            '-g',
             alpha=0.8,
-            label="s1(t)x(c2xc3)"
+            label="Residual Signal with N=4"
         )
+
         specan = SpecAn().calculate_psd(
             fs_code,
-            exp_codes[0]*exp_codes[1]
+            exp_codes[1]*exp_codes[0]
         )
+        
         plt.plot(
             specan.f/1e6,
             specan.Pxx_dB,
-            '-g',
-            label=f"c2={codes[0]}xc3={codes[1]}"
+            label=f"FFT(all code pairs) "
         )
-
-        plt.axvline(x=f_signal/1e6, color='red', linestyle='--', linewidth=1.5, label=r"B=Bs")
-
+        
+        #plt.axvline(x=f_signal/1e6, color='red', linestyle='--', linewidth=1.5, label=r"1st harmonic, $f_1$=Bs+ΔF")
+        plt.title("Spectrum Analyser",fontsize=18)
+        plt.xticks(fontsize=15)
+        plt.yticks(fontsize=15)
         plt.ylim(-70,0)
-        plt.legend(loc='lower left')
+        plt.legend(loc='lower left', fontsize=18)
         plt.tight_layout()
         plt.show()
         """
@@ -251,6 +261,7 @@ class CDMx:
                 fs_signal=fs_signal,
                 f_signal=f_signal)
 
+            dss.signals = dss.signals
             #returns N arrays of signals and symbols!
             decorrelated, symbols, fs = self.decorrelate(
                 dss.signals,
@@ -263,12 +274,11 @@ class CDMx:
             return dss 
         else:
             dss = signal 
-            decorrelated, symbols = self.decorrelate(
+            decorrelated, symbols, fs = self.decorrelate(
                 dss,
                 fs_signal=fs_signal)
             time  = np.arange(len(decorrelated[0]))*(1/fs_signal)
-            fs = fs_signal 
-            
+        
             return RecoveredSignals(signal, decorrelated, symbols, time, codes, fs)
         
 
@@ -282,8 +292,6 @@ class CDMx:
         os = []
         exp_codes = []
         codes = np.conj(codes)
-
-
         for i in range(self.conf.no_elem):
             #upsample is required to do discrete multiplication 
             if fs_code != fs_signal:
@@ -303,13 +311,51 @@ class CDMx:
             expanded_code = np.tile(code_sequence, tile_repeats)[:len(resampled_signal)]  #expand then trim to signal length  
             exp_codes.append(expanded_code)   
 
- 
             #spreading operation
             despread_signal  = resampled_signal*expanded_code
             dss.append(despread_signal)
-            
-        time = np.arange(len(dss[0]))/fs_resampled
+        """ 
+        #PLOT for code spectrum at the BW rate
+        plt.figure(figsize=(20,6))
+        plt.style.use("classic")
 
+        plt.grid()
+        plt.ylabel("Normalised Power (dB)", fontsize=20)
+        plt.xlabel("Frequency (MHz)",fontsize=20)
+    
+        #plt.subplot(2,1,1)
+        specan = SpecAn().calculate_psd(
+            fs_code,
+            os[0]*exp_codes[0]
+        )
+        
+        plt.plot(
+            specan.f/1e6,
+            specan.Pxx_dB,
+            label="Element of Interest + Residual Signal"
+        )
+
+        specan = SpecAn().calculate_psd(
+            fs_code,
+            exp_codes[1]*exp_codes[0]
+        )
+        
+        plt.plot(
+            specan.f/1e6,
+            specan.Pxx_dB,
+            label=f"FFT(all code pairs) "
+        )
+        
+        #plt.axvline(x=f_signal/1e6, color='red', linestyle='--', linewidth=1.5, label=r"1st harmonic, $f_1$=Bs+ΔF")
+        plt.title("Spectrum Analyser",fontsize=18)
+        plt.xticks(fontsize=15)
+        plt.yticks(fontsize=15)
+        plt.ylim(-70,0)
+        plt.legend(loc='lower left', fontsize=18)
+        plt.tight_layout()
+        plt.show()
+        """
+        time = np.arange(len(dss[0]))/fs_resampled
         return RecoveredSignals(os, dss, [], time, exp_codes, fs_resampled) 
 
     def decorrelate(self, despread_signal, fs_signal):       
@@ -317,7 +363,8 @@ class CDMx:
         syms = []
         for i in range(self.conf.no_elem):
             fs_despread = fs_signal
-            if self.conf.SPREADING_STAGE=="IF":
+
+            if self.conf.SPREADING_STAGE=="IF" and not self.conf.CALIBRATE:
                 #DDC TO BASEBAND FIRST 
                 ddc = Mixer(self.conf).quadrature(
                             despread_signal[i],
@@ -325,18 +372,16 @@ class CDMx:
                             flo=self.conf.fIF
                         )
                 
-                flow = self.conf.b
-                
+                flow = self.conf.b/2
                 ddc.signals = Filter(self.conf).butterworth(
                     cutoff = flow,
                     fs = ddc.fs,
                     signals =  ddc.signals,
                     filter_type="lowpass"
                 )
-                
+
                 despread_signal[i] = ddc.signals
                 fs_despread = ddc.fs
-
 
             decorrelated_signal, symbols = self.mf.rrcfilter(
                 despread_signal[i],
@@ -396,14 +441,13 @@ class Filter:
         filtered = np.convolve(samples, h_rrc, mode='full')
         filtered_no_delay = filtered[delay:-delay]
 
-
+        
         #sample at the symbol
         if mode == "txmode":
             symbols = filtered_no_delay[::sps_symbol][1:]
         elif mode == "rxmode":
             symbols = filtered_no_delay[::new_sps_symbol][1:]
-
-        
+        """
         #Plot for pulse-shaping and constellation
         if self.conf.modType=="BPSK":
 
@@ -413,18 +457,22 @@ class Filter:
                 time = np.arange(len(filtered_no_delay))/self.conf.fs
             
                 plt.figure(figsize=(15,6))
+                plt.style.use("classic")
+
                 plt.rcParams['font.size'] = 15
-                plt.stem(time_sample, samples, label="Upsampled Symbols")
+                plt.stem(time_sample[:10*8], samples[:10*8], label="Upsampled Symbols")
                 #plt.axvline(x=1/self.conf.fb, color='red', linestyle='--', linewidth=1.5)
                 #plt.axvline(x=2/self.conf.fb, color='red', linestyle='--', linewidth=1.5)
                 #plt.axvline(x=3/self.conf.fb, color='red', linestyle='--', linewidth=1.5)
 
-                plt.plot(time, filtered_no_delay, '-o', c='orange', label="RRC filtered symbols w/o group delay")
+                plt.plot(time[:10*8], filtered_no_delay[:10*8], '-o', c='orange', label="RRC filtered symbols w/o group delay")
                 plt.grid()
                 plt.title("BPSK with RRC Pulse Shaping")
                 plt.ylabel("Symbol")
-                plt.xlabel("Sample Index\n")
+                plt.xlabel("Time (seconds)")
                 plt.legend(loc='upper right')
+                plt.tight_layout()
+
                 #Figure 3.5, constellation q
                 plt.figure(figsize=(10,8))
                 plt.rcParams['font.size'] = 15
@@ -447,57 +495,67 @@ class Filter:
                 #TRANSMIT BPSK
                 #Figure 3.4
                 plt.figure(figsize=(15,6))
+                plt.style.use("classic")
                 plt.rcParams['font.size'] = 15
                 time = np.arange(len(filtered_no_delay))/fs_signal
-                plt.plot(time[1:-1], filtered_no_delay[1:-1], '--', c='orange', label="RRC filtered symbols w/o group delay")
-                plt.stem(time[::new_sps_symbol][1:], filtered_no_delay[::new_sps_symbol][1:], label="Upsampled Symbols")
+                plt.plot(time[1:-1], filtered_no_delay[1:-1], '-o', c='orange', label="RRC filtered symbols w/o group delay")
+                plt.stem(time[::new_sps_symbol], filtered_no_delay[::new_sps_symbol], label="Sampled Symbols")
                 
                 plt.grid()
                 plt.title("RX BPSK with RRC Pulse Shaping")
                 plt.ylabel("Symbol")
-                plt.xlabel("Sample Index\n")
+                plt.xlabel("Time (seconds)")
+                plt.tight_layout()
                 plt.legend(loc='upper right')
 
 
                 #Figure 3.5, constellation BPSK TX  
                 plt.figure(figsize=(8,8))
+                plt.style.use("classic")
                 theta = np.linspace(0, 2*np.pi, 1000)
                 plt.plot(np.cos(theta),np.sin(theta),'k--', alpha=0.5)
 
                 plt.rcParams['font.size'] = 15
                 plt.axhline(y=0, color='orange', linestyle='-', linewidth=1.5)
                 plt.axvline(x=0, color='orange', linestyle='-', linewidth=1.5)
+                #plt.axhline(y=0.34, color='red', linestyle='--', linewidth=1.5)
+                #plt.axhline(y=-0.34, color='red', linestyle='--', linewidth=1.5)
+                #plt.axvline(x=-0.86, color='red', linestyle='--', linewidth=1.5)
+                #plt.axvline(x=0.86, color='red', linestyle='--', linewidth=1.5, label="|Rij|")
                 plt.title(f"RX Constellation Diagram of BPSK Signal")
-                plt.ylabel("Quadrature (Q)")
-                plt.xlabel("In-Phase (I)")
+                plt.ylabel("Quadrature (Q)",fontsize=18)
+                plt.xlabel("In-Phase (I)",fontsize=18)
                 plt.scatter(
                     np.real(symbols),
                     np.imag(symbols),
                     color="blue",
                     alpha=0.5,
                     s=30,
+                    label="BPSK symbols"
                 )
+                plt.legend()
                 plt.tight_layout()
                 plt.grid()
             
 
         elif self.conf.modType == "QPSK":
-            plt.figure(figsize=(15,10))
-            plt.rcParams['font.size'] = 15
-            plt.suptitle("QPSK with RRC Pulse Shaping")
+            plt.figure(figsize=(20,10))
+            plt.style.use("classic")
+            plt.rcParams['font.size'] = 21
+            plt.suptitle("Recovered QPSK Baseband Waveform", fontsize=12)
             time = np.arange(len(filtered_no_delay))/fs_signal
             plt.subplot(2, 1, 1)
             plt.stem(time[:1000][::sps_symbol],np.real(filtered_no_delay[:1000][::sps_symbol]),  label="Upsampled Symbols")
             plt.plot(time[:1000],np.real(filtered_no_delay[:1000]),  '-o', c='orange', label="RRC filtered symbols w/o group delay")
-            plt.ylabel("Real Part (In-Phase / I)")
+            plt.ylabel("Real Part (In-Phase / I)", fontsize=18)
             plt.grid()
             plt.legend(loc='upper right')
 
             plt.subplot(2, 1, 2)
             plt.stem(time[:1000][::sps_symbol],np.imag(filtered_no_delay[:1000][::sps_symbol]),  label="Upsampled Symbols")
             plt.plot(time[:1000],np.imag(filtered_no_delay[:1000]),  '-o', c='orange', label="RRC filtered symbols w/o group delay")
-            plt.ylabel("Imaginary Part (Quadrature / Q)")
-            plt.xlabel("Sample Index")
+            plt.ylabel("Imaginary Part (Quadrature / Q)", fontsize=18)
+            plt.xlabel("Time (seconds)", fontsize=18)
             plt.grid()
 
             plt.legend(loc='upper right')
@@ -523,7 +581,7 @@ class Filter:
             plt.tight_layout()
             plt.grid()
         plt.show()
-        
+        """
         return filtered_no_delay, symbols
 
     def butterworth(self, cutoff, fs, signals, filter_type="low"):
@@ -641,6 +699,7 @@ class Mixer:
         else:
             #quadrature downconversion
             lo_signal = 2*np.exp(-1j*2*np.pi*flo_mixer*lo_time) 
+            
 
         #mix signal by multiplication 
         mixer_output = signal_resampled * lo_signal
@@ -650,11 +709,72 @@ class Mixer:
 
 
 class SpecAn: 
-    def calculate_psd(self ,fs, signal):
+    def calculate_psd(self ,fs, signal, normalise=True):
         x = signal
         X = 10*np.log10(np.fft.fftshift(np.abs(np.fft.fft(x))**2)/len(x))
         f = np.linspace(-fs/2, fs/2, len(X))
-        
         #Xnorm
-        X -= np.max(X)
+        if normalise:
+            X -= np.max(X)
+        
         return Specan(f,X)
+
+class Doppler:
+    def __init__(self):
+        #load TLE 
+        #I've chosen LEO Vantage 1 which is an SSO LEO Comms satellite
+        self.norad_id = '44744'          
+        base = 'https://celestrak.org/NORAD/elements/gp.php'
+        url = base + f'?CATNR={self.norad_id}&FORMAT=TLE'
+        filename = f'tle{self.norad_id}.txt'
+        satellite_file = load.download(url, filename=filename)
+
+
+    def calculate_shifts(self):
+
+        ts = load.timescale()
+        satellite = load.tle_file(f'tle{self.norad_id}.txt', ts)[0]
+
+        #Looking at WSA SSC ground station 
+        ssc = wgs84.latlon(-29.05, 115.35)
+
+        #search time frame in the past  
+        t0 = ts.utc(2026, 6, 3) 
+        t1 = ts.utc(2026, 6, 4)
+
+        #find events of rise 
+        t, events = satellite.find_events(
+            ssc,
+            t0,
+            t1,
+            altitude_degrees=30.0)
+
+        event_names = 'rise above 30°', 'culminate', 'set below 30°'
+
+        for ti, event in zip(t, events):
+            name = event_names[event]
+            print(ti.utc_strftime('%Y %b %d %H:%M:%S'), name)
+
+
+        # Take first complete rise -> culmination -> set
+        t_rise = t[0]
+        t_culm = t[1]
+        t_set = t[2]
+
+
+        # Create samples across THIS pass
+        duration_s = (t_set.tt - t_rise.tt) * 86400
+        seconds = np.linspace(0, duration_s, 1000)
+        passtime = ts.tt_jd(
+        t_rise.tt + seconds / 86400
+        )
+        difference = satellite - ssc
+        pos = difference.at(passtime)
+        alt, az, sat_range, alt_rate, az_rate, sat_range_rate = pos.frame_latlon_and_rates(ssc)
+
+        # Doppler
+        freq_tx = 40e9
+        c = 299792.458 # km/s
+        doppler = -(sat_range_rate.km_per_s / c) * freq_tx
+
+        return doppler, alt.degrees, passtime.utc_datetime() 
