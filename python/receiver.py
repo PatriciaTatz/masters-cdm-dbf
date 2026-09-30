@@ -1,12 +1,12 @@
 from enum import Enum, auto
-
+from dataclasses import replace
 import matplotlib.pyplot as plt
 import numpy as np
 import copy
-from scipy.signal import resample_poly, upfirdn
+from scipy.signal import welch
 
 import utils as u
-from components import CDMx, SpecAn, Beamformer, Filter, Mixer
+from components import CDMx, SpecAn, Beamformer, Filter, Mixer, Doppler
 from config import CDMcfg
 from signals import DiscreteSignal
 from models import ResampledSignals
@@ -87,13 +87,6 @@ class Receiver():
                     fs_signal = self.fs_rx, 
                     flo = flo 
                 )
-            elif self.conf.SPREADING_STAGE=="RF":
-                self.baseband = ResampledSignals(
-                    self.rxsignals,
-                    self.rx_time,
-                    self.fs_rx
-                )
-
 
             if PlotType.signal in self.plot:
                 self.signal_plot(
@@ -215,11 +208,8 @@ class Receiver():
                 f_signal=self.conf.fb
                 )
 
-            if PlotType.signal in self.plot:
+            if PlotType.recovered in self.plot:
                 self.recover_plot(
-                    self.rx_time, self.rxsignals, 
-                    self.rx_time, self.recovered,
-                    self.recovered.fs,
                     0
                 )
 
@@ -230,11 +220,17 @@ class Receiver():
             angles = self.estimate_angles(self.recovered.signals)
             psi = [
             i * np.pi * np.sin(angles[i])
-            for i in range(len(self.recovered.signals))
+            for i in range(0,len(self.recovered.signals))
             ]
+            amplitudes = np.array([
+                np.sqrt(np.mean(np.abs(s)**2))
+                for s in self.recovered.signals
+                ])
+            amplitudes /= amplitudes[0]
 
             if PlotType.bf in self.plot:
-                self.plot_beampattern(psi)    
+                self.beampattern_plot(psi, amplitudes)    
+                #self.array_plot(angles, amplitudes)
             return self.recovered
         else:
             return self.recovered
@@ -242,23 +238,23 @@ class Receiver():
 
     def estimate_angles(self, elements):
 
-        reference = elements[0]
-
-        angles  = [0]
+        angles = [0]
 
         for i in range(1, len(elements)):
 
-            # Phase of element i relative to element 0
+            # Phase difference between adjacent elements
             phase_difference = np.angle(
-             np.vdot(reference, elements[i])
+                np.vdot(elements[i-1], elements[i])
             )
 
-            # Convert spa*ial phase difference to arrival an*le
+            # Adjacent elements are separated by d = lambda/2
             theta = np.arcsin(
-              -phase_difference / (i * np.pi)
+                -phase_difference / np.pi
             )
+
             angles.append(theta)
-        return angles
+
+        return np.array(angles)
 
     def signal_plot(self, 
         title,
@@ -478,11 +474,20 @@ class Receiver():
         plt.ylabel("Amplitude")
         plt.show()
 
-    def plot_beampattern(self,psi_angles, N_fft=4096):
+    def beampattern_plot(self,psi_angles, A, N_fft=4096):
+
+
+        fig, ax  = plt.subplots(
+            subplot_kw={'projection': 'polar'},
+            figsize=(18, 18)
+        )
+        plt.rcParams['font.size'] = 21
+        plt.style.use("classic")
+        # -------------------------
+        # Original
+        # -------------------------
         Nr = self.conf.no_elem
-
-        w = np.exp(1j*np.array(psi_angles)) # conventional beamformer
-
+        w = np.exp(1j*np.array(signal.psi)) # conventional beamformer weights
         w_padded = np.concatenate((w, np.zeros(N_fft - Nr))) # zero pad to N_fft elements to get more resolution in the FFT
         w_fft_dB = 10*np.log10(np.abs(np.fft.fftshift(np.fft.fft(w_padded)))**2) # magnitude of fft in dB
         w_fft_dB -= np.max(w_fft_dB) # normalize to 0 dB at peak
@@ -490,25 +495,95 @@ class Receiver():
         # Map the FFT bins to angles in radians
         theta_bins = np.arcsin(np.linspace(-1, 1, N_fft)) # in radians
 
+        #Full circle
+        theta_bins = np.concatenate([
+            theta_bins,
+            np.pi - theta_bins[::-1]
+            ])
+        w_fft_dB  = np.concatenate([
+            w_fft_dB,
+            w_fft_dB[::-1]
+            ])
+
         # find max so we can add it to plot
         theta_max = theta_bins[np.argmax(w_fft_dB)]
 
-        plt.rcParams['font.size'] = 20
-        plt.style.use("classic")
-
-        fig, ax = plt.subplots(subplot_kw={'projection': 'polar'})
-        ax.plot(theta_bins, w_fft_dB) # MAKE SURE TO USE RADIAN FOR POLAR
-        ax.plot([theta_max], [np.max(w_fft_dB)],'ro')
-        ax.text(theta_max - 0.1, np.max(w_fft_dB) - 4, np.round(theta_max * 180 / np.pi))
+        ax.plot(theta_bins, w_fft_dB, 'g', linewidth=2, label='Original') # MAKE SURE TO USE RADIAN FOR POLAR
+        AoA = np.round(theta_max * 180 / np.pi)
+        ax.plot([theta_max], [np.max(w_fft_dB)],'go', markersize=10, label=f"AoA={AoA}")
         ax.set_theta_zero_location('N') # make 0 degrees point up
         ax.set_theta_direction(-1) # increase clockwise
         ax.set_rlabel_position(55)  # Move grid labels away from other labels
-        ax.set_thetamin(-90) # only show top half
-        ax.set_thetamax(90)
+        #ax.set_thetamin(-90) # only show top half
+        #ax.set_thetamax(90)
         ax.set_ylim([-30, 1]) # because there's no noise, only go down 30 dB
-        plt.tight_layout()
+        ax.tick_params(axis="both", labelsize=21)
+        # -------------------------
+        # Recovered
+        # -------------------------
+
+        Nr = self.conf.no_elem
+        w = A*np.exp(1j*np.array(psi_angles)) # conventional beamformer weights
+        w_padded = np.concatenate((w, np.zeros(N_fft - Nr))) # zero pad to N_fft elements to get more resolution in the FFT
+        w_fft_dB = 10*np.log10(np.abs(np.fft.fftshift(np.fft.fft(w_padded)))**2) # magnitude of fft in dB
+        w_fft_dB -= np.max(w_fft_dB) # normalize to 0 dB at peak
+
+        # Map the FFT bins to angles in radians
+        theta_bins = np.arcsin(np.linspace(-1, 1, N_fft)) # in radians
+
+        #Full circle
+        theta_bins = np.concatenate([
+            theta_bins,
+            np.pi - theta_bins[::-1]
+            ])
+        w_fft_dB  = np.concatenate([
+            w_fft_dB,
+            w_fft_dB[::-1]
+            ])
+
+        # find max so we can add it to plot
+        theta_max = theta_bins[np.argmax(w_fft_dB)]
+
+        ax.plot(theta_bins, w_fft_dB,'r', linewidth=2,label='Recovered') # MAKE SURE TO USE RADIAN FOR POLAR
+        AoA = np.round(theta_max * 180 / np.pi)
+        ax.plot([theta_max], [np.max(w_fft_dB)],'bo', markersize=10, label=f"AoA={AoA}")
+
+        fig.legend(
+        loc='lower center',
+        ncol=2,
+        fontsize=24
+                )
+        fig.tight_layout()
         plt.show()
    
+    def array_plot(self, angles, A):
+        rx_angles = np.rad2deg(angles)
+        rx_dB = 20 * np.log10(A)
+
+        tx_psi = signal.psi
+        tx_angles = np.array([
+            0 if i == 0 else np.arcsin(tx_psi[i] / (i * np.pi))
+            for i in range(len(tx_psi))
+            ])
+        tx_angles = np.rad2deg(tx_angles)
+        tx_dB =  np.zeros(len(rx_dB))
+        a_error =  rx_dB - tx_dB
+
+        plt.rcParams['font.size'] = 21
+        plt.figure(figsize=(8,6))
+        plt.style.use("classic")
+
+        plt.plot(rx_dB, rx_angles, '-o', label="Reco")
+
+
+        plt.xlabel("Angle of Arrival (degrees)",fontsize=18)
+        plt.ylabel("Amplitude Loss (dB)",fontsize=18)
+        plt.tight_layout()
+        plt.grid()
+        plt.legend()
+        plt.show()
+
+        return fd_est
 
 if __name__ == "__main__":
     """
@@ -535,15 +610,16 @@ if __name__ == "__main__":
         simtime = totaltime,
         no_elem = 1,
         codefam="WH",
-        modType="QPSK",
-        codeids=np.array([2,3]),
-        SPREADING_STAGE = "IF"           #Location of the spreading [IF or BB]
+        modType="BPSK",
+        codeids=np.array([1,3,4,6]),
+        SPREADING_STAGE = "BB"           #Location of the spreading [IF or BB]
         )
     #create signal 
     signal = DiscreteSignal(config)
-    #signal.show_signal_plot()
+    signal.show_signal_plot()
 
     #initiate and assemble receiver 
     rx = Receiver(config, {PlotType.recovered})
     rx.setup(signal)
     rx.assemble()
+
