@@ -5,14 +5,14 @@ Simulate effects of channel
 """
 import random
 from math import pi
-
+from dataclasses import replace
 import commpy.channels as ch  # type:ignore[import-untyped]
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.signal import welch
 from math import sin 
 
-from components import Filter, SpecAn, Mixer
+from components import Filter, SpecAn, Mixer, Doppler
 from config import CDMcfg
 from models import ResampledSignals
 
@@ -76,13 +76,13 @@ class DiscreteSignal:
         else:
             raise ValueError("Unsupported modulation scheme. Choose [BPSK, QPSK]")
         #Random symbol generator    
-        self.txsymbols = np.random.choice(constellation, no_symbols) 
+        #self.txsymbols = np.random.choice(constellation, no_symbols) 
     
         #OVERWRITE WARNING!! FOR REPEATABLE RESULTS SAVE DATA
         #np.save("input_thesis_QPSK_pulse_shaping", self.txsymbols)
 
         #FOR REPEATABLE RESULTS LOAD DATA
-        #self.txsymbols = np.load("input_thesis_pulse_shaping.npy")
+        self.txsymbols = np.load("input_thesis_pulse_shaping.npy")
 
         #add rrcfilter
         self.symbol_waveform, self.symbols = self.filters.rrcfilter(
@@ -161,7 +161,6 @@ class DiscreteSignal:
         """
         modsignal.signals = np.real(modsignal.signals)
         
-    
         """
         #PLOT FOR AFTER THE MODULATION
         plt.figure(figsize=(15,6))
@@ -266,7 +265,7 @@ class DiscreteSignal:
             s=30,
         )
         plt.grid()
-        plt.show()  
+        plt.show()
 
 
     def plot_beampattern(self, N_fft=4096):
@@ -295,7 +294,32 @@ class DiscreteSignal:
         ax.set_ylim([-30, 1]) # because there's no noise, only go down 30 dB
         plt.show()
 
-   
+    def estimate_fd(self):
+        f, P = welch(
+            self.elements[0],
+            self.fs
+        )
+        # Select ONLY the positive-frequency signal around fc
+        bw = self.conf.b
+        guard = 100e6
+        mask = (
+            (f >= self.conf.fc - bw/2 - guard) &
+            (f <= self.conf.fc + bw/2 + guard )
+        )
+
+        f_signal = f[mask]
+        P_signal = P[mask]
+
+
+        # Spectral centroid
+        f_est = np.sum(f_signal * P_signal) / np.sum(P_signal)
+        plt.plot(f_signal, P_signal)
+
+
+        # Doppler relative to nominal carrier
+        fd_est = f_est - self.conf.fc
+
+        return fd_est
 
 if __name__ == "__main__":
     #show how to initiate the signal for whatever use 
@@ -321,13 +345,62 @@ if __name__ == "__main__":
         alpha = 0.5,
         simtime = totaltime,
         no_elem = 4,
-        modType="QPSK"
+        modType="BPSK"
     )
     
     signal = DiscreteSignal(config)
 
+    fref = signal.estimate_fd()
+
+    #Calculation for Doppler 
+    fds, els, time = Doppler().calculate_shifts()
+    fd_list = []
+
+    for fd, el in zip(fds, els):
+
+        config_fd = replace(
+            config,
+            fd=fd,
+            elevation=el
+        )
+
+        signal = DiscreteSignal(config_fd)
+
+        fd_list.append(
+            signal.estimate_fd()
+        )
+
+    fd_estimated = np.asarray(fd_list) - fref
+
+
+
     #==================================
     #PLOTRESULTS
     #=================================
+
+    plt.figure(figsize=(10, 6))
+
+    plt.plot(
+        np.asarray(fds) / 1e3,
+        els,
+        "k--",
+        linewidth=2,
+        label=r"Injected $f_D$"
+    )
+
+    plt.plot(
+        fd_estimated / 1e3,
+        els,
+        "r.",
+        markersize=5,
+        label=r"Estimated $\hat{f}_D$"
+    )
+
+    plt.xlabel(r"Doppler Shift $f_D$ (kHz)")
+    plt.ylabel("Elevation / Beam Angle (deg)")
+    plt.grid()
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
     #signal.show_signal_plot()
-    signal.plot_beampattern()
+    #signal.plot_beampattern()
