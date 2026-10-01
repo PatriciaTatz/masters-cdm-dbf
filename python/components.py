@@ -262,8 +262,8 @@ class CDMx:
                 fs_signal=fs_signal,
                 f_signal=f_signal)
 
-            dss.signals = dss.signals
-            #returns N arrays of signals and symbols!
+            """
+            #returns N arrays of signals and symbols! Does downconversion to DC and Symbol recovery
             decorrelated, symbols, fs = self.decorrelate(
                 dss.signals,
                 fs_signal=dss.fs)
@@ -272,6 +272,7 @@ class CDMx:
             dss.symbols = symbols
             dss.fs = fs 
             dss.time = np.arange(len(dss.signals[0]))*(1/dss.fs)
+            """
             return dss 
         else:
             dss = signal 
@@ -373,14 +374,14 @@ class CDMx:
                             flo=self.conf.fIF
                         )
                 
-                flow = self.conf.b/2
+                flow = self.conf.b
                 ddc.signals = Filter(self.conf).butterworth(
                     cutoff = flow,
                     fs = ddc.fs,
                     signals =  ddc.signals,
                     filter_type="lowpass"
                 )
-
+                
                 despread_signal[i] = ddc.signals
                 fs_despread = ddc.fs
 
@@ -764,7 +765,7 @@ class Doppler:
 
         # Create samples across THIS pass
         duration_s = (t_set.tt - t_rise.tt) * 86400
-        seconds = np.linspace(0, duration_s, 10)
+        seconds = np.linspace(0, duration_s, 50)
         passtime = ts.tt_jd(
         t_rise.tt + seconds / 86400
         )
@@ -775,6 +776,8 @@ class Doppler:
         # Doppler
         freq_tx = 1e9
         c = 299792.458 # km/s
-        doppler = -(sat_range_rate.km_per_s / c) * freq_tx
+        velocity = sat_range_rate.km_per_s 
+        doppler = -(velocity/ c) * freq_tx
+        beta = -sat_range_rate.km_per_s / c
 
-        return doppler, alt.degrees, passtime.utc_datetime() 
+        return doppler, alt.degrees, beta 

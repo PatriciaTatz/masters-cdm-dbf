@@ -65,7 +65,7 @@ class Receiver():
             #Sampling Frequency = fs_rx
             if self.conf.SPREADING_STAGE=="IF":
                 #Band-pass filter as Image reject filter
-                fband = np.array([self.conf.fc - self.conf.b/2, self.conf.fc + self.conf.b/2])
+                fband = np.array([self.conf.fc - self.conf.b, self.conf.fc + self.conf.b])
                 self.rxsignals = self.filter.butterworth(
                     cutoff = fband,
                     fs = self.fs_rx,
@@ -105,7 +105,7 @@ class Receiver():
             #Time = self.rx_time
             #Signal Frequency =  self.conf.fIF w/o image 
             #Sampling Frequency = fs_rx
-
+        
             if self.conf.SPREADING_STAGE=="IF":
                 flow = self.conf.fIF + self.conf.b/2
                 self.filtered_bb = self.filter.butterworth(
@@ -230,7 +230,6 @@ class Receiver():
 
             if PlotType.bf in self.plot:
                 self.beampattern_plot(psi, amplitudes)    
-                #self.array_plot(angles, amplitudes)
             return self.recovered
         else:
             return self.recovered
@@ -585,6 +584,36 @@ class Receiver():
 
         return fd_est
 
+    def estimate_fd(self):
+        f, P = welch(
+            self.recovered.signals[0],
+            self.recovered.fs,
+
+        )
+        bw = self.conf.b
+
+        # Your Doppler is only ~12 kHz, so this is plenty
+        guard = 20e3
+
+        # Isolate positive low-IF signal
+        mask = (
+            (f >= self.conf.fIF - bw/2 - guard) &
+            (f <= self.conf.fIF + bw/2 + guard )
+        )
+
+        f_signal = f[mask]
+        P_signal = P[mask]
+
+
+        # Power-weighted spectral centroid
+        f_est = np.sum(f_signal * P_signal) / np.sum(P_signal)
+        plt.plot(f_signal, P_signal)
+
+        # Residual displacement from nominal IF
+        fd_est = f_est 
+
+        return fd_est - self.conf.fIF
+
 if __name__ == "__main__":
     """
     Ts: symbol period = e.g. 10 seconds
@@ -608,18 +637,70 @@ if __name__ == "__main__":
         sps_chip= 2,
         alpha = 0.5,
         simtime = totaltime,
-        no_elem = 1,
+        no_elem = 4,
         codefam="WH",
         modType="BPSK",
         codeids=np.array([1,3,4,6]),
-        SPREADING_STAGE = "BB"           #Location of the spreading [IF or BB]
+        SPREADING_STAGE = "IF"           #Location of the spreading [IF or BB]
         )
     #create signal 
     signal = DiscreteSignal(config)
-    signal.show_signal_plot()
 
     #initiate and assemble receiver 
-    rx = Receiver(config, {PlotType.recovered})
+    rx = Receiver(config)
     rx.setup(signal)
     rx.assemble()
 
+    fref = rx.estimate_fd()
+    print(fref)
+
+    #Calculation for Doppler 
+    fds, els, betas = Doppler().calculate_shifts()
+    fd_list = []
+    for beta, el in zip(betas, els):
+
+        config_fd = replace(
+            config,
+            beta = beta,
+            elevation=el
+        )
+
+        signal = DiscreteSignal(config_fd)
+        rx = Receiver(config_fd)
+        rx.setup(signal)
+        rx.assemble()
+        
+        print("done")
+        fd_list.append(
+            rx.estimate_fd()
+        )
+
+    fd_estimated = np.asarray(fd_list) - fref
+    #==================================
+    #PLOTRESULT
+    #=================================
+
+    plt.figure(figsize=(10, 6))
+
+    plt.plot(
+        np.asarray(fds) / 1e3,
+        els,
+        "k--",
+        linewidth=2,
+        label=r"Injected $f_D$"
+    )
+
+    plt.plot(
+        fd_estimated / 1e3,
+        els,
+        "r.",
+        markersize=5,
+        label=r"Estimated $\hat{f}_D$"
+    )
+
+    plt.xlabel(r"Doppler Shift $f_D$ (kHz)")
+    plt.ylabel("Elevation / Beam Angle (deg)")
+    plt.grid()
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
