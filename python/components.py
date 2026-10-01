@@ -99,13 +99,7 @@ class CDMx:
             for i in self.conf.codeids: 
                 s = np.exp(-1j*pi*i*n*(n+1)/self.conf.lc)
                 codes.append(s)
-                """
-                plt.scatter(np.real(s), np.imag(s), alpha=0.4)
-                theta = np.linspace(0, 2*np.pi, 1000)
-                plt.plot(np.cos(theta),np.sin(theta),'k--', alpha=0.5)
-                plt.grid()
-                plt.show()
-                """
+
         elif self.conf.codefam == "DFT":
             codes = []
             n = np.arange(0, self.conf.lc)
@@ -262,17 +256,16 @@ class CDMx:
                 fs_signal=fs_signal,
                 f_signal=f_signal)
 
-            """
+            
             #returns N arrays of signals and symbols! Does downconversion to DC and Symbol recovery
             decorrelated, symbols, fs = self.decorrelate(
                 dss.signals,
                 fs_signal=dss.fs)
-
             dss.signals = decorrelated
             dss.symbols = symbols
             dss.fs = fs 
             dss.time = np.arange(len(dss.signals[0]))*(1/dss.fs)
-            """
+            
             return dss 
         else:
             dss = signal 
@@ -374,7 +367,7 @@ class CDMx:
                             flo=self.conf.fIF
                         )
                 
-                flow = self.conf.b
+                flow = self.conf.b/2
                 ddc.signals = Filter(self.conf).butterworth(
                     cutoff = flow,
                     fs = ddc.fs,
@@ -449,7 +442,7 @@ class Filter:
             symbols = filtered_no_delay[::sps_symbol][1:]
         elif mode == "rxmode":
             symbols = filtered_no_delay[::new_sps_symbol][1:]
-        """
+        
         #Plot for pulse-shaping and constellation
         if self.conf.modType=="BPSK":
 
@@ -583,7 +576,7 @@ class Filter:
             plt.tight_layout()
             plt.grid()
         plt.show()
-        """
+        
         return filtered_no_delay, symbols
 
     def butterworth(self, cutoff, fs, signals, filter_type="low"):
