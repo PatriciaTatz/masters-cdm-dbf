@@ -54,17 +54,19 @@ class BER:
             ):
             #generate signal
             signal = DiscreteSignal(conf)
-            txsym = np.where(signal.txsymbols > 0, 1, -1)                              #Tx Symbols
-
             gamma = 10**(EbN0dB/10)    #SNR to linear scale
             rx_noisy = []
             for k in range(self.conf.no_elem):
                 s = signal.elements[k]
                 P = np.sum(np.abs(s)**2) / len(s) #Power in array size
-                L = len(s)/len(txsym)
-                Eb = P*L
+                L = len(s)/len(signal.symbols_elements[0])
+                Es = P*L
+                if self.conf.modType == "QPSK":
+                    Eb = Es / 2 # QPSK = 2 bits per symbol
+                else:
+                    Eb = Es 
                 N0 = Eb / gamma #Noise spectral density 
-                n = np.sqrt(N0/2)*np.random.standard_normal(s.shape) #noise array
+                n = np.sqrt(N0/2)*np.random.standard_normal(s.shape) 
                 r = s+n
                 rx_noisy.append(r)
 
@@ -81,17 +83,35 @@ class BER:
             rxsym = recoveredSignal.symbols
 
             #hard decisions
-            for k in range(conf.no_elem):
-                txsym = np.where(signal.symbols_elements[k] > 0, 1, -1)       #Tx Symbols
-                rsym =  np.where(rxsym[k] > 0, 1, -1)   
-
-                #calculate errors
-                errors = np.sum(rsym!=txsym)
-
-                #update counters - this doesnt allow for rotations 
-                total_error[k] += errors
-            total_bits_tx += len(txsym)
+            if self.conf.modType == "BPSK":
+                for k in range(conf.no_elem):
+                    txsym = np.where(signal.symbols_elements[k] > 0, 1, -1)       #Tx Symbols
+                    rsym =  np.where(rxsym[k] > 0, 1, -1)   
+                    #calculate errors
+                    errors = np.sum(rsym!=txsym)
+                    #update counters - this doesnt allow for rotations 
+                    total_error[k] += errors
+                total_bits_tx += len(txsym)
+            else:
+                # Hard decisions
+                for k in range(conf.no_elem):
+                    txsym = signal.symbols_elements[k]
+                    # Transmitted QPSK hard decisions
+                    tx_I = np.where(np.real(signal.symbols_elements[k]) > 0, 1, -1)
+                    tx_Q = np.where(np.imag(signal.symbols_elements[k]) > 0, 1, -1)
+                    # Recovered QPSK hard decisions
+                    rx_I = np.where(np.real(rxsym[k]) > 0, 1, -1)
+                    rx_Q = np.where(np.imag(rxsym[k]) > 0, 1, -1)
+                    # Calculate bit errors
+                    errors_I = np.sum(rx_I != tx_I)
+                    errors_Q = np.sum(rx_Q != tx_Q)
+                    errors = errors_I + errors_Q
+                    total_error[k] += errors
+                total_bits_tx += 2 * len(txsym)
         ber_k = total_error/total_bits_tx
+
+
+        print("Completed")
         return {
             "snr": EbN0dB,
             "pid": os.getpid(),
@@ -111,7 +131,7 @@ def plot_curve(ebno_db, ber_array, ber_titles):
     for i in range(1,len(ber_titles)):
         color = cmap(i/(n_lines))
 
-        np.save(f"{fileloc}/{ber_title[i]}",ber_array[i])
+        #np.save(f"{fileloc}/{ber_title[i]}",ber_array[i])
         plt.semilogy(
             ebno_db,
             ber_array[i],
@@ -141,24 +161,25 @@ def plot_curve(ebno_db, ber_array, ber_titles):
 
     plt.xlabel("Eb/No (dB)")
     plt.ylabel("Bit Error Rate")
-    plt.title(f"Avg BER | WH N=2 Lc=8")
+    plt.title(f"Avg. BER/Path with WH N=2 Lc=8")
     plt.grid(True, which='both', linestyle='--', alpha=0.6)
     plt.legend()
 
 
 if __name__ == "__main__":
     #configure
-    Rb = 30e6
+    Rb = 15e6
     Tb = 1/Rb
     symbols = 1000
     totaltime = symbols*Tb
     
-    lc  = 16
-    Nelem = np.array([8])
+    lc  = 8
+    Nelem = np.array([1])
     fam="WH"
     print("running=", fam)
-    mod = "BPSK"
-    stage="BB"
+    mod = "QPSK"
+    stage="IF"
+    fileloc = f"./results/{fam}/raw_data/"
 
     ber_title = ['Theoretical'] 
     SNR =  11
@@ -176,32 +197,36 @@ if __name__ == "__main__":
             simtime=totaltime,
             no_elem=int(nelem),
             lc=lc,
+            beta=-1.203372472369649e-05,
             codeids=np.arange(1,lc),
-            CALIBRATE=False,
-            CARRIER=True,
             SPREADING_STAGE=stage,
             codefam=fam,
             modType=mod
             )
         WHcodes = CodeSelector(baseconfig)
         weights = WHcodes.generate_weights()
-        best, worst, ranked  = WHcodes.find_best_clique(
+        
+        best, worst, ranked =  WHcodes.find_best_clique(
                     weights, 
                     baseconfig.no_elem
                     )
         """
-        i=1
-        for clique in ranked[:3]:
+        for i, clique in ranked[-10:]:
             config_pair = replace(baseconfig, codeids=np.array(clique))
             signal = DiscreteSignal(config_pair)
             print("clique=",clique)
             ber = BER(config_pair)
-            ber_curves, ber_avg = ber.sim_parallel(1e4,SNR)
+            ber_curves, ber_avg = ber.sim_parallel(1e3,SNR)
             ber_title.append(f"No = {clique} | Rank = {i}")
             ber_data.append(ber_avg)
-            i+=1
+            np.save(f"{fileloc}/No = {clique} | Rank = {i}",ber_avg)
+
 
         """
+        best, worst, _  = WHcodes.find_best_clique(
+                    weights, 
+                    baseconfig.no_elem
+                    )
         config_best = replace(baseconfig, codeids=best)
         #config_worst = replace(baseconfig, codeids=worst)
 
@@ -209,11 +234,13 @@ if __name__ == "__main__":
         #ber_worst = BER(config_worst)
 
         print(f"N={nelem} with best code pairs={best}")
-        ber_curves, ber_avg = ber_best.sim_parallel(1e4,SNR)
+        ber_curves, ber_avg = ber_best.sim_parallel(1e3,SNR)
         ber_k_0  = [ber_curve[0] for ber_curve in ber_curves]
 
         ber_title.append(f"N_{nelem}_Lc_{lc}")
         ber_data.append(ber_avg)
+
+        np.save(f"{fileloc}/N_{nelem}_Lc_{lc}",ber_avg)
         
         #ber_title.append(f"N={nelem}")
         #ber_data.append(np.array(ber_k_0))
@@ -221,7 +248,8 @@ if __name__ == "__main__":
         #ber_curves, ber_avg = ber_worst.sim(10, SNR)
         #ber_title.append(f"N_{nelem}, worst")
         #ber_data.append(ber_avg)
-        
+       
     plot_curve(ebno_db, ber_data, ber_title)
     plt.show()
     
+#[1,12,17,19,20,21,23,25,26,27]

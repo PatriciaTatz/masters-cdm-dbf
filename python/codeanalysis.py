@@ -53,16 +53,16 @@ class CodeSelector:
         #for both node and edge, large weight BAD, small weight GOOD, total algo minimises weight 
         self.codeids = [int(x) for x in self.codeids]
         self.node_weight = {
-            codeid: float(0.5*acf + 0.5*sf)
+            codeid: float(0*acf + 1*sf)
             for codeid, sf, acf in zip(self.codeids, self.sfs, self.acfs)
         }
 
         for ci, cj, ccf_width, ccf_peak, csd_height in ccs:
   
             self.edge_weight[f"{ci}-{cj}"] += (
-                0.1*csd_height+
+                1/2*csd_height+
                 0*ccf_width+
-                0.9*abs(ccf_peak)
+                1/2*abs(ccf_peak)
             )
 
         return CodeWeights(self.node_weight, self.edge_weight)
@@ -169,6 +169,20 @@ class CodeSelector:
                 ccf = np.correlate(self.allcodes[i], self.allcodes[j], mode='full') #normalise ccf as peak height is considered
                 zero_lag = len(ccf)//2
                 prominence = peak_prominences(ccf, [zero_lag])[0][0]
+
+                if self.codefam == "ZC":
+                    ccf_at_zero = np.abs(np.real(ccf[zero_lag]))
+                    """
+                    print(
+                        "i=",self.codeids[i],
+                        "j=",self.codeids[j],
+                        np.real(ccf[zero_lag]),
+                        np.abs(ccf[zero_lag])/self.Lc
+                        )
+                    """
+                else:
+                    ccf_at_zero = np.abs(ccf[zero_lag])
+
                 if ccf[zero_lag] == 0:
                     # No actual peak
                     widths = [0]   # no peak result in lightest weight
@@ -181,7 +195,6 @@ class CodeSelector:
                         [zero_lag],
                         rel_height=0.5
                     )
-
                 self.ccf_data.append(
                     (
                         self.codeids[i],
@@ -194,6 +207,8 @@ class CodeSelector:
                     )
                 )
                 
+
+                #CSD
                 codes_mixed = self.allcodes[i]*np.conj(self.allcodes[j])
                 Sxy = np.fft.fft(codes_mixed)
 
@@ -205,16 +220,11 @@ class CodeSelector:
                 elif self.arch == "IF":
                     #do not want at m=2 
                     lower_half_energy =  np.sum(np.abs(Sxy[2])**2)
-
-
-
                 if lower_half_energy == 0:
                     csd = 0 
                 else:
                     csd = lower_half_energy/total_energy
-                    
                 fbins = np.fft.fftfreq(self.Lc, d=1)
-
                 self.csd_data.append(
                     (
                         self.codeids[i],
@@ -229,7 +239,7 @@ class CodeSelector:
                         int(self.codeids[i]),
                         int(self.codeids[j]),
                         float(widths[0]),       # CCF width
-                        float(abs(ccf[zero_lag])),   # zero-lag CCF peak as plotted
+                        float(ccf_at_zero),   # zero-lag CCF peak as plotted
                         float(csd) # CSD amplitude at 1/Lc
                     )
                 )
@@ -343,13 +353,13 @@ class CodeSelector:
             threshold,
             0,0
         )
-        self.ranked.sort(key=lambda x: x[0])
-
+        self.ranked.sort(key=lambda x: x[2])
+        """
         self.ranked = [
         (rank, *entry[1:])
         for rank, entry in enumerate(self.ranked, start=1)
         ]
-
+        """
         return self.best, self.worst  , self.ranked
           
     def dfs_recursive(
@@ -389,7 +399,7 @@ class CodeSelector:
             if threshold is not None and total < threshold:
                 return True
 
-            self.ranked.append((total, clique))
+            self.ranked.append((node_mean, edge_mean, total, clique))
             return False
 
         #Evaluate a partial branch, prune if above threshold
@@ -627,15 +637,15 @@ class CodeSelector:
 
 if __name__ == "__main__":
     #initiate code config
-    lc = 7
-    ids = np.arange(0,lc)
+    lc = 8
+    ids = np.arange(1,lc)
     WHcfg = CDMcfg(
         simtime = 1, 
         lc = lc,
-        codefam="ZC",
-        no_elem= 2,
+        codefam="WH",
+        no_elem= 4,
         codeids=ids,
-        SPREADING_STAGE="BB")
+        SPREADING_STAGE="IF")
 
 
     WHcodes = CodeSelector(WHcfg)
@@ -648,7 +658,7 @@ if __name__ == "__main__":
     print("worst = ", worst)
     print("ranked=", ranked)
     WHcodes.plot("CSD")
-    WHcodes.plot("ACF")
-    WHcodes.plot("CCF")
-    WHcodes.plot("SF")
+    #WHcodes.plot("ACF")
+    #WHcodes.plot("CCF")
+    #WHcodes.plot("SF")
     #WHcodes.plot("network", "best")

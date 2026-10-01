@@ -5,50 +5,70 @@ To calculate max angle and doppler shift a SSO Leo Comms satellite
 import matplotlib.pyplot as plt
 import numpy as np
 from skyfield.api import load, wgs84
-from skyfield.iokit import parse_tle_file
 
-#load TLE 
-#I've chosen LEO Vantage 1 which is an SSO LEO Comms satellite
-norad_id = 43113
-base = 'https://celestrak.org/NORAD/elements/gp.php'
-url = base + f'?CATNR={norad_id}&FORMAT=TLE'
-filename = f'tle{norad_id}.txt'
-satellite_file = load.download(url, filename=filename)
-
-ts = load.timescale()
-LEOVantage1 = load.tle_file(f'tle{norad_id}.txt', ts)[0]
-
-#Looking at Svalbard ground station 
-svalbard = wgs84.latlon(+78.22875, +15.39964)
-
-#search time frame in the past  
-t0 = ts.utc(2026, 6, 3) 
-t1 = ts.utc(2026, 6, 4)
-
-#find events of rise 
-t, events = LEOVantage1.find_events(svalbard, t0, t1, altitude_degrees=30.0)
-event_names = 'rise above 30°', 'culminate', 'set below 30°'
+class Doppler:
+    def __init__(self):
+        #load TLE 
+        #I've chosen LEO Vantage 1 which is an SSO LEO Comms satellite
+        self.norad_id = '44744'          
+        base = 'https://celestrak.org/NORAD/elements/gp.php'
+        url = base + f'?CATNR={self.norad_id}&FORMAT=TLE'
+        filename = f'tle{self.norad_id}.txt'
 
 
-for ti, event in zip(t, events):
-    name = event_names[event]
-    print(ti.utc_strftime('%Y %b %d %H:%M:%S'), name)
+    def calculate_shifts(self):
+
+        ts = load.timescale()
+        satellite = load.tle_file(f'tle{self.norad_id}.txt', ts)[0]
+
+        #Looking at WSA SSC ground station 
+        ssc = wgs84.latlon(-29.05, 115.35)
+
+        #search time frame in the past  
+        t0 = ts.utc(2026, 6, 3) 
+        t1 = ts.utc(2026, 6, 4)
+
+        #find events of rise 
+        t, events = satellite.find_events(
+            ssc,
+            t0,
+            t1,
+            altitude_degrees=30.0)
+
+        event_names = 'rise above 30°', 'culminate', 'set below 30°'
+
+        for ti, event in zip(t, events):
+            name = event_names[event]
+            print(ti.utc_strftime('%Y %b %d %H:%M:%S'), name)
 
 
-#Calculate S-curve for maximum elevation angles
+        # Take first complete rise -> culmination -> set
+        t_rise = t[0]
+        t_culm = t[1]
+        t_set = t[2]
 
-passtime = ts.utc(2026, 6, 3, 00, 29,  np.arange(5* 60)) #year, month, day, hour, minute, second 
-difference = LEOVantage1 - svalbard
-pos = difference.at(passtime)
-_, _, sat_range, _, _, sat_range_rate = pos.frame_latlon_and_rates(svalbard)
 
-#Doppler shift
-freq_tx = 40e9 #Sband, 3GHz 
-c = 299792.458 #speed of light kms
-xtime = passtime.utc_datetime()
-normalised_doppler = -sat_range_rate.km_per_s / c
+        # Create samples across THIS pass
+        duration_s = (t_set.tt - t_rise.tt) * 86400
+        seconds = np.linspace(0, duration_s, 1000)
+        passtime = ts.tt_jd(
+        t_rise.tt + seconds / 86400
+        )
+        difference = satellite - ssc
+        pos = difference.at(passtime)
+        alt, az, sat_range, alt_rate, az_rate, sat_range_rate = pos.frame_latlon_and_rates(ssc)
 
-plt.figure()
-plt.grid()
-plt.plot(xtime, normalised_doppler, 'o--')
-plt.show()
+        # Doppler
+        freq_tx = 40e9
+        c = 299792.458 # km/s
+        doppler = -(sat_range_rate.km_per_s / c) * freq_tx
+
+        return doppler, alt.degrees, passtime.utc_datetime() 
+
+
+if __name__ == "__main__":
+        
+    doppler = Doppler()
+    fd_array, elevation, passtime = doppler.calculate_shifts()
+    plt.plot(fd_array, elevation)
+    plt.show()

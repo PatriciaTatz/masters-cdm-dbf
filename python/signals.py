@@ -9,7 +9,8 @@ from dataclasses import replace
 import commpy.channels as ch  # type:ignore[import-untyped]
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.signal import welch
+from scipy.signal import welch, resample_poly
+from fractions import Fraction
 from math import sin 
 
 from components import Filter, SpecAn, Mixer, Doppler
@@ -76,13 +77,13 @@ class DiscreteSignal:
         else:
             raise ValueError("Unsupported modulation scheme. Choose [BPSK, QPSK]")
         #Random symbol generator    
-        #self.txsymbols = np.random.choice(constellation, no_symbols) 
+        self.txsymbols = np.random.choice(constellation, no_symbols) 
     
         #OVERWRITE WARNING!! FOR REPEATABLE RESULTS SAVE DATA
         #np.save("input_thesis_QPSK_pulse_shaping", self.txsymbols)
 
         #FOR REPEATABLE RESULTS LOAD DATA
-        self.txsymbols = np.load("input_thesis_pulse_shaping.npy")
+        #self.txsymbols = np.load("input_thesis_QPSK_pulse_shaping.npy")
 
         #add rrcfilter
         self.symbol_waveform, self.symbols = self.filters.rrcfilter(
@@ -144,7 +145,7 @@ class DiscreteSignal:
         modsignal = self.mixer.quadrature(
             signal,
             fs_signal = self.conf.fs,
-            flo = self.conf.fc + self.conf.fd
+            flo = self.conf.fc
         )
         """
         #bandpass filter to remove harmonics caused by resampling 
@@ -159,8 +160,19 @@ class DiscreteSignal:
         
         modsignal.signals = np.real(filtered_modsignal)
         """
-        modsignal.signals = np.real(modsignal.signals)
+
+
+        if self.conf.DOPPLER:
+            doppler_signal = self.apply_doppler(
+                modsignal.signals
+            )
+            modsignal.signals = np.real(doppler_signal)
+        else:
+            modsignal.signals = np.real(modsignal.signals)
         
+
+
+
         """
         #PLOT FOR AFTER THE MODULATION
         plt.figure(figsize=(15,6))
@@ -242,13 +254,14 @@ class DiscreteSignal:
             self.symbol_waveform,
             )
     
-        plt.plot(specan.f/1e6, specan.Pxx_dB, label="Spectrum of BPSK waveform")
+        plt.plot(specan.f/1e6, specan.Pxx_dB, label="Spectrum of QPSK waveform")
         plt.xticks(fontsize=15)
         plt.yticks(fontsize=15)
         plt.ylabel("Normalised Power (dB)",fontsize=18)
         plt.xlabel("Frequency (MHz)",fontsize=18)
         plt.axvline(x=-(1+self.conf.alpha)*self.conf.fb/1e6/2, color='red', linestyle='--', linewidth=1.5, label="Bs=(1+α)Rb")
         plt.axvline(x=(1+self.conf.alpha)*self.conf.fb/1e6/2, color='red', linestyle='--', linewidth=1.5)
+        
         plt.legend()
         plt.tight_layout()
         plt.grid()
@@ -266,6 +279,20 @@ class DiscreteSignal:
         )
         plt.grid()
         plt.show()
+
+    def apply_doppler(self, signal):
+
+        scale = 1 - self.conf.beta
+
+        ratio = Fraction(float(scale)).limit_denominator(1_000_000)
+
+        signal_doppler = resample_poly(
+            signal,
+            ratio.denominator,
+            ratio.numerator
+        )
+
+        return signal_doppler
 
 
     def plot_beampattern(self, N_fft=4096):
@@ -313,9 +340,6 @@ class DiscreteSignal:
 
         # Spectral centroid
         f_est = np.sum(f_signal * P_signal) / np.sum(P_signal)
-        plt.plot(f_signal, P_signal)
-
-
         # Doppler relative to nominal carrier
         fd_est = f_est - self.conf.fc
 
@@ -333,7 +357,7 @@ if __name__ == "__main__":
     #==================================
     #RUNSIMULATOR
     #==================================
-    Rb = 30e6
+    Rb = 15e6
     Tb = 1/Rb
     symbols = 1000
     totaltime = symbols*Tb
@@ -345,25 +369,43 @@ if __name__ == "__main__":
         alpha = 0.5,
         simtime = totaltime,
         no_elem = 4,
-        modType="BPSK"
+        modType="QPSK"
     )
     
     signal = DiscreteSignal(config)
 
     fref = signal.estimate_fd()
-
+    
     #Calculation for Doppler 
-    fds, els, time = Doppler().calculate_shifts()
+    fds, els, betas = Doppler().calculate_shifts()
     fd_list = []
+    idx = np.argmax(np.abs(betas))
 
-    for fd, el in zip(fds, els):
+    beta_max = betas[idx]
+    print(betas)
+    print(beta_max)
+    print("Max BW distortion=", ((1-beta_max)*config.b - config.b)/1e3)
+    el_max = els[idx]
+    """
+    
+    config_fd = replace(
+        config,
+        beta=beta_max,
+        elevation=el_max
+    )
 
+    signal = DiscreteSignal(config_fd)
+
+    f_ref = signal.estimate_fd()
+
+    for beta, el in zip(betas, els):
         config_fd = replace(
             config,
-            fd=fd,
+            beta=beta,
             elevation=el
         )
 
+        print("done")
         signal = DiscreteSignal(config_fd)
 
         fd_list.append(
@@ -371,14 +413,16 @@ if __name__ == "__main__":
         )
 
     fd_estimated = np.asarray(fd_list) - fref
-
-
-
+    
     #==================================
     #PLOTRESULTS
     #=================================
+    fd_estimated = np.load("./fd_data.npy")
 
+    #np.save("fd_data", fd_estimated)
     plt.figure(figsize=(10, 6))
+    plt.rcParams['font.size'] = 21
+    plt.style.use("classic")
 
     plt.plot(
         np.asarray(fds) / 1e3,
@@ -391,16 +435,19 @@ if __name__ == "__main__":
     plt.plot(
         fd_estimated / 1e3,
         els,
-        "r.",
-        markersize=5,
-        label=r"Estimated $\hat{f}_D$"
+        "-g",
+        linewidth=2,
+        label=r"Simulated $\hat{f}_D$ before CDM"
     )
+
 
     plt.xlabel(r"Doppler Shift $f_D$ (kHz)")
     plt.ylabel("Elevation / Beam Angle (deg)")
+    plt.ylim(30,38)
     plt.grid()
     plt.legend()
     plt.tight_layout()
     plt.show()
     #signal.show_signal_plot()
     #signal.plot_beampattern()
+    """

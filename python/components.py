@@ -186,7 +186,7 @@ class CDMx:
         time = np.arange(len(ss[0]))/fs_resampled
         if max(time)>max(time_before)*1.2:
             raise ValueError("Something went wrong with upsampling of the time series! Exceeds sim time")
-        
+    
         """
         #PLOT for code spectrum at the BW rate
         plt.figure(figsize=(20,6))
@@ -442,7 +442,7 @@ class Filter:
             symbols = filtered_no_delay[::sps_symbol][1:]
         elif mode == "rxmode":
             symbols = filtered_no_delay[::new_sps_symbol][1:]
-        
+        """
         #Plot for pulse-shaping and constellation
         if self.conf.modType=="BPSK":
 
@@ -540,15 +540,15 @@ class Filter:
             plt.suptitle("Recovered QPSK Baseband Waveform", fontsize=12)
             time = np.arange(len(filtered_no_delay))/fs_signal
             plt.subplot(2, 1, 1)
-            plt.stem(time[:1000][::sps_symbol],np.real(filtered_no_delay[:1000][::sps_symbol]),  label="Upsampled Symbols")
-            plt.plot(time[:1000],np.real(filtered_no_delay[:1000]),  '-o', c='orange', label="RRC filtered symbols w/o group delay")
+            plt.stem(time[::sps_symbol],np.real(filtered_no_delay[::sps_symbol]),  label="Upsampled Symbols")
+            plt.plot(time,np.real(filtered_no_delay),  '-o', c='orange', label="RRC filtered symbols w/o group delay")
             plt.ylabel("Real Part (In-Phase / I)", fontsize=18)
             plt.grid()
             plt.legend(loc='upper right')
 
             plt.subplot(2, 1, 2)
-            plt.stem(time[:1000][::sps_symbol],np.imag(filtered_no_delay[:1000][::sps_symbol]),  label="Upsampled Symbols")
-            plt.plot(time[:1000],np.imag(filtered_no_delay[:1000]),  '-o', c='orange', label="RRC filtered symbols w/o group delay")
+            plt.stem(time[::sps_symbol],np.imag(filtered_no_delay[::sps_symbol]),  label="Upsampled Symbols")
+            plt.plot(time,np.imag(filtered_no_delay),  '-o', c='orange', label="RRC filtered symbols w/o group delay")
             plt.ylabel("Imaginary Part (Quadrature / Q)", fontsize=18)
             plt.xlabel("Time (seconds)", fontsize=18)
             plt.grid()
@@ -576,7 +576,7 @@ class Filter:
             plt.tight_layout()
             plt.grid()
         plt.show()
-        
+        """
         return filtered_no_delay, symbols
 
     def butterworth(self, cutoff, fs, signals, filter_type="low"):
@@ -747,7 +747,6 @@ class Doppler:
 
         for ti, event in zip(t, events):
             name = event_names[event]
-            print(ti.utc_strftime('%Y %b %d %H:%M:%S'), name)
 
 
         # Take first complete rise -> culmination -> set

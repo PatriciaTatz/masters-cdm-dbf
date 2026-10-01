@@ -407,7 +407,6 @@ class Receiver():
         
         elif self.conf.modType=="QPSK":
             plt.style.use("classic")
-            print(index)
             plt.subplot(2, 1, 1)
             plt.plot(self.recovered.time, np.real(self.recovered.signals[index]), '-g', linewidth='3', label="Recovered waveform")
             plt.plot(signal.symbol_wf_time, np.real(signal.symbol_waveform), '-b', label="Tx symbol waveform")
@@ -604,10 +603,8 @@ class Receiver():
         f_signal = f[mask]
         P_signal = P[mask]
 
-
         # Power-weighted spectral centroid
         f_est = np.sum(f_signal * P_signal) / np.sum(P_signal)
-        plt.plot(f_signal, P_signal)
 
         # Residual displacement from nominal IF
         fd_est = f_est 
@@ -626,7 +623,7 @@ if __name__ == "__main__":
     # ==============================
     # PARAMETERS 
     # ==============================
-    Rb = 30e6
+    Rb = 15e6
     Tb = 1/Rb
     symbols = 1000
     totaltime = symbols*Tb
@@ -639,7 +636,7 @@ if __name__ == "__main__":
         simtime = totaltime,
         no_elem = 4,
         codefam="WH",
-        modType="BPSK",
+        modType="QPSK",
         codeids=np.array([1,3,4,6]),
         SPREADING_STAGE = "IF"           #Location of the spreading [IF or BB]
         )
@@ -650,12 +647,14 @@ if __name__ == "__main__":
     rx = Receiver(config)
     rx.setup(signal)
     rx.assemble()
-
+    
     fref = rx.estimate_fd()
-    print(fref)
-
+    """
     #Calculation for Doppler 
     fds, els, betas = Doppler().calculate_shifts()
+    
+    
+    #PLOT CALCULATION
     fd_list = []
     for beta, el in zip(betas, els):
 
@@ -669,19 +668,24 @@ if __name__ == "__main__":
         rx = Receiver(config_fd)
         rx.setup(signal)
         rx.assemble()
-        
-        print("done")
         fd_list.append(
             rx.estimate_fd()
         )
 
     fd_estimated = np.asarray(fd_list) - fref
+    
     #==================================
     #PLOTRESULT
     #=================================
-
-    plt.figure(figsize=(10, 6))
-
+    
+    np.save("./results/Doppler/rx_fd_data_wide", fd_estimated)
+    
+    tx_fd = np.load("./fd_data.npy")
+    rx_fd = np.load("./results/Doppler/rx_fd_data_wide.npy")
+    #rx_fd = fd_estimated
+    plt.figure(figsize=(10, 4))
+    plt.rcParams['font.size'] = 18
+    plt.style.use("classic")
     plt.plot(
         np.asarray(fds) / 1e3,
         els,
@@ -691,16 +695,25 @@ if __name__ == "__main__":
     )
 
     plt.plot(
-        fd_estimated / 1e3,
+        tx_fd / 1e3,
         els,
-        "r.",
-        markersize=5,
-        label=r"Estimated $\hat{f}_D$"
+        "-g",
+        linewidth=2,
+        label=r"Simulated $\hat{f}_D$ before CDM"
+    )
+    plt.plot(
+        rx_fd / 1e3,
+        els,
+        "-.r",
+        linewidth=3,
+        label=r"Recovered $\hat{f}_D$ after CDM"
     )
 
     plt.xlabel(r"Doppler Shift $f_D$ (kHz)")
     plt.ylabel("Elevation / Beam Angle (deg)")
+    plt.ylim(30,38)
     plt.grid()
     plt.legend()
     plt.tight_layout()
     plt.show()
+    """

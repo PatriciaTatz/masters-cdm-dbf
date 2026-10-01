@@ -26,13 +26,13 @@ def ebno_at_ber(ebno_db, ber, ber_target):
 
 
 def get_rank(title):
-    return int(title.split("Rank = ")[-1])
+    return int(title.split("N=")[-1])
 
 
 #############
 
-
-fileloc = Path("./results/WH/raw_data/thesis_data/low_IF_arch_badpair")
+folder_name = "ex_qpsk"
+fileloc = Path(f"./results/WH/raw_data/thesis_data/{folder_name}")
 ber_data = {}
 
 for file_path in fileloc.glob("*.npy"):
@@ -41,18 +41,20 @@ for file_path in fileloc.glob("*.npy"):
         continue
     ber_data[title] = np.load(file_path)
 
-
 """
-sorted_data = sorted(
+
+ber_data = dict(sorted(
     ber_data.items(),
-    key=lambda item: get_rank(item[0])
-)
+    key=lambda item: get_rank(item[0]),
+    reverse=True
+))
+
 """
 
-ebno_db = np.load(f"{fileloc}/ebno.npy")
-ber_theory = np.load(f"{fileloc}/theory.npy")
+ebno_db = np.load(f"./results/WH/raw_data/thesis_data/ebno.npy")
+ber_theory = np.load(f"./results/WH/raw_data/thesis_data/theory.npy")
 
-ber_target = 1e-2
+ber_target = 1e-5
 # Reference Eb/No from theoretical curve
 ebno_ref = ebno_at_ber(
         ebno_db,
@@ -62,12 +64,25 @@ ebno_ref = ebno_at_ber(
 
 print(f"Theoretical Eb/No @ BER={ber_target}: {ebno_ref:.2f} dB")
 
-plt.figure()
+plt.figure(figsize=(10,9))
+plt.style.use("classic")
+colors = plt.get_cmap("tab20b")(np.linspace(0, 1, len(ber_data)))
 plt.rcParams['font.size'] = 10
 deg = [] 
 #cmap = plt.get_cmap('turbo')
 #max_rank = len(ber_data)
-
+#ADD THEORY
+plt.semilogy(
+    ebno_db,
+    ber_theory,
+    linestyle='-',
+    color='black',
+    marker='*',
+    linewidth=1.5,
+    markersize=6,
+    label='Theoretical-BPSK'
+)
+i =0
 for title, ber in ber_data.items():
     #rank = get_rank(title)
     #color = cmap((rank - 1) / (max_rank - 1))
@@ -97,22 +112,12 @@ for title, ber in ber_data.items():
     plt.semilogy(
         ebno_db[:len(ber)],
         ber,
-        linewidth=1,
+        linewidth=2,
         markersize=3,
+        #color=colors[i],
         label=rf"{title}"
     )
-
-#ADD THEORY
-plt.semilogy(
-    ebno_db,
-    ber_theory,
-    linestyle='-',
-    color='black',
-    marker='*',
-    linewidth=1,
-    markersize=6,
-    label='Theoretical-BPSK'
-)
+    i+=1
 
 
 # Show only 10^n labels
@@ -121,13 +126,13 @@ ax.yaxis.set_major_locator(LogLocator(base=10))
 ax.yaxis.set_major_formatter(LogFormatterMathtext(base=10))
 ax.yaxis.set_minor_formatter(NullFormatter())
 
-plt.title("Low-IF Spreading with N=2 WH Lc=8", fontsize=15)
+plt.title("Avg. BER per Path\n [IF-Spread, Bm=Bs+Δf, WH, Lc=8, QPSK]", fontsize=18)
 plt.xlabel("Eb/No (dB)", fontsize=20)
 plt.ylabel("Bit Error Rate", fontsize=20)
-plt.xticks(fontsize=12)
-plt.yticks(fontsize=12)
+plt.xticks(fontsize=15)
+plt.yticks(fontsize=15)
 plt.grid(True, which='both', linestyle='-', alpha=0.6)
-plt.legend(loc='lower left', fontsize=20)
+plt.legend(loc='lower left', fontsize=15)
 
 plt.show()
 
