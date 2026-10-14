@@ -10,12 +10,12 @@ class CDMcfg():
     simtime: float 
 
     #FEATURES
-    BEAMFORM: bool=False                 #To combine recovered elements into one received beam
+    BEAMFORM: bool=False                #To combine recovered elements into one received beam
     CALIBRATE: bool=False               #Model an ideal matched-filter reciever
-    INTERFERENCE: bool=False            #Inject interference as part of Signal Generator
+    INTERFERENCE: bool=False             #Inject interference as part of Signal Generator
     CARRIER: bool=True                  #Modulate baseband to high RF carrier frequency
     SPREADING_STAGE: str="BB"           #Location of the spreading [IF or BB]
-    DOPPLER: bool=True
+    DOPPLER: bool=False
 
     #Signal properties
     fc: float = 1e9                     #Carrier frequency
@@ -29,7 +29,7 @@ class CDMcfg():
     #Receiver properties 
     fIF: float = 80e6                   #IF frequency
     lc: int = 32                        #Code length
-    sps_chip: int = 1                   #Samples per chip >=2
+    sps_chip: int = 2                   #Samples per chip >=2
     codefam: str = "WH"                 #Code family 
     no_elem: int = 2                    #No elements multiplexed
     degree: int = 1                     #Degree used by Gold Codes

@@ -4,6 +4,7 @@ Simulate effects of channel
 - Doppler shift 
 """
 import random
+import commpy.filters as filter  # type:ignore[import-untyped]
 from math import pi
 from dataclasses import replace
 import commpy.channels as ch  # type:ignore[import-untyped]
@@ -32,21 +33,28 @@ class DiscreteSignal:
 
         if self.conf.INTERFERENCE: 
             #ADD INTERFERENCE - removed by despreading process & MF 
-            N = len(txsignal)
-            BW_int = 1e6
-            Rs = BW_int
-            sps = int(self.conf.fs / Rs)
-            bits = np.random.choice([-1, 1], int(np.ceil(N/sps)))
-            symbols = np.repeat(bits, sps)[:N]
-            interference =  symbols * np.exp(1j*2*np.pi*7.5e6*self.time)
+            interference = self.create_interference()
+            # Desired SINR/SIR
+            SINR_dB = -3
+            # Signal and interference power
+            P_signal = np.mean(np.abs(txsignal)**2)
+            P_int = np.mean(np.abs(interference)**2)
 
-            txsignal += np.real(interference)
+            # Required interference power
+            SINR = 10**(SINR_dB / 10)
+            P_int_required = P_signal / SINR
+
+            # Scale interference
+            interference *= np.sqrt(P_int_required / P_int)
+            txsignal += interference
+            self.symbol_plot = txsignal
 
         if self.conf.CARRIER:
             self.mixer = Mixer(conf)
             #modulation will change time array, fs_mixer, carrier_time, carrier_signald sampling frequency
             #and over txsignal which now represents a QPSK modded carrier 
             modulated = self.modulate_to_carrier(txsignal)
+            self.symbol_plot = modulated.signals
             self.fs = modulated.fs
             self.time = modulated.time   
 
@@ -104,7 +112,45 @@ class DiscreteSignal:
         #time of full symbol pulses
         self.symbol_wf_time = np.arange(len(self.symbol_waveform))/self.conf.fs
 
-        
+
+    def create_interference(self):
+
+        BW_int = 1e6
+        Rs_int = BW_int / (1 + self.conf.alpha)
+        sps_int = int(self.conf.fs / Rs_int)
+        ts_int = 1 / Rs_int
+
+        # Generate enough BPSK symbols
+        N = int(np.ceil(len(self.time) / sps_int))
+        bits = np.random.choice([-1, 1], N)
+
+        # RRC filter
+        ntaps = int(self.conf.span * sps_int)
+        if ntaps % 2 == 0:
+            ntaps += 1
+
+        _, h_rrc = filter.rrcosfilter(
+            ntaps, self.conf.alpha, ts_int, self.conf.fs
+        )
+        h_rrc /= np.sqrt(np.sum(h_rrc**2))
+
+        # Upsample and pulse shape
+        symbols = np.zeros(N * sps_int)
+        symbols[::sps_int] = bits
+        symbols = np.convolve(symbols, h_rrc, mode='same')
+
+        # Match tx signal length
+        symbols = symbols[:len(self.time)]
+
+        # Shift interference
+        fc_int = self.conf.b / 2 + 1e6
+        interference = symbols * np.exp(
+            1j * 2*np.pi*fc_int*self.time[:len(symbols)]
+        )
+
+        return interference
+
+    
     def create_elementsignals(self, signal):
         #apply phase rotation as delay is too small to be seen as lagged samples. Why? 
         #psi = pi 
@@ -137,7 +183,7 @@ class DiscreteSignal:
             self.conf.fs, 
             signal,
             )
-        plt.plot(specan.f, specan.Pxx_dB, '-b')
+        plt.plot(specan.f/1e6, specan.Pxx_dB, '-b')
         plt.grid()
         plt.ylabel("Frequency kHz")
         """
@@ -170,8 +216,6 @@ class DiscreteSignal:
         else:
             modsignal.signals = np.real(modsignal.signals)
         
-
-
 
         """
         #PLOT FOR AFTER THE MODULATION
@@ -373,9 +417,11 @@ if __name__ == "__main__":
     )
     
     signal = DiscreteSignal(config)
-
+    signal.show_signal_plot()
     fref = signal.estimate_fd()
-    
+
+
+"""
     #Calculation for Doppler 
     fds, els, betas = Doppler().calculate_shifts()
     fd_list = []
@@ -386,7 +432,7 @@ if __name__ == "__main__":
     print(beta_max)
     print("Max BW distortion=", ((1-beta_max)*config.b - config.b)/1e3)
     el_max = els[idx]
-    """
+    
     
     config_fd = replace(
         config,
@@ -450,4 +496,5 @@ if __name__ == "__main__":
     plt.show()
     #signal.show_signal_plot()
     #signal.plot_beampattern()
-    """
+    
+"""

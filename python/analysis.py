@@ -110,6 +110,11 @@ class BER:
                 total_bits_tx += 2 * len(txsym)
         ber_k = total_error/total_bits_tx
 
+        ber_avg_snr = np.mean(ber_k)
+        np.save(
+            f"./results/{conf.codefam}/raw_data/SNR_{EbN0dB}_avg.npy",
+            ber_avg_snr
+        )
 
         print("Completed")
         return {
@@ -121,11 +126,11 @@ class BER:
 
 def plot_curve(ebno_db, ber_array, ber_titles):
     fileloc = f"./results/{fam}/raw_data/"
-    #np.save(f"{fileloc}/ebno.npy", ebno_db)
+    np.save(f"{fileloc}/ebno.npy", ebno_db)
     plt.rcParams['font.size'] = 15
 
     
-    #np.save(f"{fileloc}/theory.npy", ber_array[0])
+    np.save(f"{fileloc}/theory.npy", ber_array[0])
     cmap = plt.get_cmap('turbo')
     n_lines = len(ber_titles)-1
     for i in range(1,len(ber_titles)):
@@ -174,15 +179,15 @@ if __name__ == "__main__":
     totaltime = symbols*Tb
     
     lc  = 8
-    Nelem = np.array([1])
-    fam="WH"
+    Nelem = np.array([2])
+    fam="Gold"
     print("running=", fam)
     mod = "QPSK"
     stage="IF"
     fileloc = f"./results/{fam}/raw_data/"
 
     ber_title = ['Theoretical'] 
-    SNR =  11
+    SNR =  13
     ebno_db = np.arange(0, SNR)
     ebno_linear = 10**(ebno_db/10)
     ber_theory = 0.5*erfc(np.sqrt(ebno_linear))
@@ -197,7 +202,6 @@ if __name__ == "__main__":
             simtime=totaltime,
             no_elem=int(nelem),
             lc=lc,
-            beta=-1.203372472369649e-05,
             codeids=np.arange(1,lc),
             SPREADING_STAGE=stage,
             codefam=fam,
@@ -234,7 +238,7 @@ if __name__ == "__main__":
         #ber_worst = BER(config_worst)
 
         print(f"N={nelem} with best code pairs={best}")
-        ber_curves, ber_avg = ber_best.sim_parallel(1e3,SNR)
+        ber_curves, ber_avg = ber_best.sim_parallel(1e2,SNR)
         ber_k_0  = [ber_curve[0] for ber_curve in ber_curves]
 
         ber_title.append(f"N_{nelem}_Lc_{lc}")

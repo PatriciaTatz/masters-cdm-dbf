@@ -31,7 +31,7 @@ def get_rank(title):
 
 #############
 
-folder_name = "ex_qpsk"
+folder_name = "dvbs2"
 fileloc = Path(f"./results/WH/raw_data/thesis_data/{folder_name}")
 ber_data = {}
 
@@ -54,7 +54,7 @@ ber_data = dict(sorted(
 ebno_db = np.load(f"./results/WH/raw_data/thesis_data/ebno.npy")
 ber_theory = np.load(f"./results/WH/raw_data/thesis_data/theory.npy")
 
-ber_target = 1e-5
+ber_target = 1e-7
 # Reference Eb/No from theoretical curve
 ebno_ref = ebno_at_ber(
         ebno_db,
@@ -125,6 +125,11 @@ ax = plt.gca()
 ax.yaxis.set_major_locator(LogLocator(base=10))
 ax.yaxis.set_major_formatter(LogFormatterMathtext(base=10))
 ax.yaxis.set_minor_formatter(NullFormatter())
+
+#DVBS2
+plt.axhline(y=1e-7, color='red', linestyle='--', linewidth=2, label="DVB-S2 Quasi-Error Free Threshold")
+
+
 
 plt.title("Avg. BER per Path\n [IF-Spread, Bm=Bs+Δf, WH, Lc=8, QPSK]", fontsize=18)
 plt.xlabel("Eb/No (dB)", fontsize=20)

@@ -65,7 +65,7 @@ class Receiver():
             #Sampling Frequency = fs_rx
             if self.conf.SPREADING_STAGE=="IF":
                 #Band-pass filter as Image reject filter
-                fband = np.array([self.conf.fc - self.conf.b, self.conf.fc + self.conf.b])
+                fband = np.array([self.conf.fc - self.conf.b/2, self.conf.fc + self.conf.b/2])
                 self.rxsignals = self.filter.butterworth(
                     cutoff = fband,
                     fs = self.fs_rx,
@@ -267,10 +267,10 @@ class Receiver():
         plt.figure(figsize=(18,6))
         plt.style.use("classic")
         plt.title(f"{title}")
-        plt.plot(time[:1000], asignal[:1000], '-o', label="Element=1")
+        plt.plot(time, asignal, '-', label="Element=1")
         plt.legend(loc='upper right')
         plt.grid()
-        plt.xlabel("Time (seconds)",fontsize=18)
+        plt.xlabel("Time (nsec)",fontsize=18)
         plt.ylabel("Amplitude",fontsize=18)
         plt.tight_layout()
 
@@ -341,7 +341,7 @@ class Receiver():
         plt.plot(specan.f/1e6, specan.Pxx_dB, '-g', label="Spread Spectrum of Element 1")
         if self.conf.SPREADING_STAGE=="BB":
             plt.axvline(x= self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
-            plt.axvline(x=-self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5, label="Bss=LsxBs")
+            plt.axvline(x=-self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5, label="Bss=LcxBs")
         elif self.conf.SPREADING_STAGE=="IF":
             plt.axvline(x=-self.conf.lc*self.conf.fIF/1e6, color='red', linestyle='--', linewidth=1.5)
             plt.axvline(x=self.conf.lc*self.conf.fIF/1e6, color='red', linestyle='--', linewidth=1.5)
@@ -384,7 +384,7 @@ class Receiver():
             label="Combined signals"
         )
         plt.axvline(x=self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
-        plt.axvline(x=-self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5,label="Bss=LsxBs")
+        plt.axvline(x=-self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5,label="Bss=LcxBs")
 
         plt.ylabel("Normalised Power (dB)",fontsize=18)
         plt.xlabel("Frequency (MHz)",fontsize=18)
@@ -428,14 +428,18 @@ class Receiver():
 
         #SPECTRUM
         plt.figure(figsize=(20,6))
-        specan = SpecAn().calculate_psd(
+        if self.conf.INTERFERENCE:
+            specan = SpecAn().calculate_psd(
             self.conf.fs,
-            signal.symbol_waveform
+            signal.symbol_plot,
+            normalise=True
                         )
-        plt.plot(specan.f/1e6, specan.Pxx_dB, '-r', label="Original spectrum")
+            plt.plot(specan.f/1e6, specan.Pxx_dB, '-', color='darkviolet', label="Original spectrum")
+        
         specan = SpecAn().calculate_psd(
             self.recovered.fs,
-            self.recovered.signals[index]
+            self.recovered.signals[index],
+            normalise=True
                         )
         plt.plot(specan.f/1e6, specan.Pxx_dB, '-b', label="Recovered spectrum")
         plt.axvline(x=self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
@@ -443,7 +447,8 @@ class Receiver():
         plt.legend()
         plt.xlabel("Frequency (MHz)", fontsize=18)
         plt.ylabel("Normalised Power (dB)",fontsize=18)
-        plt.title(f"Spectrum of Recovered Element{index+1}",fontsize=21)
+        plt.title(f"Spectrum of Recovered Element={index+1}",fontsize=21)
+        plt.tight_layout()
         plt.grid()
         plt.show()
 
@@ -644,7 +649,7 @@ if __name__ == "__main__":
     signal = DiscreteSignal(config)
 
     #initiate and assemble receiver 
-    rx = Receiver(config)
+    rx = Receiver(config, {PlotType.recovered})
     rx.setup(signal)
     rx.assemble()
     

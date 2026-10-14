@@ -383,7 +383,6 @@ class CDMx:
                 fs_signal=fs_despread,
                 mode="rxmode"
                 )
-            
             decorr.append(decorrelated_signal)
             syms.append(symbols)
 
@@ -450,6 +449,7 @@ class Filter:
                 #Figure 3.4
                 time_sample = np.arange(len(samples)) / self.conf.fs
                 time = np.arange(len(filtered_no_delay))/self.conf.fs
+
             
                 plt.figure(figsize=(15,6))
                 plt.style.use("classic")
@@ -534,26 +534,32 @@ class Filter:
             
 
         elif self.conf.modType == "QPSK":
+            time_original = np.arange(len(signal))/fs_signal*1e8
+            time = np.arange(len(filtered_no_delay))/fs_signal*1e8
             plt.figure(figsize=(20,10))
             plt.style.use("classic")
             plt.rcParams['font.size'] = 21
-            plt.suptitle("Recovered QPSK Baseband Waveform", fontsize=12)
-            time = np.arange(len(filtered_no_delay))/fs_signal
+            plt.suptitle("Recovered QPSK Baseband Waveform", fontsize=20)
+
             plt.subplot(2, 1, 1)
-            plt.stem(time[::sps_symbol],np.real(filtered_no_delay[::sps_symbol]),  label="Upsampled Symbols")
-            plt.plot(time,np.real(filtered_no_delay),  '-o', c='orange', label="RRC filtered symbols w/o group delay")
+            plt.stem(time[::sps_symbol],np.real(filtered_no_delay[::sps_symbol]),  label="Sampled Symbols")
+            plt.plot(time,np.real(filtered_no_delay),  '-o', c='orange', markersize=2, label="RRC filtered symbols w/o group delay")
+            plt.plot(time_original,np.real(signal),  '--', c='red', linewidth=3, label="Before RRC Filter")
+
             plt.ylabel("Real Part (In-Phase / I)", fontsize=18)
             plt.grid()
-            plt.legend(loc='upper right')
+            plt.legend(loc='upper right', fontsize=18)
 
             plt.subplot(2, 1, 2)
-            plt.stem(time[::sps_symbol],np.imag(filtered_no_delay[::sps_symbol]),  label="Upsampled Symbols")
-            plt.plot(time,np.imag(filtered_no_delay),  '-o', c='orange', label="RRC filtered symbols w/o group delay")
+            plt.stem(time[::sps_symbol],np.imag(filtered_no_delay[::sps_symbol]),  label="Sampled Symbols")
+            plt.plot(time,np.imag(filtered_no_delay),  '-o', c='orange', markersize=2,label="RRC filtered symbols w/o group delay")
+            plt.plot(time_original,np.imag(signal),  '--', c='red', linewidth=3, label="Before RRC Filter")
+
             plt.ylabel("Imaginary Part (Quadrature / Q)", fontsize=18)
-            plt.xlabel("Time (seconds)", fontsize=18)
+            plt.xlabel("Time (μsec)", fontsize=18)
             plt.grid()
 
-            plt.legend(loc='upper right')
+            plt.legend(loc='upper right', fontsize=18)
 
             #Figure 3.5, constellation 
             plt.figure(figsize=(8,8))
@@ -563,7 +569,7 @@ class Filter:
             plt.rcParams['font.size'] = 15
             plt.axhline(y=0, color='orange', linestyle='-', linewidth=1.5)
             plt.axvline(x=0, color='orange', linestyle='-', linewidth=1.5)
-            plt.title(f"Constellation Diagram of QPSK Signal")
+            plt.title(f"Constellation Diagram of QPSK Signal",fontsize=21)
             plt.ylabel("Quadrature (Q)")
             plt.xlabel("In-Phase (I)")
             plt.scatter(
@@ -585,7 +591,7 @@ class Filter:
         #cutoff = 1.5*self.fb
         
         b,a= butter(
-            N=4, 
+            N=6, 
             Wn = cutoff/nyquist, 
             btype=filter_type
         )
