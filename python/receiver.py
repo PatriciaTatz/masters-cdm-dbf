@@ -116,7 +116,7 @@ class Receiver():
                 )
 
             elif self.conf.SPREADING_STAGE=="BB":
-                flow = self.conf.b
+                flow = self.conf.b/2
                 self.filtered_bb = self.filter.butterworth(
                     cutoff = flow,
                     fs = self.baseband.fs,
@@ -270,14 +270,14 @@ class Receiver():
         plt.plot(time, asignal, '-', label="Element=1")
         plt.legend(loc='upper right')
         plt.grid()
-        plt.xlabel("Time (nsec)",fontsize=18)
-        plt.ylabel("Amplitude",fontsize=18)
+        plt.xlabel("Time (nsec)",fontsize=15)
+        plt.ylabel("Amplitude",fontsize=15)
         plt.tight_layout()
 
     
         #SPECTRUM
         plt.figure(figsize=(20,6))
-        plt.rcParams['font.size'] = 20
+        plt.rcParams['font.size'] = 15
         plt.style.use("classic")
 
         plt.title(f"{title}", fontsize=21)
@@ -292,10 +292,13 @@ class Receiver():
             label="Element=1"
         )
         #plt.axvline(x=self.conf.fc/1e6, color='red', linestyle='--', linewidth=1.5, label="Carrier Frequency")
-
-        
-        plt.ylabel("Normalized Power (dB)",fontsize=18)
-        plt.xlabel("Frequency (MHz)",fontsize=18)
+        plt.xlim([-20,20])
+        plt.ylim([-80,0])        
+        plt.yticks(np.arange(-80, 1, 20))
+        plt.ylabel("Normalized Power (dB)",fontsize=30)
+        plt.xlabel("Frequency (MHz)",fontsize=30)
+        plt.xticks(fontsize=35)
+        plt.yticks(fontsize=35)
         plt.tight_layout()
         plt.legend()
         plt.grid()
@@ -348,7 +351,7 @@ class Receiver():
 
         plt.xlabel("Frequency (MHz)",fontsize=18)
         plt.ylabel("Normalised Power (dB)",fontsize=18)
-        plt.title(f"Spectrum of Element={index+1}", fontsize=20)
+        plt.title(f"Spectrum of Element={index+1}", fontsize=18)
         plt.grid()
         plt.legend()
         plt.tight_layout()
@@ -383,11 +386,14 @@ class Receiver():
             '-b',
             label="Combined signals"
         )
-        plt.axvline(x=self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
-        plt.axvline(x=-self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5,label="Bss=LcxBs")
-
-        plt.ylabel("Normalised Power (dB)",fontsize=18)
-        plt.xlabel("Frequency (MHz)",fontsize=18)
+        #plt.axvline(x=self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
+        #plt.axvline(x=-self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5,label="Bss=LcxBs")
+        plt.xlim([-200, 200])
+        plt.ylim([-85,0])
+        plt.xticks(fontsize=40)
+        plt.yticks(fontsize=40)
+        plt.ylabel("Normalised Power (dB)",fontsize=30)
+        plt.xlabel("Frequency (MHz)",fontsize=30)
         plt.grid()
         plt.legend()
         plt.tight_layout()
@@ -442,11 +448,15 @@ class Receiver():
             normalise=True
                         )
         plt.plot(specan.f/1e6, specan.Pxx_dB, '-b', label="Recovered spectrum")
-        plt.axvline(x=self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
-        plt.axvline(x=-self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5, label="Original Rx bandwidth")
+        #plt.axvline(x=self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
+        #plt.axvline(x=-self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5, label="Original Rx bandwidth")
+        plt.xlim([-20, 20])
+        plt.ylim([-85,0])
+        plt.xticks(fontsize=40)
+        plt.yticks(fontsize=40)
         plt.legend()
-        plt.xlabel("Frequency (MHz)", fontsize=18)
-        plt.ylabel("Normalised Power (dB)",fontsize=18)
+        plt.xlabel("Frequency (MHz)", fontsize=30)
+        plt.ylabel("Normalised Power (dB)",fontsize=30)
         plt.title(f"Spectrum of Recovered Element={index+1}",fontsize=21)
         plt.tight_layout()
         plt.grid()
@@ -628,28 +638,29 @@ if __name__ == "__main__":
     # ==============================
     # PARAMETERS 
     # ==============================
-    Rb = 15e6
+    Rb = 6.25e6
     Tb = 1/Rb
-    symbols = 1000
+    symbols = 5000
     totaltime = symbols*Tb
-    lc = 8
+    lc = 32
     config = CDMcfg(
         fb = Rb,
         lc = lc, 
+        fc = 500e6,
         sps_chip= 2,
         alpha = 0.5,
         simtime = totaltime,
-        no_elem = 4,
+        no_elem = 8,
         codefam="WH",
-        modType="QPSK",
-        codeids=np.array([1,3,4,6]),
-        SPREADING_STAGE = "IF"           #Location of the spreading [IF or BB]
+        modType="BPSK",
+        codeids=np.arange(1,9),
+        SPREADING_STAGE = "BB"           #Location of the spreading [IF or BB]
         )
     #create signal 
     signal = DiscreteSignal(config)
 
     #initiate and assemble receiver 
-    rx = Receiver(config, {PlotType.recovered})
+    rx = Receiver(config, PlotType.all())
     rx.setup(signal)
     rx.assemble()
     

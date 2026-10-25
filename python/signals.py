@@ -88,16 +88,27 @@ class DiscreteSignal:
         self.txsymbols = np.random.choice(constellation, no_symbols) 
     
         #OVERWRITE WARNING!! FOR REPEATABLE RESULTS SAVE DATA
-        #np.save("input_thesis_QPSK_pulse_shaping", self.txsymbols)
+        #np.save("input_thesis_alwan_pulse_shaping", self.txsymbols)
 
         #FOR REPEATABLE RESULTS LOAD DATA
-        #self.txsymbols = np.load("input_thesis_QPSK_pulse_shaping.npy")
+        self.txsymbols = np.load("input_thesis_alwan_pulse_shaping.npy")
 
         #add rrcfilter
         self.symbol_waveform, self.symbols = self.filters.rrcfilter(
             self.txsymbols,
             self.conf.fs
             )
+
+        #add noise here for the Validation, only forBPSK
+        gamma = 10**(10/10)    #SNR to linear scale
+        P = np.sum(np.abs(self.symbol_waveform)**2) / len(self.symbol_waveform) #Power in array size
+        L = len(self.symbol_waveform)/len(self.symbols)
+        Es = P*L
+        Eb = Es 
+        N0 = Eb / gamma #Noise spectral density 
+        n = np.sqrt(N0/2)*np.random.standard_normal(self.symbol_waveform.shape) 
+        self.symbol_waveform += n
+
 
         #np.save("transmit_clean", self.transmit)
         return self.symbol_waveform
