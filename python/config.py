@@ -12,7 +12,7 @@ class CDMcfg():
     #FEATURES
     BEAMFORM: bool=False                #To combine recovered elements into one received beam
     CALIBRATE: bool=False               #Model an ideal matched-filter reciever
-    INTERFERENCE: bool=False             #Inject interference as part of Signal Generator
+    INTERFERENCE: bool=True             #Inject interference as part of Signal Generator
     CARRIER: bool=True                  #Modulate baseband to high RF carrier frequency
     SPREADING_STAGE: str="BB"           #Location of the spreading [IF or BB]
     DOPPLER: bool=False

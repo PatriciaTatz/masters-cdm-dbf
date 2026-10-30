@@ -116,7 +116,7 @@ class Receiver():
                 )
 
             elif self.conf.SPREADING_STAGE=="BB":
-                flow = self.conf.b/2
+                flow = self.conf.b
                 self.filtered_bb = self.filter.butterworth(
                     cutoff = flow,
                     fs = self.baseband.fs,
@@ -292,13 +292,8 @@ class Receiver():
             label="Element=1"
         )
         #plt.axvline(x=self.conf.fc/1e6, color='red', linestyle='--', linewidth=1.5, label="Carrier Frequency")
-        plt.xlim([-20,20])
-        plt.ylim([-80,0])        
-        plt.yticks(np.arange(-80, 1, 20))
         plt.ylabel("Normalized Power (dB)",fontsize=30)
         plt.xlabel("Frequency (MHz)",fontsize=30)
-        plt.xticks(fontsize=35)
-        plt.yticks(fontsize=35)
         plt.tight_layout()
         plt.legend()
         plt.grid()
@@ -388,12 +383,8 @@ class Receiver():
         )
         #plt.axvline(x=self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
         #plt.axvline(x=-self.conf.lc*self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5,label="Bss=LcxBs")
-        plt.xlim([-200, 200])
-        plt.ylim([-85,0])
-        plt.xticks(fontsize=40)
-        plt.yticks(fontsize=40)
-        plt.ylabel("Normalised Power (dB)",fontsize=30)
-        plt.xlabel("Frequency (MHz)",fontsize=30)
+        plt.ylabel("Normalised Power (dB)",fontsize=18)
+        plt.xlabel("Frequency (MHz)",fontsize=18)
         plt.grid()
         plt.legend()
         plt.tight_layout()
@@ -438,25 +429,32 @@ class Receiver():
             specan = SpecAn().calculate_psd(
             self.conf.fs,
             signal.symbol_plot,
-            normalise=True
+            normalise="special_case"
                         )
-            plt.plot(specan.f/1e6, specan.Pxx_dB, '-', color='darkviolet', label="Original spectrum")
+            plt.plot(
+                specan.f/1e6, 
+                specan.Pxx_dB, 
+                '-',
+                 color='darkviolet',
+                label="Original spectrum"
+            )
         
         specan = SpecAn().calculate_psd(
             self.recovered.fs,
             self.recovered.signals[index],
-            normalise=True
+            normalise="special_case"
                         )
-        plt.plot(specan.f/1e6, specan.Pxx_dB, '-b', label="Recovered spectrum")
-        #plt.axvline(x=self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
-        #plt.axvline(x=-self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5, label="Original Rx bandwidth")
-        plt.xlim([-20, 20])
-        plt.ylim([-85,0])
-        plt.xticks(fontsize=40)
-        plt.yticks(fontsize=40)
+        plt.plot(
+            specan.f/1e6,
+            specan.Pxx_dB,
+            '-b', 
+            label="Recovered spectrum"
+            )
+        plt.axvline(x=self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5)
+        plt.axvline(x=-self.conf.b/1e6/2, color='red', linestyle='--', linewidth=1.5, label="Original Rx bandwidth")
         plt.legend()
-        plt.xlabel("Frequency (MHz)", fontsize=30)
-        plt.ylabel("Normalised Power (dB)",fontsize=30)
+        plt.xlabel("Frequency (MHz)", fontsize=18)
+        plt.ylabel("Normalised Power (dB)",fontsize=18)
         plt.title(f"Spectrum of Recovered Element={index+1}",fontsize=21)
         plt.tight_layout()
         plt.grid()
@@ -488,8 +486,6 @@ class Receiver():
         plt.show()
 
     def beampattern_plot(self,psi_angles, A, N_fft=4096):
-
-
         fig, ax  = plt.subplots(
             subplot_kw={'projection': 'polar'},
             figsize=(18, 18)
@@ -638,29 +634,28 @@ if __name__ == "__main__":
     # ==============================
     # PARAMETERS 
     # ==============================
-    Rb = 6.25e6
+    Rb = 15e6
     Tb = 1/Rb
-    symbols = 5000
+    symbols = 1000
     totaltime = symbols*Tb
-    lc = 32
+    lc = 8
     config = CDMcfg(
         fb = Rb,
         lc = lc, 
-        fc = 500e6,
         sps_chip= 2,
         alpha = 0.5,
         simtime = totaltime,
-        no_elem = 8,
+        no_elem = 4,
         codefam="WH",
-        modType="BPSK",
-        codeids=np.arange(1,9),
-        SPREADING_STAGE = "BB"           #Location of the spreading [IF or BB]
+        modType="QPSK",
+        codeids=np.array([1,3,4,6]),
+        SPREADING_STAGE = "IF"           #Location of the spreading [IF or BB]
         )
     #create signal 
     signal = DiscreteSignal(config)
 
     #initiate and assemble receiver 
-    rx = Receiver(config, PlotType.all())
+    rx = Receiver(config, {PlotType.recovered})
     rx.setup(signal)
     rx.assemble()
     

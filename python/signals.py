@@ -30,6 +30,7 @@ class DiscreteSignal:
         self.filters = Filter(conf)
         txsignal = self.create_symbols().copy() #create symbols, rrc filtered, copy of transmit to avoid overwriting original waveform 
         self.create_timeseries(txsignal) #create self.time series based on input symbol rate
+        self.symbol_plot = txsignal
 
         if self.conf.INTERFERENCE: 
             #ADD INTERFERENCE - removed by despreading process & MF 
@@ -54,7 +55,7 @@ class DiscreteSignal:
             #modulation will change time array, fs_mixer, carrier_time, carrier_signald sampling frequency
             #and over txsignal which now represents a QPSK modded carrier 
             modulated = self.modulate_to_carrier(txsignal)
-            self.symbol_plot = modulated.signals
+            #self.symbol_plot = modulated.signals
             self.fs = modulated.fs
             self.time = modulated.time   
 
@@ -91,14 +92,15 @@ class DiscreteSignal:
         #np.save("input_thesis_alwan_pulse_shaping", self.txsymbols)
 
         #FOR REPEATABLE RESULTS LOAD DATA
-        self.txsymbols = np.load("input_thesis_alwan_pulse_shaping.npy")
+        #self.txsymbols = np.load("input_thesis_alwan_pulse_shaping.npy")
 
         #add rrcfilter
         self.symbol_waveform, self.symbols = self.filters.rrcfilter(
             self.txsymbols,
             self.conf.fs
             )
-
+        
+        """
         #add noise here for the Validation, only forBPSK
         gamma = 10**(10/10)    #SNR to linear scale
         P = np.sum(np.abs(self.symbol_waveform)**2) / len(self.symbol_waveform) #Power in array size
@@ -108,7 +110,7 @@ class DiscreteSignal:
         N0 = Eb / gamma #Noise spectral density 
         n = np.sqrt(N0/2)*np.random.standard_normal(self.symbol_waveform.shape) 
         self.symbol_waveform += n
-
+        """
 
         #np.save("transmit_clean", self.transmit)
         return self.symbol_waveform

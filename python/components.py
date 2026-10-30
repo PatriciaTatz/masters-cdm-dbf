@@ -205,22 +205,20 @@ class CDMx:
         plt.plot(
             specan.f/1e6,
             specan.Pxx_dB,
-            label="Element of Interest"
+            label="Signal of Interest = s1(t)x(c5xc6)"
         )
         
         #how the signal is corrupted
         specan = SpecAn().calculate_psd(
             fs_code,
-            os[1]*exp_codes[1]*exp_codes[0]+\
-            os[2]*exp_codes[2]*exp_codes[0]+\
-            os[3]*exp_codes[3]*exp_codes[0]
+            os[1]*exp_codes[1]*exp_codes[0]
         )
           
         plt.plot(
             specan.f/1e6,
             specan.Pxx_dB,
             alpha=0.8,
-            label="Residual Signal with N=4"
+            label="Residual Signal = s2(t)x(c5xc6)"
         )
 
         specan = SpecAn().calculate_psd(
@@ -231,10 +229,10 @@ class CDMx:
         plt.plot(
             specan.f/1e6,
             specan.Pxx_dB,
-            label=f"FFT(all code pairs) "
+            label=f"FFT(c5xc6) "
         )
-        
-        #plt.axvline(x=f_signal/1e6, color='red', linestyle='--', linewidth=1.5, label=r"1st harmonic, $f_1$=Bs+ΔF")
+        print(f_signal/1e6)
+        plt.axvline(x=f_signal/1e6, color='red', linestyle='--', linewidth=1.5, label=r"1st harmonic, $f_1$=Bs")
         plt.title("Spectrum Analyser",fontsize=18)
         plt.xticks(fontsize=15)
         plt.yticks(fontsize=15)
@@ -256,7 +254,6 @@ class CDMx:
                 fs_signal=fs_signal,
                 f_signal=f_signal)
 
-            
             #returns N arrays of signals and symbols! Does downconversion to DC and Symbol recovery
             decorrelated, symbols, fs = self.decorrelate(
                 dss.signals,
@@ -306,50 +303,9 @@ class CDMx:
             expanded_code = np.tile(code_sequence, tile_repeats)[:len(resampled_signal)]  #expand then trim to signal length  
             exp_codes.append(expanded_code)   
 
-            #spreading operation
+            #despreading operation
             despread_signal  = resampled_signal*expanded_code
             dss.append(despread_signal)
-        """ 
-        #PLOT for code spectrum at the BW rate
-        plt.figure(figsize=(20,6))
-        plt.style.use("classic")
-
-        plt.grid()
-        plt.ylabel("Normalised Power (dB)", fontsize=20)
-        plt.xlabel("Frequency (MHz)",fontsize=20)
-    
-        #plt.subplot(2,1,1)
-        specan = SpecAn().calculate_psd(
-            fs_code,
-            os[0]*exp_codes[0]
-        )
-        
-        plt.plot(
-            specan.f/1e6,
-            specan.Pxx_dB,
-            label="Element of Interest + Residual Signal"
-        )
-
-        specan = SpecAn().calculate_psd(
-            fs_code,
-            exp_codes[1]*exp_codes[0]
-        )
-        
-        plt.plot(
-            specan.f/1e6,
-            specan.Pxx_dB,
-            label=f"FFT(all code pairs) "
-        )
-        
-        #plt.axvline(x=f_signal/1e6, color='red', linestyle='--', linewidth=1.5, label=r"1st harmonic, $f_1$=Bs+ΔF")
-        plt.title("Spectrum Analyser",fontsize=18)
-        plt.xticks(fontsize=15)
-        plt.yticks(fontsize=15)
-        plt.ylim(-70,0)
-        plt.legend(loc='lower left', fontsize=18)
-        plt.tight_layout()
-        plt.show()
-        """
         time = np.arange(len(dss[0]))/fs_resampled
         return RecoveredSignals(os, dss, [], time, exp_codes, fs_resampled) 
 
@@ -366,7 +322,6 @@ class CDMx:
                             fs_signal=fs_signal,
                             flo=self.conf.fIF
                         )
-                
                 flow = self.conf.b/2
                 ddc.signals = Filter(self.conf).butterworth(
                     cutoff = flow,
@@ -385,7 +340,6 @@ class CDMx:
                 )
             decorr.append(decorrelated_signal)
             syms.append(symbols)
-
         return decorr, syms, fs_despread
 
 
@@ -710,15 +664,19 @@ class Mixer:
 
 
 class SpecAn: 
-    def calculate_psd(self ,fs, signal, normalise=True):
+    def calculate_psd(self,fs, signal, normalise=False):
         x = signal
         X = 10*np.log10(np.fft.fftshift(np.abs(np.fft.fft(x))**2)/len(x))
         f = np.linspace(-fs/2, fs/2, len(X))
-        
         #Xnorm
-        if normalise:
+        if normalise=="special_case":
+            # frequency bins within signal bandwidth
+            mask = np.abs(f) <= (22e6)/2
+            # average in-band power
+            Pref = np.mean(X[mask])
+            X -= Pref
+        else:
             X -= np.max(X)
-        
         return Specan(f,X)
 
 class Doppler:
